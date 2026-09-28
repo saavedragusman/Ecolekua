@@ -4,8 +4,8 @@
 |---|---|
 | Spec | 001 |
 | Nombre | Foundation |
-| Versión | 1.1 |
-| Estado | Borrador — pendiente de confirmar decisiones de la sección 16 |
+| Versión | 1.2 |
+| Estado | Confirmada |
 | Documentos rectores | `docs/constitution.md`, `docs/business/business-rules.md` |
 
 ### Historial de revisiones
@@ -14,6 +14,7 @@
 |---|---|
 | 1.0 | Versión inicial. |
 | 1.1 | Unificada longitud mínima de contraseña (FND-013). Corregida referencia de "Operación sensible". Definidas operación pública y protección por defecto (FND-026, E-30, BR-FND-010, DEC-015). Aclarado que clientes y visitantes del portal no son usuarios (DEC-014). Actor en auditoría de operaciones públicas (FND-023). Orden y dependencias de specs alineados con el cronograma comprometido (sección 15, DEC-016). |
+| 1.2 | Decisiones surgidas en Design: reinicio del contador de intentos fallidos (DEC-017), mensaje durante el bloqueo (DEC-018), zona horaria de operación (DEC-019), acciones del administrador sobre sí mismo (DEC-020), creación del primer administrador (DEC-021). |
 
 ---
 
@@ -682,6 +683,11 @@ Las siguientes decisiones completan comportamientos que la versión anterior dej
 | DEC-014 | "Usuario" designa exclusivamente al personal de Ecolekua. Visitantes y clientes del portal no son Usuarios, no reciben roles ni permisos de este modelo y su identidad y acceso se definen en las specs 015 y 016. | Confirmada |
 | DEC-015 | Toda operación es protegida por defecto; una operación solo es pública si una spec la declara explícitamente. | Confirmada |
 | DEC-016 | El orden de implementación sigue las fases comprometidas con Ecolekua: 015 (portal y cotizador) se implementa tras 004, y 016 (portal de clientes) tras 005. | Confirmada |
+| DEC-017 | Los intentos fallidos no caducan por tiempo: el contador solo vuelve a 0 con un inicio de sesión exitoso o al terminar el bloqueo de 15 minutos (FND-003). | Confirmada |
+| DEC-018 | Mientras un correo está bloqueado, el intento de inicio de sesión muestra un mensaje específico que indica el bloqueo temporal por demasiados intentos y los minutos restantes. El bloqueo aplica a cualquier correo, exista o no, por lo que el mensaje no revela la existencia de la cuenta (FND-002, FND-003). | Confirmada |
+| DEC-019 | La zona horaria de operación de Ecolekua es `America/Caracas`. Las fechas se almacenan en UTC; la consulta de auditoría las muestra y filtra por rango de fechas en esa zona horaria (FND-025). | Confirmada |
+| DEC-020 | Un administrador con los permisos correspondientes puede modificar sus propios datos y restablecer su propia contraseña desde la gestión de usuarios, igual que con cualquier otro usuario. Las únicas restricciones sobre sí mismo son las de FND-021: no puede desactivarse ni modificar sus propios roles (FND-010, FND-021, DEC-010). | Confirmada |
+| DEC-021 | El primer administrador se crea mediante un comando de consola interactivo que solicita nombre, apellido y correo, genera una contraseña temporal que obliga a cambiarla en el primer inicio de sesión, solo se ejecuta si no existe ya un usuario activo con rol Administrador y queda registrado en la auditoría como evento de consola. No se almacenan credenciales en variables de entorno ni en el código (FND-014, FND-020, FND-022). | Confirmada |
 
 ---
 

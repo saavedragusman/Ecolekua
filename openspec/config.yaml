@@ -11,7 +11,7 @@ context: |
   Testing: Pest v4 (pestphp/pest-plugin-laravel), PHPUnit 12 runner, MySQL `testing` DB
   (no SQLite). No JS test framework configured (vue-tsc for types, vite-plus for lint/build).
   Docs hierarchy (must not be contradicted, in order): docs/constitution.md >
-  docs/business/business-rules.md > product specs (see rules.context_risks) >
+  docs/business/business-rules.md > docs/specs/NNN-name.md (product specs) >
   openspec/changes/{name}/ (proposal/specs delta/design/tasks) > code+tests.
   Requirement IDs (FND-xxx) and scenario IDs (E-xx) must be preserved verbatim end to end.
 
@@ -46,15 +46,8 @@ testing:
     discounts, inventory, reservations, orders, production, permissions).
 
 rules:
-  context_risks:
-    - >
-      DISCREPANCY: AGENTS.md documentation hierarchy names product specs as
-      `docs/specs/NNN-nombre.md`, but the actual file on disk is
-      `specs/001-foundation.md` (repo root, not under docs/). Confirm the intended
-      canonical location with the user before sdd-spec transcribes from it; do not
-      silently normalize the path.
   proposal:
-    - Scope = exactly what the referenced docs/specs (or specs/) NNN-nombre.md defines; no extra functionality.
+    - Scope = exactly what the referenced docs/specs/NNN-name.md defines; no extra functionality.
     - Never introduce tenant/tenant_id/multi-company abstractions.
   specs:
     - Each FND-xxx requirement becomes "### Requirement: FND-xxx — <title>".

@@ -372,7 +372,7 @@ El acceso a la información debe estar controlado mediante:
 - autenticación;
 - autorización;
 - permisos basados ​​en roles;
-- aislamiento de los inquilinos;
+- separación entre usuarios internos y clientes del portal: un cliente solo puede acceder a su propia información;
 - validación;
 - protección contra el acceso no autorizado a los datos;
 - Manejo seguro de credenciales y secretos.
@@ -605,10 +605,11 @@ La documentación principal incluye:
 
 - `AGENTS.md`
 - `CLAUDE.md`
+- `docs/ui/design-system.md`
 - `docs/constitution.md`
 - `docs/business/glossary.md`
 - `docs/business/business-rules.md`
-- especificaciones dentro de `specs/`
+- especificaciones dentro de `/docs/specs/`
 
 Cuando una decisión contradiga una documentación existente, la documentación debe actualizarse como parte del cambio.
 
@@ -634,22 +635,6 @@ Una funcionalidad se considera terminada cuando:
 - tiene documentación suficiente;
 - puede ser utilizada por el usuario final;
 - ha sido verificada según el proceso SDD correspondiente.
-
----
-
-# 21. Principio Fundamental
-
-El principio rector del proyecto es:
-
-> **Construir el mejor sistema posible para los procesos reales de Ecolekua, evitando complejidad que no aporte valor al negocio.**
-
-El proyecto no debe intentar anticipar todos los posibles negocios, empresas o escenarios futuros.
-
-Debe priorizar:
-
-**claridad + fidelidad al negocio + integridad de datos + trazabilidad + seguridad + mantenibilidad + simplicidad.**
-
-Cualquier futura expansión significativa del alcance deberá ser evaluada como una decisión explícita del proyecto y no asumida automáticamente por la arquitectura.
 
 ----
 
@@ -780,3 +765,19 @@ La IA no debe generar documentación excesiva, comentarios redundantes o estruct
 La prioridad es:
 
 **código claro → tipos explícitos → nombres descriptivos → documentación cuando aporte contexto.**
+
+---
+
+# 22. Principio Fundamental
+
+El principio rector del proyecto es:
+
+> **Construir el mejor sistema posible para los procesos reales de Ecolekua, evitando complejidad que no aporte valor al negocio.**
+
+El proyecto no debe intentar anticipar todos los posibles negocios, empresas o escenarios futuros.
+
+Debe priorizar:
+
+**claridad + fidelidad al negocio + integridad de datos + trazabilidad + seguridad + mantenibilidad + simplicidad.**
+
+Cualquier futura expansión significativa del alcance deberá ser evaluada como una decisión explícita del proyecto y no asumida automáticamente por la arquitectura.

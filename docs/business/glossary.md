@@ -61,7 +61,7 @@ An order may contain:
 
 Amount paid by the customer before production begins.
 
-For the initial business rule, orders containing 1–6 pieces require a 50% deposit.
+For the initial business rule, orders containing 1–7 pieces require a 50% deposit.
 
 The exact payment policy must remain configurable where practical.
 

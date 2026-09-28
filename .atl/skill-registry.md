@@ -15,7 +15,7 @@ Last updated: 2026-09-28
 
 | File | Role | References |
 | --- | --- | --- |
-| `AGENTS.md` | Primary operational instructions for all agents (source of truth; CLAUDE.md imports it). Spanish conversational replies; English code/identifiers. | `docs/constitution.md`, `docs/business/business-rules.md`, `specs/NNN-*.md` (see discrepancy note in `openspec/config.yaml` `rules.context_risks` — doc says `docs/specs/`, actual path is `specs/`), `openspec/changes/NNN-name/` |
+| `AGENTS.md` | Primary operational instructions for all agents (source of truth; CLAUDE.md imports it). Spanish conversational replies; English code/identifiers. | `docs/constitution.md`, `docs/business/business-rules.md`, `docs/specs/NNN-*.md`, `openspec/changes/NNN-name/` |
 | `CLAUDE.md` | Thin pointer: `@AGENTS.md` — Claude Code loads AGENTS.md automatically. | `AGENTS.md` |
 
 ## Contract
