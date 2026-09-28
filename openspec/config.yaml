@@ -1,0 +1,89 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Tech stack: Laravel 13 (PHP 8.3) + Inertia.js v3 + Vue 3 + TypeScript + Tailwind CSS 4
+  (laravel/blank-vue-starter-kit), MySQL 8.4, runs via Laravel Sail (Docker) on WSL2.
+  Architecture: single-tenant Micro-ERP for Ecolekua only. No tenant/multi-company
+  abstractions. Thin controllers -> FormRequest + Policy -> Action classes
+  (app/Actions/<Module>/). Permission-based authz (module.action), no role-name checks,
+  no Gate::before/superadmin. Backend is the sole authority for price/stock/state logic.
+  Testing: Pest v4 (pestphp/pest-plugin-laravel), PHPUnit 12 runner, MySQL `testing` DB
+  (no SQLite). No JS test framework configured (vue-tsc for types, vite-plus for lint/build).
+  Docs hierarchy (must not be contradicted, in order): docs/constitution.md >
+  docs/business/business-rules.md > product specs (see rules.context_risks) >
+  openspec/changes/{name}/ (proposal/specs delta/design/tasks) > code+tests.
+  Requirement IDs (FND-xxx) and scenario IDs (E-xx) must be preserved verbatim end to end.
+
+strict_tdd: true
+
+testing:
+  projects:
+    - path: "."
+      stack: "Laravel 13 (PHP 8.3) backend + Vue 3/Inertia/TS frontend"
+      test_command: "./vendor/bin/sail artisan test"
+      scoped_test_command: "./vendor/bin/sail pest --filter=<ScenarioID>"
+      framework: "Pest v4 (pestphp/pest-plugin-laravel), PHPUnit 12"
+      layers:
+        unit: { available: true, tool: "Pest (tests/Unit)" }
+        integration: { available: true, tool: "Pest + pest-plugin-laravel, HTTP feature tests (tests/Feature)" }
+        e2e: { available: false, tool: null }
+      coverage: { available: false, command: null, note: "No coverage driver (Xdebug/pcov) configured; Pest supports --coverage if one is installed later." }
+      quality:
+        linter: { available: true, command: "./vendor/bin/sail pint --test" }
+        formatter: { available: true, command: "./vendor/bin/sail pint" }
+        type_checker_php: { available: true, command: "./vendor/bin/sail composer types:check", tool: "larastan/phpstan level 7" }
+        type_checker_ts: { available: true, command: "./vendor/bin/sail pnpm types:check", tool: "vue-tsc" }
+        js_lint: { available: true, command: "./vendor/bin/sail pnpm check", fix_command: "./vendor/bin/sail pnpm check:fix" }
+        build: { available: true, command: "./vendor/bin/sail pnpm build" }
+  workspace_level_command: "./vendor/bin/sail artisan test"
+  workspace_level_command_rationale: >
+    Single project root (pnpm-workspace.yaml declares only '.'); composer.json's
+    `test` script (config:clear -> pint:check -> phpstan -> artisan test) and
+    AGENTS.md both name `sail artisan test` as the authoritative backend test gate.
+    No JS unit-test framework exists; JS quality is covered by types:check/build/lint,
+    not TDD tests, consistent with AGENTS.md Strict TDD scope (backend-first: prices,
+    discounts, inventory, reservations, orders, production, permissions).
+
+rules:
+  context_risks:
+    - >
+      DISCREPANCY: AGENTS.md documentation hierarchy names product specs as
+      `docs/specs/NNN-nombre.md`, but the actual file on disk is
+      `specs/001-foundation.md` (repo root, not under docs/). Confirm the intended
+      canonical location with the user before sdd-spec transcribes from it; do not
+      silently normalize the path.
+  proposal:
+    - Scope = exactly what the referenced docs/specs (or specs/) NNN-nombre.md defines; no extra functionality.
+    - Never introduce tenant/tenant_id/multi-company abstractions.
+  specs:
+    - Each FND-xxx requirement becomes "### Requirement: FND-xxx — <title>".
+    - Each E-xx scenario becomes "#### Scenario: E-xx — <title>" with GIVEN/WHEN/THEN.
+    - Delta specs are a faithful transcription of the product spec; do not add, remove, or reinterpret requirements.
+    - Preserve original ID prefixes (FND for 001; later specs define their own).
+  design:
+    - This is the project's single "plan" artifact; do not create a separate plan.md.
+    - Confirm controller -> FormRequest -> Policy -> Action pattern unless a documented exception exists.
+    - Money uses decimal columns and exact PHP arithmetic, never float.
+    - Dates persist in UTC, display in Ecolekua's operating timezone.
+  tasks:
+    - Each task references the FND-xxx/E-xx IDs it covers.
+    - Group by phase; keep tasks completable in one session.
+  apply:
+    guidelines:
+      - Test-first: write the failing Pest test named after its scenario ID before implementation.
+      - Test names start with the scenario ID, e.g. `it('E-06 ...')`.
+      - Controllers stay thin; business logic and transactions live in app/Actions/<Module>/.
+      - Authorization checks happen in the backend (Policies/Gates); never rely on hidden UI only.
+      - No direct stock `update()`; every inventory change is a traceable movement.
+      - Use pnpm only; never generate package-lock.json.
+    tdd: true
+    test_command: "./vendor/bin/sail artisan test"
+  verify:
+    test_command: "./vendor/bin/sail artisan test"
+    build_command: "./vendor/bin/sail pnpm build"
+    lint_command: "./vendor/bin/sail pint --test"
+    coverage_threshold: 0
+  archive:
+    - Only after sdd-verify has no blocking findings and explicit human confirmation.
+    - Warn before merging deltas that remove or rename requirements.
