@@ -1,0 +1,6 @@
+packages:
+    - '.'
+
+publicHoistPattern:
+    - '@inertiajs/core'
+minimumReleaseAge: 1440
