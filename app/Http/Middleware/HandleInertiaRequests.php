@@ -38,8 +38,11 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            // Explicit DTO, never the whole User model (design Decision 15).
             'auth' => [
-                'user' => $request->user(),
+                'user' => $request->user()?->only(['id', 'first_name', 'last_name', 'email', 'must_change_password']),
+                // Lazy: resolved only when a page renders; used to decide what to show, not to authorize.
+                'permissions' => fn (): array => $request->user()?->permissionNames() ?? [],
             ],
         ];
     }

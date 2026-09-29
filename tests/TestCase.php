@@ -13,4 +13,14 @@ abstract class TestCase extends BaseTestCase
     protected bool $seed = true;
 
     protected string $seeder = FoundationSeeder::class;
+
+    /**
+     * PHP tests must not depend on compiled frontend assets (public/build).
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withoutVite();
+    }
 }

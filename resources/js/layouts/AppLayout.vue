@@ -7,6 +7,7 @@ import IconButton from '@/components/IconButton.vue';
 import SideNav from '@/components/SideNav.vue';
 import { useAppearance } from '@/composables/useAppearance';
 import { home } from '@/routes';
+import { edit as passwordEdit } from '@/routes/password';
 import type { NavItem } from '@/types';
 
 const page = usePage();
@@ -24,8 +25,8 @@ type Destination = {
 
 // At most 5 destinations (design-system §7.8). Permission names come from
 // the catalog (`App\Enums\PermissionName`). The URIs are the ones declared in
-// design.md "Routes and authorization"; Wayfinder helpers other than `home`
-// do not exist until those routes are registered (Phases 3-6).
+// design.md "Routes and authorization"; `home` and `password.edit` already use
+// Wayfinder helpers, the rest follow when their routes exist (tasks 4.18, 6.12, 7.8).
 const DESTINATIONS: Destination[] = [
     {
         label: 'Inicio',
@@ -54,7 +55,7 @@ const DESTINATIONS: Destination[] = [
     },
     {
         label: 'Cambiar contraseña',
-        href: '/password',
+        href: passwordEdit.url(),
         icon: 'key',
         permission: null,
     },
