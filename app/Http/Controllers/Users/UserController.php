@@ -52,7 +52,11 @@ class UserController extends Controller
     {
         Gate::authorize('view', $user);
 
-        return Inertia::render('users/Show', ['user' => $this->summary($user->load('roles:id,name'))]);
+        return Inertia::render('users/Show', [
+            'user' => $this->summary($user->load('roles:id,name')),
+            // Options for the role form: only sent to those who may assign roles.
+            'roles' => Gate::allows('assignRoles', $user) ? $this->roleOptions() : [],
+        ]);
     }
 
     public function edit(User $user): Response

@@ -1,4 +1,5 @@
 import { home } from '@/routes';
+import { index as usersIndex } from '@/routes/users';
 
 // Display order of the navigation groups. Groups without a visible entry are
 // omitted. The type already admits Comercial, Producción and Inventario, but no
@@ -34,7 +35,8 @@ export type NavEntry = {
 // in the backend (FND-019). Permission names come from the catalog
 // (`App\Enums\PermissionName`). `home` uses its Wayfinder helper; the other
 // hrefs are the URIs declared in design.md "Routes and authorization" and
-// switch to Wayfinder helpers when their routes exist (tasks 4.18, 6.12, 7.8).
+// switch to Wayfinder helpers when their routes exist (`users.index` done in
+// 4.18; roles and audit in 6.12 and 7.8).
 export const NAV_ENTRIES: NavEntry[] = [
     {
         key: 'home',
@@ -47,11 +49,10 @@ export const NAV_ENTRIES: NavEntry[] = [
         exact: true,
     },
     {
-        // TODO(4.18): replace with the Wayfinder `users.index` helper.
         key: 'users',
         label: 'Usuarios',
         icon: 'group',
-        href: '/users',
+        href: usersIndex.url(),
         permission: 'users.view',
         group: 'Administración',
         priority: 10,

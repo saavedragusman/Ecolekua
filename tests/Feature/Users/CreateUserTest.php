@@ -178,7 +178,6 @@ it('FND-010 checks the permission, not the role name, and any role holding it is
 });
 
 it('FND-010 shows the user list, detail, create and edit routes only with the matching permission', function () {
-    config(['inertia.testing.ensure_pages_exist' => false]);
     $viewer = userWithPermissions(PermissionName::UsersView);
     $target = User::factory()->create();
 
@@ -198,4 +197,17 @@ it('FND-010 shows the user list, detail, create and edit routes only with the ma
         ->assertInertia(fn (Assert $page) => $page->component('users/Edit')->where('user.id', $target->id));
     $this->actingAs($creator)->get('/users')->assertForbidden();
     $this->actingAs($creator)->get("/users/{$target->id}")->assertForbidden();
+});
+
+it('FND-010 exposes the role options on the detail page only to users who can assign roles', function () {
+    $target = User::factory()->create();
+    Role::factory()->create(['name' => 'Rol de ejemplo']);
+
+    $viewer = userWithPermissions(PermissionName::UsersView);
+    $this->actingAs($viewer)->get("/users/{$target->id}")->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('users/Show')->has('roles', 0));
+
+    $assigner = userWithPermissions(PermissionName::UsersView, PermissionName::UsersAssignRoles);
+    $this->actingAs($assigner)->get("/users/{$target->id}")->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('users/Show')->where('roles', fn ($roles) => collect($roles)->pluck('name')->contains('Rol de ejemplo')));
 });
