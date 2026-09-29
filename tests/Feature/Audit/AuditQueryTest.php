@@ -38,6 +38,12 @@ it('FND-025 requires the audit.view permission', function () {
     $this->actingAs($this->viewer)->get('/audit')->assertOk();
 });
 
+it('FND-025 renders the audit page component for a user with audit.view', function () {
+    $this->actingAs($this->viewer)->get('/audit')->assertInertia(
+        fn (Assert $page) => $page->component('audit/Index')
+    );
+});
+
 it('FND-025 filters by user', function () {
     $ana = User::factory()->create();
     $luis = User::factory()->create();

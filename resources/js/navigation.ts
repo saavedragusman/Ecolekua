@@ -1,4 +1,5 @@
 import { home } from '@/routes';
+import { index as auditIndex } from '@/routes/audit';
 import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
 
@@ -34,10 +35,8 @@ export type NavEntry = {
 // Single source of truth for the sidebar, the bottom bar and the "Más" sheet.
 // Filtering by permission in the frontend is visual only: authorization stays
 // in the backend (FND-019). Permission names come from the catalog
-// (`App\Enums\PermissionName`). `home` uses its Wayfinder helper; the other
-// hrefs are the URIs declared in design.md "Routes and authorization" and
-// switch to Wayfinder helpers when their routes exist (`users.index` done in
-// 4.18, `roles.index` in 6.12; audit in 7.8).
+// (`App\Enums\PermissionName`). Every `href` comes from a Wayfinder helper, so
+// no URI is hardcoded here.
 export const NAV_ENTRIES: NavEntry[] = [
     {
         key: 'home',
@@ -68,11 +67,10 @@ export const NAV_ENTRIES: NavEntry[] = [
         priority: 20,
     },
     {
-        // TODO(7.8): replace with the Wayfinder `audit.index` helper.
         key: 'audit',
         label: 'Auditoría',
         icon: 'history',
-        href: '/audit',
+        href: auditIndex.url(),
         permission: 'audit.view',
         group: 'Administración',
         priority: 30,
