@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (46/108; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section)
+## Completed tasks (56/108; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -269,6 +269,41 @@ No RED step: Phase 2 frontend has no JS test framework and none was added (AGENT
 - `/` will redirect guests to `/login`, which returns 501 until PR 3b.
 - The middleware is appended before `HandleInertiaRequests` (design order).
 
+## PR 3b — Login, logout, throttle, session pinning (tasks 3.8-3.17; branch feat/001-foundation-3b-login-session, child of PR 3a)
+
+- [x] 3.8 `config/session.php`: `driver => 'database'`, `lifetime => 120` literals. `phpunit.xml` now sets `APP_LOCALE=es`/`APP_FALLBACK_LOCALE=es` (the local `.env` has `en`, which would break `lang/es` lookups in tests).
+- [x] 3.9 RED `tests/Feature/Auth/LoginTest.php` (E-01..E-06 + lockout audit + locked-attempt audit reason). [x] 3.10 RED `LoginThrottleTest.php` (DEC-017 x4, DEC-018 x2).
+- [x] 3.11 `app/Support/Auth/LoginThrottle.php` (row FOR UPDATE via `insertOrIgnore` + `lockForUpdate`; `locked_until` stored as a whole-second timestamp so remaining minutes are exact). [x] 3.12 `lang/es/auth.php` (`failed`, pluralized `locked`).
+- [x] 3.13 `app/Actions/Auth/AttemptLogin.php` + `LoginResult.php` (result VO; nothing thrown inside the transaction). [x] 3.14 `LoginRequest`, `LoginController` (create renders `auth/Login`, store), real `guest`-gated routes; `redirectUsersTo(home)` added to `bootstrap/app.php`.
+- [x] 3.15 RED `LogoutTest.php` (E-07) and `SessionTest.php` (E-08 x2, E-09 x2). [x] 3.16 `SessionInvalidator`, `EnsureUserIsActive`, `Logout` action, `LogoutController`, `POST /logout`; `EnsureUserIsActive` appended after `RequireAuthentication`.
+- [x] 3.17 pint; middleware order confirmed (RequireAuthentication -> EnsureUserIsActive -> HandleInertiaRequests).
+
+### TDD Cycle Evidence (PR 3b)
+
+| Task | Test File | RED | GREEN |
+|------|-----------|-----|-------|
+| 3.9/3.10 | Auth/LoginTest.php, LoginThrottleTest.php | 13 written; with the 3a placeholder routes: 10 failed + errors (501 from `/login`, missing `errors` in session), 1-3 trivially passing | 16/16 with tests/Feature/Authorization after 3.8, 3.11-3.14 (one test needed `/logout`, green after 3.16) |
+| 3.15 | Auth/LogoutTest.php, Auth/SessionTest.php | 6 written: 5 failed (`/logout` 404; E-09 deactivation still returned 200); E-08 expiry and E-09 row-deletion already passed (DB session handler) | 6/6 after 3.16; full suite 49 passed, 248 assertions |
+
+### Observed evidence (PR 3b)
+- `sail artisan test` -> 49 passed, 248 assertions. `sail pint --test` -> passed. `sail artisan route:list` -> `GET /`, `GET login`, `POST login`, `POST logout` (all web group).
+- No frontend changes in this unit (types/build not re-run).
+
+### Work Unit Evidence (PR 3b)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Feature/Auth tests/Feature/Authorization` -> 22 passed, 113 assertions |
+| Runtime harness | Feature tests drive the real `database` session driver through `loginWithRealSession()` / `requestWithSession()` (real `sessions` rows, real cookie); no browser run (login page is PR 3c) |
+| Rollback boundary | Revert `app/Actions/Auth/*`, `app/Support/Auth/*`, `EnsureUserIsActive`, `LoginRequest`, `Auth/{Login,Logout}Controller`, `bootstrap/app.php`, `config/session.php`, `lang/es/auth.php`, `phpunit.xml`, `tests/Pest.php`, `routes/web.php`, `tests/Feature/Auth/*` |
+
+### PR 3b deviations / notes
+- `tests/Pest.php` `loginWithRealSession()`/`requestWithSession()` (PR 1c helpers, flagged then as needing adjustment) were fixed: the cookie is now the decrypted session id; `requestWithSession` forgets the guards, session manager/store and `auth.driver` singletons, and passes an encrypted cookie explicitly (`call()` ignores default cookies). Without this the shared test app kept the in-memory login and every "rejected" scenario passed or failed spuriously.
+- The must_change_password redirect to `password.edit` is deferred to 3c (route absent); noted in task 3.20.
+- `GET /login` renders `auth/Login`, which is created in PR 3c (`ensure_pages_exist` would fail a test hitting it); until then the browser cannot show the login page.
+- Tests use a test-only route `/_test/protected` registered per test (not in the app).
+- Failed non-locked attempts carry no `reason` in the audit context (design only specifies `reason=locked`).
+
 ## Next
 
-PR 3b (tasks 3.8+): login, logout, throttle, session pinning.
+PR 3c (3.18+): Home, forced/own password change, Login.vue/ChangePassword.vue, shared props.
