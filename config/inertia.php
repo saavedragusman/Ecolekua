@@ -52,6 +52,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | DevTools
+    |--------------------------------------------------------------------------
+    |
+    | Disabled by default: when enabled in the local environment Inertia registers
+    | unauthenticated /_inertia/devtools/* routes, which would break FND-026 (E-30).
+    | A developer may opt in locally with INERTIA_DEVTOOLS_ENABLED=true.
+    |
+    */
+
+    'devtools' => [
+
+        'enabled' => env('INERTIA_DEVTOOLS_ENABLED', false),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Testing
     |--------------------------------------------------------------------------
     |

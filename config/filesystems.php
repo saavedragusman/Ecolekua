@@ -33,7 +33,8 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // No spec needs file serving; false removes the unauthenticated /storage/{path} routes (FND-026).
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],
