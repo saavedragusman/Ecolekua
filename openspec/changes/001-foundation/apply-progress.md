@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (26/102)
+## Completed tasks (32/104; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -136,6 +136,62 @@ E-29(a) intentionally deferred to task 7.6.
 - `RefreshDatabase` is applied to Feature via `tests/Pest.php`; the redundant `uses(RefreshDatabase::class)` was removed from the three Feature tests.
 - `loginWithRealSession()` / `requestWithSession()` are implemented per design but NOT yet exercised: they need `POST /login`, which lands in PR 3b (task 3.14). Expect possible adjustment then.
 
+## PR 2a — Design tokens, blade shell, locale (tasks 2.1-2.5 + 2.12, 32/104 done)
+
+> Scope amendment (2026-09-28, user decision UI-06): optional dark mode in the internal ERP (light default, manual `localStorage` toggle, derived dark palette `Propuesta`, portal excluded) amended 2a by adding task 2.12 and rewording 2.2/2.5; task 2.13 (`useAppearance` + toggle) added to PR 2b. See the UI-06 section below.
+
+- [x] 2.1 `resources/css/app.css` replaced with the design-system §2 token block (extracted verbatim from the doc); the starter `Instrument Sans` `@theme inline` removed; the two starter `@source` lines (pagination views, compiled views) kept.
+- [x] 2.2 `resources/views/app.blade.php`: `<html lang>` unchanged binding but `dark` class binding removed; `viewport-fit=cover` added; `@fonts` replaced by Google Fonts `<link>` tags (Outfit, Plus Jakarta Sans, Material Symbols Outlined; UI-03 interim).
+- [x] 2.3 `config/app.php` default locale `es` (`env('APP_LOCALE', 'es')`); `lang/es/validation.php` (only rules used by this change + `password.*` + `attributes`) and `lang/es/auth.php` stub (`return []`).
+- [x] 2.4 `resources/js/app.ts` progress color is `var(--color-secondary)` (a token reference, no hex; Inertia interpolates the value into a CSS `<style>`, confirmed in `@inertiajs/core`).
+- [x] 2.5 §11 verification (see below).
+
+### Observed evidence (PR 2a)
+
+- `sail pnpm types:check` -> `vue-tsc --noEmit`, no errors.
+- `sail pnpm build` -> `built in ~390ms`, no errors.
+- `sail artisan test` -> 27 passed, 135 assertions (unchanged; the `es` default did not break any test).
+- `sail pint --test` -> passed (config/app.php and lang/ also formatted with pint -> passed).
+- Token utilities generation: Tailwind v4 emits only used classes, so a throwaway `resources/views/zz-probe.blade.php` (deleted afterwards, not in the diff) used `p-space-md px-gutter text-label-md font-label-md shadow-glow bg-dots bg-primary pb-safe`; the built CSS contained every one (e.g. `.p-space-md{padding:var(--spacing-space-md)}`, `.px-gutter{padding-inline:var(--spacing-gutter)}`, `--color-primary:#000845`).
+
+### §11 checklist (docs/ui/design-system.md)
+
+| # | Item | Result |
+|---|---|---|
+| 1 | `pnpm build` compiles; §2 utilities generated | PASS (build clean; probe above generated `p-space-md`, `px-gutter`, `text-label-md`, `shadow-glow`, `bg-dots`) |
+| 2 | No arbitrary hex / default Tailwind palette in the diff | PASS (only hex values are the token declarations in `app.css`; `app.ts` uses `var(--color-secondary)`; no `bg-[#...]` or `gray-*`-style classes added) |
+| 3 | No `dark:` classes | PASS in the diff (`rg dark:` finds none in `app.css`, `app.blade.php`, `app.ts`; `dark` class binding removed). `resources/js/pages/Welcome.vue` (starter, 23 `dark:` uses) still exists and is deleted by task 2.10 |
+| 4 | Viewed at 375/768/1280 | NOT APPLICABLE to this unit: no route or component renders the shell yet (first real render is Phase 3's login page); re-check in 2.11 / Phase 3 |
+| 5 | Touch targets >=44px; inputs >=16px | NOT APPLICABLE: no components yet (2.7 / 2.11) |
+| 6 | Visible focus with keyboard | NOT APPLICABLE: no interactive elements yet (2.7 / 2.11) |
+| 7 | No `text-secondary-container` on light background | PASS (class not used anywhere in the diff) |
+
+Task 2.5 is scoped to "tokens, viewport, no dark mode": all three are satisfied. Items 4-6 are UI-render checks with nothing to observe yet; they are not failures and are carried into 2.11.
+
+### Work Unit Evidence (PR 2a)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pnpm types:check && ./vendor/bin/sail pnpm build` -> both exit 0; `sail artisan test` 27 passed, 135 assertions |
+| Runtime harness | N/A — shell has no standalone route until Phase 3; utilities verified with the throwaway probe file |
+| Rollback boundary | Revert `resources/css/app.css`, `resources/views/app.blade.php`, `resources/js/app.ts`, `config/app.php` locale default, delete `lang/es/` |
+
+### PR 2a deviations / notes
+
+- TDD: no RED step (documented Phase 2 exception: no JS test framework). No PHP behavior changed.
+- The local `.env` (not readable by agents) evidently sets `APP_LOCALE=en`: `tinker` reports `app()->getLocale()` = `en` even though the config default is now `es`. `.env` / `.env.example` are outside the agent's permitted paths; the user must set `APP_LOCALE=es` (and preferably `APP_FALLBACK_LOCALE=es`) in `.env` and `.env.example` for Spanish messages to take effect locally. Tests and the config default are unaffected.
+- `vite.config.ts` still registers `bunny('Instrument Sans')` through the Laravel Vite fonts plugin; the build still emits unused Instrument Sans assets (`@fonts` is no longer in the layout so they are never referenced). Left untouched (not in tasks 2.1-2.4); suggest removing it in a later unit.
+- Google Fonts loaded from `fonts.googleapis.com` via `<link>` (UI-03 interim; pending approval of `@fontsource-*`/`material-symbols` dependencies).
+
+### UI-06 amendment (tasks 2.12 done; 2.13 pending in PR 2b)
+
+- [x] 2.12 `resources/css/app.css`: `@custom-variant dark (&:where(.dark, .dark *));`, `.dark { … }` overriding all 55 color tokens (names identical to §2), `color-scheme: light` on `:root` and `dark` on `.dark` (in `@layer base`). `resources/views/app.blade.php`: inline no-flash `<script>` in `<head>` before `@vite` (reads `localStorage.appearance` in try/catch, adds `dark` to `<html>` only for `'dark'`). `docs/ui/design-system.md` updated (§1.5, §2, new §3.2 contrast table, §6.5 toggle notes, §10 UI-06, §11). 2.2 and 2.5 reworded and still satisfied (no `dark:` classes; `dark` binding removed; theme class applied only by the inline script).
+- [ ] 2.13 `useAppearance.ts` + toggle in `AppLayout.vue` (Spanish `aria-label`): lands with PR 2b layouts. 2.11 now also verifies both themes.
+
+Evidence: `sail pnpm types:check` OK; `sail pnpm build` OK (built CSS contains `.dark{--color-primary:#dee0ff;…}` and `color-scheme:dark`/`light`); `sail artisan test` 27 passed, 135 assertions; `sail pint --test` passed; `rg 'dark:' resources/js resources/views` -> only `resources/js/pages/Welcome.vue` (deleted by 2.10). Contrast ratios computed with a WCAG 2.x luminance script run through `sail php` (values in design-system §3.2).
+
+Notes: (1) dark `secondary-container` is a dark teal (`#006c8a`) so the CTA can keep `text-primary` (now light) at 4.6:1; the brand cyan exists only in light mode. (2) RESOLVED (user, 2026-09-28, option A): `AppButton` `primary` hover changed from `hover:bg-primary-container` (1.2:1 in dark) to `hover:bg-primary/90` in both themes; computed `on-primary` contrast 15.1:1 light / 9.1:1 dark (design-system §3.2, §7.1). (3) PR 2a review workload grows by ~90 CSS + ~90 doc lines; Forecast unchanged (2a remains a small unit; total still ~4,450 order of magnitude).
+
 ## Next
 
-Phase 2 (PR 2a), tasks 2.1..2.5.
+PR 2b, tasks 2.6..2.11 and 2.13 (layouts, base components, Forbidden page, Welcome.vue deletion, useAppearance + toggle, §11 re-check on both themes).

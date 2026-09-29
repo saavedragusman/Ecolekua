@@ -15,7 +15,7 @@
 2. **El tablero de diseño** (paleta con colores semilla `#081A72`, `#00C2F3`, `#F0F9FF`, `#1E293B`) muestra los colores **semilla** con los que se generó la paleta. **No se usan en código.** En código solo se usan los **roles** de la sección 2.
 3. **Portal público:** se migra conservando su aspecto (AGENTS.md §9). Las únicas alteraciones permitidas son las listadas en la sección 9.
 4. **Micro-ERP:** usa los mismos tokens, más los patrones de la sección 7, que el prototipo no cubre (tablas, badges de estado, timer, navegación inferior, formularios).
-5. **Solo modo claro.** El prototipo no define tema oscuro. Prohibido usar el prefijo `dark:`.
+5. **Modo claro por defecto; modo oscuro opcional solo en el ERP (UI-06).** El prototipo no define tema oscuro; la paleta oscura es una **derivación propuesta** (§2) pendiente de aprobación del cliente. El modo oscuro se implementa **exclusivamente** redefiniendo bajo `.dark` los tokens semánticos de la sección 2: el prefijo `dark:` sigue **prohibido** en componentes y páginas, de modo que los componentes no cambian por tema. El portal público conserva su identidad clara y no aplica modo oscuro.
 
 ---
 
@@ -55,10 +55,14 @@ Los patrones de la sección 7 se implementan **una vez** como componentes TypeSc
 
 Se declaran en `resources/css/app.css` mediante `@theme`. Los nombres son **idénticos** a los del prototipo, para que el HTML del portal migre sin cambiar clases.
 
+> El modo oscuro (UI-06) redefine **todos** los tokens de color bajo `.dark`; los tokens que no son de color (tipografía, espaciado, sombras) no cambian. `@custom-variant dark` habilita la clase `.dark` como selector de tema (no se usa `prefers-color-scheme`).
+
 > Si `app.css` ya define `--color-primary` u otros tokens del starter kit (por ejemplo, variables estilo shadcn), se sustituyen por estos. No debe haber dos sistemas de color paralelos.
 
 ```css
 @import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   /* ---------- Color: primario (azul corporativo) ---------- */
@@ -215,6 +219,76 @@ Se declaran en `resources/css/app.css` mediante `@theme`. Los nombres son **idé
   --shadow-glow-lg: 0 4px 20px rgb(42 205 255 / 0.4);
 }
 
+/* ---------- Tema oscuro opcional (UI-06, PROPUESTA): solo redefine los tokens de color ---------- */
+.dark {
+  /* Color: primario */
+  --color-primary: #dee0ff;
+  --color-on-primary: #0f1c78;
+  --color-primary-container: #0a1454;
+  --color-on-primary-container: #dee0ff;
+  --color-primary-fixed: #26338a;
+  --color-primary-fixed-dim: #bbc3ff;
+  --color-on-primary-fixed: #dee0ff;
+  --color-on-primary-fixed-variant: #bbc3ff;
+  --color-inverse-primary: #4957ac;
+  --color-surface-tint: #bbc3ff;
+
+  /* Color: secundario */
+  --color-secondary: #5fd4ff;
+  --color-on-secondary: #003546;
+  --color-secondary-container: #006c8a;
+  --color-on-secondary-container: #bbe9ff;
+  --color-secondary-fixed: #003a4c;
+  --color-secondary-fixed-dim: #005f7a;
+  --color-on-secondary-fixed: #bbe9ff;
+  --color-on-secondary-fixed-variant: #bbe9ff;
+
+  /* Color: terciario */
+  --color-tertiary: #d6dfe5;
+  --color-on-tertiary: #141d21;
+  --color-tertiary-container: #bfc8ce;
+  --color-on-tertiary-container: #1f282c;
+  --color-tertiary-fixed: #3f484d;
+  --color-tertiary-fixed-dim: #2a3338;
+  --color-on-tertiary-fixed: #dbe4ea;
+  --color-on-tertiary-fixed-variant: #bfc8ce;
+
+  /* Color: error */
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+
+  /* Color: superficies y texto */
+  --color-background: #0d1421;
+  --color-on-background: #dce2f7;
+  --color-surface: #0d1421;
+  --color-surface-bright: #333a4b;
+  --color-surface-dim: #0d1421;
+  --color-surface-container-lowest: #080f1c;
+  --color-surface-container-low: #151c2a;
+  --color-surface-container: #192030;
+  --color-surface-container-high: #242b3b;
+  --color-surface-container-highest: #2f3646;
+  --color-surface-variant: #2f3646;
+  --color-on-surface: #dce2f7;
+  --color-on-surface-variant: #c5c6d4;
+  --color-inverse-surface: #dce2f7;
+  --color-inverse-on-surface: #263143;
+  --color-outline: #8f909d;
+  --color-outline-variant: #454651;
+
+  /* Color: estados del ERP */
+  --color-success: #88d98a;
+  --color-on-success: #003911;
+  --color-success-container: #005319;
+  --color-on-success-container: #a3f6a4;
+  --color-warning: #e9c16c;
+  --color-on-warning: #412d00;
+  --color-warning-container: #5d4200;
+  --color-on-warning-container: #ffdea3;
+}
+
 /* ---------- Utilidades propias ---------- */
 @utility bg-dots {
   background-image: radial-gradient(var(--color-secondary-container) 1px, transparent 1px);
@@ -233,6 +307,14 @@ Se declaran en `resources/css/app.css` mediante `@theme`. Los nombres son **idé
 }
 
 @layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-surface text-on-surface font-body-md text-body-md antialiased;
   }
@@ -261,7 +343,7 @@ Se declaran en `resources/css/app.css` mediante `@theme`. Los nombres son **idé
 | `inverse-surface` | Botón invertido, toasts | — |
 | `error` / `error-container` | Errores, acciones destructivas, pausa, retrabajo | "Eliminar", badge "Retrabajo" |
 
-### 3.1 Reglas de contraste (verificadas, WCAG AA)
+### 3.1 Reglas de contraste (verificadas, WCAG AA) — modo claro
 
 | Combinación | Contraste | Veredicto |
 |---|---|---|
@@ -276,7 +358,50 @@ Se declaran en `resources/css/app.css` mediante `@theme`. Los nombres son **idé
 | `outline-variant` sobre `surface` | 1.6:1 | ❌ solo decorativo |
 | **`secondary-container` sobre `surface`** | **1.8:1** | ❌ **prohibido como texto o icono informativo** |
 
-Reglas derivadas:
+### 3.2 Reglas de contraste — modo oscuro (UI-06, propuesta)
+
+Ratios calculados con la fórmula de luminancia relativa de WCAG 2.x sobre los valores del bloque `.dark` de §2. Mínimos: 4.5:1 texto normal; 3:1 texto grande, iconos y bordes de controles.
+
+| Combinación | Contraste | Veredicto |
+|---|---|---|
+| `primary` sobre `surface` | 14.2:1 | ✅ |
+| `on-surface` sobre `surface` | 14.3:1 | ✅ |
+| `on-surface-variant` sobre `surface` | 10.9:1 | ✅ |
+| `on-surface-variant` sobre `surface-container-high` | 8.4:1 | ✅ |
+| `on-surface-variant` sobre `surface-container-highest` | 7.1:1 | ✅ |
+| `on-surface` sobre `surface-container-lowest` (tarjetas) | 14.9:1 | ✅ |
+| `on-surface-variant` sobre `surface-container-lowest` | 11.3:1 | ✅ |
+| `secondary` sobre `surface` | 10.8:1 | ✅ |
+| `primary` sobre `secondary-container` | 4.6:1 | ✅ (combinación del CTA) |
+| `primary` sobre `secondary-fixed-dim` | 5.6:1 | ✅ (hover del CTA) |
+| `on-primary` sobre `primary` | 11.1:1 | ✅ |
+| `on-primary-container` sobre `primary-container` | 13.1:1 | ✅ |
+| `secondary` sobre `primary-container` | 9.9:1 | ✅ |
+| `on-secondary` sobre `secondary` | 7.7:1 | ✅ |
+| `on-tertiary` sobre `tertiary` | 12.7:1 | ✅ |
+| `on-primary` sobre `tertiary-container` (`IconButton` `tool`) | 8.5:1 | ✅ |
+| `inverse-on-surface` sobre `inverse-surface` | 10.2:1 | ✅ |
+| `inverse-on-surface` sobre `tertiary-container` (hover `inverted`) | 7.7:1 | ✅ |
+| `on-error` sobre `error` | 7.7:1 | ✅ |
+| `on-error` sobre `on-error-container` (hover `danger`) | 10.1:1 | ✅ |
+| `error` sobre `surface` | 10.9:1 | ✅ |
+| `on-primary-fixed` sobre `primary-fixed` (badge `active`) | 8.4:1 | ✅ |
+| `on-success-container` sobre `success-container` (badge `done`) | 7.2:1 | ✅ |
+| `on-warning-container` sobre `warning-container` (badge `pending`) | 7.2:1 | ✅ |
+| `on-error-container` sobre `error-container` (badge `critical`) | 7.2:1 | ✅ |
+| `outline` sobre `surface` | 5.8:1 | ✅ (bordes de controles, mín. 3:1) |
+| `outline-variant` sobre `surface` | 2.0:1 | ❌ solo decorativo |
+| `secondary-container` sobre `surface` | 3.1:1 | ✅ solo elementos gráficos (≥3:1); no como texto |
+| `secondary-container` sobre `primary-container` | 2.8:1 | ⚠️ indicador de ítem activo del sidebar: el texto `primary` (4.6:1 sobre `secondary-container`) y `aria-current` sostienen el estado; el color no es el único indicador |
+| `on-primary` sobre `primary/90` (hover de `AppButton` `primary`) | 9.1:1 (claro: 15.1:1) | ✅ (UI-06: el hover usa `primary/90` en ambos temas) |
+| `on-primary` sobre `primary-container` | 1.2:1 | ❌ no usar esta combinación en oscuro |
+
+Reglas específicas del modo oscuro:
+
+- En modo oscuro `secondary-container` es un teal oscuro (no el cian de marca): el CTA pasa a ser teal con texto `primary` claro. El cian de marca solo existe en modo claro. Como consecuencia, decoraciones como `bg-dots` o el "!" del logotipo quedan poco visibles sobre fondos oscuros; son decorativas y no transmiten información.
+- `tertiary` y `tertiary-container` se invierten a grises claros para que los botones "de herramienta" mantengan contraste con `on-primary`.
+
+Reglas derivadas (modo claro):
 
 - `text-secondary-container` **solo** se usa sobre fondos oscuros (`primary`, `primary-container`, `tertiary`) o como decoración (el "!" del logotipo, subrayados, puntos de fondo).
 - El texto sobre `bg-secondary-container` siempre es `text-primary`. Nunca blanco.
@@ -351,6 +476,14 @@ El prototipo define tamaños `*-mobile` pero no los usa. En este proyecto son ob
 - Las grillas empiezan siempre en `grid-cols-1`, luego `md:grid-cols-2` y `lg:grid-cols-3` o `lg:grid-cols-4` (catálogo, Kanban, métricas). Separación: `gap-space-md md:gap-gutter`.
 - Padding de tarjetas: `p-space-md md:p-space-lg`. Bloques destacados: `p-space-xl`.
 
+### 6.5 Tema oscuro y alternador (UI-06)
+
+- **Clave:** `appearance` en `localStorage`. Valores: `'light'` | `'dark'`. Valor ausente o inválido = claro. **No** se usa `prefers-color-scheme`.
+- **Por defecto:** claro. El modo oscuro se activa solo con el alternador manual del ERP y se recuerda por navegador (la persistencia por usuario en BD queda para más adelante).
+- **Sin destello (no-flash):** un `<script>` en línea en `<head>` de `resources/views/app.blade.php`, antes de `@vite`, lee `localStorage` dentro de `try/catch` y añade la clase `dark` a `<html>` solo si el valor es `'dark'`.
+- **Aplicación:** el composable `resources/js/composables/useAppearance.ts` lee/escribe `appearance` y alterna `.dark` en `<html>`; el control del alternador vive en el layout del ERP, con `aria-label` en español y objetivo táctil ≥44px.
+- **Alcance:** solo el ERP. Las vistas de `resources/views/portal/` no cargan el script ni exponen el alternador.
+
 ---
 
 ## 7. Componentes
@@ -371,7 +504,7 @@ Forma: `rounded-lg` en el ERP (como el tablero de diseño) y `rounded-full` en e
 
 | Variante | Clases | Uso |
 |---|---|---|
-| `primary` | `bg-primary text-on-primary hover:bg-primary-container` | Guardar, Aceptar, Enviar |
+| `primary` | `bg-primary text-on-primary hover:bg-primary/90` | Guardar, Aceptar, Enviar |
 | `cta` | `bg-secondary-container text-primary shadow-glow hover:bg-secondary-fixed-dim` | Cotizar, Solicitar presupuesto, acción destacada |
 | `secondary` | `bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest` | Cancelar, acciones menores |
 | `inverted` | `bg-inverse-surface text-inverse-on-surface hover:bg-tertiary-container` | Acciones sobre fondos claros intensos |
@@ -452,6 +585,8 @@ Barra (píldora del tablero): `mb-space-sm flex items-center justify-around roun
 
 ---
 
+---
+
 ## 8. Accesibilidad
 
 1. **Foco visible** en todo elemento interactivo:
@@ -495,6 +630,7 @@ Cambios **permitidos y obligatorios** al llevar `desktop.html` a `resources/view
 | UI-03 | Carga de fuentes e iconos | Pendiente de aprobar dependencias | `@fontsource-variable/outfit`, `@fontsource-variable/plus-jakarta-sans` y `material-symbols` vía pnpm. Mientras no se aprueben, se mantiene el `<link>` de Google Fonts del prototipo. Vigilar el peso de Material Symbols en móviles |
 | UI-04 | Menú móvil del portal público | Pendiente | Diseñarlo con los tokens existentes (el prototipo no lo tiene) |
 | UI-05 | Palabra "calidad" del H1 del portal en `text-secondary-container` (contraste 1.8:1) | Consultar con el cliente | No cambiar sin aprobación; proponer `text-secondary` o fondo oscuro |
+| UI-06 | Modo oscuro opcional en el ERP | Propuesta | Alternador manual, persistido en `localStorage` (`appearance`), claro por defecto, sin detección de `prefers-color-scheme`. Paleta oscura derivada de los tokens de marca (§2, contrastes en §3.2), pendiente de aprobación del cliente. El portal público queda excluido. Se implementa solo con tokens bajo `.dark`; `dark:` sigue prohibido. Hover de `AppButton` `primary` cambiado de `hover:bg-primary-container` (1.2:1 en oscuro) a `hover:bg-primary/90` en ambos temas (decidido 2026-09-28) |
 
 Hasta que una decisión pase a **Confirmada**, los agentes aplican la recomendación solo si la decisión figura como "Propuesta". Si figura como "Pendiente" o "Consultar", se detienen en esa parte.
 
@@ -504,7 +640,7 @@ Hasta que una decisión pase a **Confirmada**, los agentes aplican la recomendac
 
 - [ ] `sail pnpm build` compila sin errores y las utilidades de §2 se generan (en especial `p-space-md`, `px-gutter`, `text-label-md`, `shadow-glow`, `bg-dots`).
 - [ ] No hay hexadecimales arbitrarios ni paleta por defecto de Tailwind en el diff.
-- [ ] No hay clases `dark:`.
+- [ ] No hay clases `dark:`; ambos temas verificados (claro por defecto, oscuro con el alternador) y sin destello al cargar.
 - [ ] Vista probada a 375px, 768px y 1280px de ancho.
 - [ ] Objetivos táctiles ≥44px; inputs ≥16px.
 - [ ] Foco visible navegando con teclado.

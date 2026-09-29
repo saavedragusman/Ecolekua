@@ -99,11 +99,13 @@ Can start in parallel with Phase 1 (no shared files). No JS test framework is co
 
 ### PR 2a — Design tokens, blade shell, locale
 
-- [ ] 2.1 GREEN — replace `resources/css/app.css` with the design-system §2 token block, removing the starter kit's `Instrument Sans` `@theme inline`.
-- [ ] 2.2 GREEN — modify `resources/views/app.blade.php`: `lang="es"`, `viewport-fit=cover`, remove the `dark` class binding (light mode only), replace `@fonts` with the interim Google Fonts `<link>` tags (Outfit, Plus Jakarta Sans, Material Symbols Outlined — UI-03 interim, no new dependency).
-- [ ] 2.3 GREEN — modify `config/app.php`: default `locale` → `es` (leave `timezone` as `UTC`; the `operating_timezone` key is added in Phase 7 where it is first consumed). Create `lang/es/validation.php` (only the rules used in this change) and a `lang/es/auth.php` stub (filled with `auth.failed`/`auth.locked` in Phase 3, task 3.12).
-- [ ] 2.4 GREEN — modify `resources/js/app.ts`: progress-bar color uses a token-compatible value, not a Tailwind default palette color.
-- [ ] 2.5 [manual check] Verify against `docs/ui/design-system.md` §11 checklist: tokens, viewport, no dark mode.
+- [x] 2.1 GREEN — replace `resources/css/app.css` with the design-system §2 token block, removing the starter kit's `Instrument Sans` `@theme inline`.
+- [x] 2.2 GREEN — modify `resources/views/app.blade.php`: `lang="es"`, `viewport-fit=cover`, remove the `dark` class binding (theme class is applied only by the UI-06 no-flash script, see 2.12), replace `@fonts` with the interim Google Fonts `<link>` tags (Outfit, Plus Jakarta Sans, Material Symbols Outlined — UI-03 interim, no new dependency).
+- [x] 2.3 GREEN — modify `config/app.php`: default `locale` → `es` (leave `timezone` as `UTC`; the `operating_timezone` key is added in Phase 7 where it is first consumed). Create `lang/es/validation.php` (only the rules used in this change) and a `lang/es/auth.php` stub (filled with `auth.failed`/`auth.locked` in Phase 3, task 3.12).
+- [x] 2.4 GREEN — modify `resources/js/app.ts`: progress-bar color uses a token-compatible value, not a Tailwind default palette color.
+- [x] 2.5 [manual check] Verify against `docs/ui/design-system.md` §11 checklist: tokens, viewport, no `dark:` classes (dark mode = `.dark` token overrides only, UI-06; see 2.12).
+
+- [x] 2.12 GREEN — dark mode foundation (UI-06, user decision 2026-09-28): in `resources/css/app.css` add `@custom-variant dark (&:where(.dark, .dark *));`, a `.dark { … }` block overriding every color token of §2 (matching the doc exactly) and `color-scheme` (`light` on `:root`, `dark` on `.dark`); in `resources/views/app.blade.php` add an inline `<script>` in `<head>` before `@vite` that reads `localStorage.getItem('appearance')` in try/catch and adds `dark` to `<html>` only when the value is `'dark'` (light by default, no `prefers-color-scheme`).
 
 ### PR 2b — Layouts, base components, Forbidden page
 
@@ -112,7 +114,8 @@ Can start in parallel with Phase 1 (no shared files). No JS test framework is co
 - [ ] 2.8 GREEN — create `resources/js/layouts/AuthLayout.vue` (centered `AppCard`, used by login/forced change) and `resources/js/layouts/AppLayout.vue` (sidebar at `lg`+, `BottomNav` below `lg`, at most 5 destinations — Inicio, Usuarios, Roles, Auditoría, Cuenta — each shown only if its permission is in `auth.permissions`; Inicio and Cuenta always shown).
 - [ ] 2.9 GREEN — create `resources/js/pages/errors/Forbidden.vue` (403 page; wired to the exception render hook in Phase 4, task 4.8).
 - [ ] 2.10 [cleanup] Delete `resources/js/pages/Welcome.vue` (replaced by `Home.vue` in Phase 3).
-- [ ] 2.11 [manual check] Verify against `docs/ui/design-system.md` §11 checklist: 44px touch targets, ≥16px inputs, mobile-first breakpoints, accessibility rules §8, `rounded-lg` (UI-01) and success/warning tokens (UI-02) applied per their "Propuesta" recommendation.
+- [ ] 2.13 GREEN — create `resources/js/composables/useAppearance.ts` (reads/writes `localStorage` key `appearance`, toggles `.dark` on `<html>`; light default) and a theme toggle control in the ERP layout (`AppLayout.vue`) with a Spanish accessible label (`aria-label`, ≥44px target). No `dark:` classes (UI-06).
+- [ ] 2.11 [manual check] Verify against `docs/ui/design-system.md` §11 checklist: both themes checked (light default, dark via the 2.13 toggle) with no flash on load; 44px touch targets, ≥16px inputs, mobile-first breakpoints, accessibility rules §8, `rounded-lg` (UI-01) and success/warning tokens (UI-02) applied per their "Propuesta" recommendation.
 
 **Phase 2 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 

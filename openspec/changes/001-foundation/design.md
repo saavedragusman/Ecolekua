@@ -188,11 +188,12 @@ CREATE TRIGGER audit_logs_block_delete BEFORE DELETE ON audit_logs FOR EACH ROW
 ### Decision 15: Frontend shell and design system
 
 **Choice**:
-- `resources/css/app.css` is replaced by the design-system §2 block (it removes the starter kit's `Instrument Sans` `@theme inline`).
+- `resources/css/app.css` is replaced by the design-system §2 block (it removes the starter kit's `Instrument Sans` `@theme inline`), including `@custom-variant dark (&:where(.dark, .dark *));`, the `.dark { … }` override of every color token and `color-scheme` per theme (UI-06, optional dark mode, palette status `Propuesta`; `dark:` prefix remains forbidden in components).
+- `resources/js/composables/useAppearance.ts` reads/writes `localStorage` key `appearance` and toggles `.dark` on `<html>`; a theme toggle with a Spanish `aria-label` lives in `AppLayout.vue` (PR 2b). Public portal excluded.
 - `app.blade.php`:
   - `lang="es"`;
   - `viewport-fit=cover`;
-  - remove the `dark` class binding (light mode only);
+  - remove the starter's `dark` class binding; the theme class is applied only by a tiny inline `<script>` in `<head>` before `@vite` that reads `localStorage.getItem('appearance')` in try/catch and adds `dark` to `<html>` when the value is `'dark'` (light default, no `prefers-color-scheme`, no flash) — UI-06;
   - replace `@fonts` with the interim Google Fonts `<link>` tags (Outfit, Plus Jakarta Sans, Material Symbols Outlined), following UI-03.
 - `config/app.php` default locale is `es`. The new `lang/es/validation.php` and `lang/es/auth.php` cover only the rules and messages used here.
 - Layouts:
@@ -391,8 +392,8 @@ Generated Wayfinder files (`resources/js/actions/**`, `resources/js/routes/**`) 
 | `database/factories/UserFactory.php` | Modify | first/last name, `is_active`, `must_change_password`; states `inactive()`, `mustChangePassword()`, `withPermissions(...)` |
 | `database/factories/RoleFactory.php` | Create | Test roles |
 | `lang/es/validation.php`, `lang/es/auth.php` | Create | Spanish messages for the rules used; `auth.failed` (generic, FND-002) and `auth.locked` (pluralized, `:minutes`, DEC-018) |
-| `resources/css/app.css` | Modify | Design-system §2 tokens only |
-| `resources/views/app.blade.php` | Modify | `lang="es"`, viewport, fonts link, no `dark` |
+| `resources/css/app.css` | Modify | Design-system §2 tokens, `@custom-variant dark` and `.dark` color overrides (UI-06) |
+| `resources/views/app.blade.php` | Modify | `lang="es"`, viewport, fonts link, no-flash theme script (UI-06) |
 | `resources/js/app.ts` | Modify | Progress colour from a token-compatible value (no Tailwind default palette) |
 | `resources/js/types/auth.ts` | Modify | `AuthUser` DTO + `permissions: string[]` |
 | `resources/js/layouts/AppLayout.vue`, `AuthLayout.vue` | Create | Shells (design-system §6.2) |
