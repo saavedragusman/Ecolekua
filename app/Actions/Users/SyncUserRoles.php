@@ -3,6 +3,7 @@
 namespace App\Actions\Users;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Authorization\EnsureAdministrationIsPreserved;
 use App\Enums\AuditAction;
 use App\Exceptions\BusinessRuleViolation;
 use App\Models\Role;
@@ -15,18 +16,27 @@ use Illuminate\Support\Facades\DB;
 /**
  * Replaces the roles of a user (FND-010). An active user must keep at least one role (FND-018).
  * Added and removed roles are audited separately, with their ids and names. The self-change and
- * last-administrator guards are added with the administrative protections (task 6.8).
+ * last-administrator guards are FND-021 (nobody changes their own roles) and FND-020.
  */
 class SyncUserRoles
 {
-    public function __construct(private readonly RecordAuditEvent $audit) {}
+    public function __construct(
+        private readonly RecordAuditEvent $audit,
+        private readonly EnsureAdministrationIsPreserved $administration,
+    ) {}
 
     /**
      * @param  array<int, int|string>  $roleIds
      */
     public function handle(User $user, array $roleIds, ?User $actor, ?AuditOrigin $origin = null): User
     {
+        if ($actor?->is($user)) {
+            throw new BusinessRuleViolation('No puede modificar sus propios roles.');
+        }
+
         return DB::transaction(function () use ($user, $roleIds, $actor, $origin): User {
+            $this->administration->lock();
+
             $wanted = Role::query()->whereIn('id', Arr::wrap($roleIds))->orderBy('id')->get();
 
             if ($user->is_active && $wanted->isEmpty()) {
@@ -43,6 +53,8 @@ class SyncUserRoles
             }
 
             $user->roles()->sync($wanted->modelKeys());
+
+            $this->administration->assert();
 
             if ($added->isNotEmpty()) {
                 $this->audit->handle(AuditAction::UserRolesAssigned, $actor, $user, newValues: ['roles' => $this->describe($added)], origin: $origin);
