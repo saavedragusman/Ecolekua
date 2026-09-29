@@ -3,10 +3,7 @@
 use App\Exceptions\AuditLogIsImmutable;
 use App\Models\AuditLog;
 use Illuminate\Database\QueryException;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
-
-uses(RefreshDatabase::class);
 
 function insertAuditRow(string $action = 'auth.login', string $email = 'ana@ecolekua.com'): int
 {

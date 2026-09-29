@@ -40,3 +40,4 @@ yarn-error.log
 /opencode.json
 /opencode.jsonc
 *:Zone.Identifier
+.atl/.skill-registry.cache.json
