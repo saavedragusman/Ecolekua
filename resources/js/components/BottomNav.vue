@@ -30,7 +30,7 @@ defineProps<{
                     ]"
                 >
                     <AppIcon :name="item.icon" />
-                    <span>{{ item.label }}</span>
+                    <span class="text-center">{{ item.label }}</span>
                 </Link>
             </li>
         </ul>

@@ -2,6 +2,7 @@
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import BottomNav from '@/components/BottomNav.vue';
+import FlashMessage from '@/components/FlashMessage.vue';
 import IconButton from '@/components/IconButton.vue';
 import SideNav from '@/components/SideNav.vue';
 import { useAppearance } from '@/composables/useAppearance';
@@ -51,7 +52,12 @@ const DESTINATIONS: Destination[] = [
         icon: 'history',
         permission: 'audit.view',
     },
-    { label: 'Cuenta', href: '/password', icon: 'person', permission: null },
+    {
+        label: 'Cambiar contraseña',
+        href: '/password',
+        icon: 'key',
+        permission: null,
+    },
 ];
 
 function isActive(destination: Destination): boolean {
@@ -112,6 +118,7 @@ const isDark = computed(() => appearance.value === 'dark');
             <main
                 class="px-gutter-mobile pt-space-md pb-28 md:px-gutter lg:pb-space-xl"
             >
+                <FlashMessage class="mb-space-md" />
                 <slot />
             </main>
         </div>

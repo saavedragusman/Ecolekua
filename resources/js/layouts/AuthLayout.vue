@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppCard from '@/components/AppCard.vue';
+import FlashMessage from '@/components/FlashMessage.vue';
 
 // Shell for guest pages and the forced password change: a single centred card.
 defineProps<{
@@ -21,6 +22,7 @@ defineProps<{
             >
                 {{ title }}
             </h1>
+            <FlashMessage />
             <slot />
         </AppCard>
     </main>

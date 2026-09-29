@@ -16,6 +16,11 @@ declare module 'vite/client' {
 
 declare module '@inertiajs/core' {
     export interface InertiaConfig {
+        // Native Inertia v3 flash data (Inertia::flash(['type' => ..., 'message' => ...])).
+        flashDataType: {
+            type?: 'success' | 'error';
+            message?: string;
+        };
         sharedPageProps: {
             name: string;
             auth: Auth;

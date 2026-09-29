@@ -200,7 +200,7 @@ Notes: (1) dark `secondary-container` is a dark teal (`#006c8a`) so the CTA can 
 - [x] 2.9 `pages/errors/Forbidden.vue` (uses `AppLayout` via `defineOptions`, Spanish text, button back to `home`).
 - [x] 2.10 `pages/Welcome.vue` deleted (see gaps: `GET /` now has no page until `Home.vue` in Phase 3).
 - [x] 2.13 `composables/useAppearance.ts` (key `appearance`, localStorage in try/catch, toggles `.dark` on `<html>`, mirrors the class set by the inline no-flash script; light default, no prefers-color-scheme) and a toggle `IconButton` in `AppLayout.vue` (`aria-label` "Activar modo oscuro"/"Activar modo claro", 44px).
-- [ ] 2.11 manual check: NOT marked. The human must verify in a browser (checklist delivered in the apply report).
+- [x] 2.11 manual check: marked done by the human in tasks.md after the PR 2b commit (executor did not perform it; browser verification is the user's).
 
 ### TDD note (PR 2b)
 No RED step: Phase 2 frontend has no JS test framework and none was added (AGENTS.md: new dependencies need approval). Structural verification only.
@@ -221,13 +221,21 @@ No RED step: Phase 2 frontend has no JS test framework and none was added (AGENT
 | Rollback boundary | Delete `resources/js/{components,layouts,composables}/`, `lib/ui.ts`, `types/navigation.ts`, `pages/errors/Forbidden.vue`; restore `types/{auth,global.d,index}.ts` and `pages/Welcome.vue` from git |
 
 ### PR 2b deviations / gaps
-- Wayfinder helpers exist only for `home`; `/users`, `/roles`, `/audit`, `/password` are hardcoded URIs in `AppLayout.vue` (from design.md "Routes and authorization"); switch to Wayfinder helpers once those routes are registered. "Cuenta" points to `/password` (`password.edit`), an assumption: design does not define an account page.
-- Shared `flash` shape is not defined in design (only "flash" in HandleInertiaRequests), so `FlashMessage` is prop-driven and `AppLayout` does not read `page.props.flash`. Wire it when 3c defines the shape.
+- Wayfinder helpers exist only for `home`; `/users`, `/roles`, `/audit`, `/password` are hardcoded URIs in `AppLayout.vue` (from design.md "Routes and authorization"); switch to Wayfinder helpers once those routes are registered. "Cuenta" (now "Cambiar contraseña", decision 3) points to `/password` (`password.edit`), an assumption: design does not define an account page.
+- (Resolved by decision 4 above) Shared `flash` shape was not defined in design (only "flash" in HandleInertiaRequests), so `FlashMessage` is prop-driven and `AppLayout` does not read `page.props.flash`. Wire it when 3c defines the shape.
 - No logout control in the layouts (logout route/UI lands in PR 3b).
 - Deleting `Welcome.vue` leaves `Route::inertia('/', 'Welcome')` pointing at a missing page (500 in the browser at `/`; no test hits `/`). Task 3.x replaces the route with `HomeController`/`Home.vue`.
 - `vite.config.ts` still registers `bunny('Instrument Sans')` (unchanged; the design does not say to remove it).
 - `.env.example` shows as modified in git status; not touched by this unit.
 - `AppButton` `md:w-auto` / `w-full` follows design-system §7.1 literally.
+
+### PR 2b gap decisions (user, recorded after the PR 2b commit; design Decision 19)
+
+1. `GET /` stays on the interim route until PR 3c; it must remain protected (not public, FND-026) and redirect guests to `login`. No merge to `main` before 3c.
+2. `DESTINATIONS` in `AppLayout.vue` moves to Wayfinder helpers when each route exists: new tasks 3.27 (Inicio, Cambiar contraseña), 4.18 (Usuarios), 6.12 (Roles), 7.8 (Auditoría). Total tasks now 108.
+3. Label "Cuenta" renamed to "Cambiar contraseña" (icon `key`); `BottomNav` label centred so it can wrap on 375px (verify in 2.11).
+4. Flash: native Inertia v3 flash typed as `{ type: 'success' | 'error', message: string }` via `InertiaConfig.flashDataType` (`types/global.d.ts`). `FlashMessage.vue` now takes no props, reads `usePage().flash` and is mounted in `AppLayout` and `AuthLayout`; the `info` type was dropped. Task 3.24 reworded (no custom shared `flash`).
+   Evidence: `sail pnpm types:check` exit 0; `vp lint` exit 0; `sail pnpm build` OK.
 
 ## Next
 

@@ -1,20 +1,14 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import IconButton from '@/components/IconButton.vue';
 
-type FlashType = 'success' | 'error' | 'info';
+// Reads the native Inertia v3 flash data ({ type, message }) set by the
+// backend with Inertia::flash(); there is no custom shared prop.
+const page = usePage();
 
-const props = withDefaults(
-    defineProps<{
-        // Message text supplied by the backend; nothing is rendered when empty.
-        message?: string | null;
-        type?: FlashType;
-    }>(),
-    { message: null, type: 'info' },
-);
-
-const TYPES: Record<FlashType, { classes: string; icon: string }> = {
+const TYPES = {
     success: {
         classes: 'bg-success-container text-on-success-container',
         icon: 'check_circle',
@@ -23,23 +17,23 @@ const TYPES: Record<FlashType, { classes: string; icon: string }> = {
         classes: 'bg-error-container text-on-error-container',
         icon: 'error',
     },
-    info: {
-        classes: 'bg-primary-fixed text-on-primary-fixed',
-        icon: 'info',
-    },
-};
+} as const;
 
 const dismissed = ref(false);
 
-// A new message re-opens the banner.
+// A new flash re-opens the banner.
 watch(
-    () => props.message,
+    () => page.flash,
     () => {
         dismissed.value = false;
     },
 );
 
-const visible = computed(() => Boolean(props.message) && !dismissed.value);
+const message = computed(() => page.flash?.message ?? null);
+const type = computed(() =>
+    page.flash?.type === 'error' ? 'error' : 'success',
+);
+const visible = computed(() => Boolean(message.value) && !dismissed.value);
 </script>
 
 <template>
