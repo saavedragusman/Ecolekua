@@ -109,12 +109,12 @@ Can start in parallel with Phase 1 (no shared files). No JS test framework is co
 
 ### PR 2b — Layouts, base components, Forbidden page
 
-- [ ] 2.6 GREEN — create `resources/js/types/auth.ts` (`AuthUser` DTO + `permissions: string[]`).
-- [ ] 2.7 GREEN — create components in `resources/js/components/`: `AppButton.vue`, `IconButton.vue`, `AppIcon.vue`, `AppInput.vue`, `AppSelect.vue`, `AppCheckbox.vue` (design-system §1.2/§7.4, not in §7's base list), `AppCard.vue`, `StatusBadge.vue` (active→`active`, inactive→`neutral`, always with text), `DataTable.vue`, `BottomNav.vue`, `SideNav.vue`, `AppPagination.vue`, `FlashMessage.vue`.
-- [ ] 2.8 GREEN — create `resources/js/layouts/AuthLayout.vue` (centered `AppCard`, used by login/forced change) and `resources/js/layouts/AppLayout.vue` (sidebar at `lg`+, `BottomNav` below `lg`, at most 5 destinations — Inicio, Usuarios, Roles, Auditoría, Cuenta — each shown only if its permission is in `auth.permissions`; Inicio and Cuenta always shown).
-- [ ] 2.9 GREEN — create `resources/js/pages/errors/Forbidden.vue` (403 page; wired to the exception render hook in Phase 4, task 4.8).
-- [ ] 2.10 [cleanup] Delete `resources/js/pages/Welcome.vue` (replaced by `Home.vue` in Phase 3).
-- [ ] 2.13 GREEN — create `resources/js/composables/useAppearance.ts` (reads/writes `localStorage` key `appearance`, toggles `.dark` on `<html>`; light default) and a theme toggle control in the ERP layout (`AppLayout.vue`) with a Spanish accessible label (`aria-label`, ≥44px target). No `dark:` classes (UI-06).
+- [x] 2.6 GREEN — create `resources/js/types/auth.ts` (`AuthUser` DTO + `permissions: string[]`).
+- [x] 2.7 GREEN — create components in `resources/js/components/`: `AppButton.vue`, `IconButton.vue`, `AppIcon.vue`, `AppInput.vue`, `AppSelect.vue`, `AppCheckbox.vue` (design-system §1.2/§7.4, not in §7's base list), `AppCard.vue`, `StatusBadge.vue` (active→`active`, inactive→`neutral`, always with text), `DataTable.vue`, `BottomNav.vue`, `SideNav.vue`, `AppPagination.vue`, `FlashMessage.vue`.
+- [x] 2.8 GREEN — create `resources/js/layouts/AuthLayout.vue` (centered `AppCard`, used by login/forced change) and `resources/js/layouts/AppLayout.vue` (sidebar at `lg`+, `BottomNav` below `lg`, at most 5 destinations — Inicio, Usuarios, Roles, Auditoría, Cuenta — each shown only if its permission is in `auth.permissions`; Inicio and Cuenta always shown).
+- [x] 2.9 GREEN — create `resources/js/pages/errors/Forbidden.vue` (403 page; wired to the exception render hook in Phase 4, task 4.8).
+- [x] 2.10 [cleanup] Delete `resources/js/pages/Welcome.vue` (replaced by `Home.vue` in Phase 3).
+- [x] 2.13 GREEN — create `resources/js/composables/useAppearance.ts` (reads/writes `localStorage` key `appearance`, toggles `.dark` on `<html>`; light default) and a theme toggle control in the ERP layout (`AppLayout.vue`) with a Spanish accessible label (`aria-label`, ≥44px target). No `dark:` classes (UI-06).
 - [ ] 2.11 [manual check] Verify against `docs/ui/design-system.md` §11 checklist: both themes checked (light default, dark via the 2.13 toggle) with no flash on load; 44px touch targets, ≥16px inputs, mobile-first breakpoints, accessibility rules §8, `rounded-lg` (UI-01) and success/warning tokens (UI-02) applied per their "Propuesta" recommendation.
 
 **Phase 2 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
