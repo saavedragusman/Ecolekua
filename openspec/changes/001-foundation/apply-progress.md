@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (93/117; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
+## Completed tasks (97/117; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -513,6 +513,42 @@ Backend only; no frontend and no dependency touched (types:check/build not re-ru
 - Roles list in Index/Show shows names only; a Show role-form submit that empties an active user's roles is rejected by the backend and shown as an error flash (no frontend rule).
 - Users `Index` has no search/filter/sort (spec does not ask).
 - Dates are not displayed on these pages.
+
+## PR 5 — First administrator console command (tasks 5.1-5.4; branch feat/001-foundation-5-first-administrator, child of PR 4c)
+
+Backend only (DEC-021, design Decision 17); no frontend, no dependency.
+
+- [x] 5.1 RED `tests/Feature/Console/CreateFirstAdministratorTest.php` (10 tests, all names start with `DEC-021`).
+- [x] 5.2 `app/Actions/Users/CreateFirstAdministrator.php` (transaction; `lockForUpdate` on the `is_protected` role row; missing role or active holder -> `BusinessRuleViolation`; `Str::random(20)`; delegates to `CreateUser` with `actor: null` and `AuditOrigin::console('users:create-administrator')`; returns `['user', 'password']`).
+- [x] 5.3 `app/Console/Commands/CreateFirstAdministrator.php` (`users:create-administrator`; refuses non-interactive runs; Prompts `text()` for Nombre/Apellido/Correo electrónico; validates with `UserRules::identity()` after the three answers; prints the password once).
+- [x] 5.4 REFACTOR pint; `tests/Feature/Users/CreateUserTest.php` re-run (14 passed, 113 assertions).
+
+### TDD Cycle Evidence (PR 5)
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5.1-5.3 | tests/Feature/Console/CreateFirstAdministratorTest.php | Integration (console + HTTP login) | 137 tests green before | 10 written, 10 errors: `The command "users:create-administrator" does not exist.` | 10/10, 74 assertions | active vs inactive holders; invalid vs duplicate (normalized) email; interactive vs `--no-interaction`; role present vs missing | pint, phpstan |
+| 5.4 | CreateUserTest.php + full suite | Integration | n/a | n/a | 147 tests, 142 passed, 5 todo, 762 assertions | n/a | pint passed |
+
+Mutation check of the log guard: a temporary `Log::info` with the password in the command made `DEC-021 never logs the temporary password` fail; probe removed.
+
+### Observed evidence (PR 5)
+- `./vendor/bin/sail artisan test` -> 147 tests, 142 passed, 5 skipped (todo E-25/E-26), 762 assertions. `sail pint` then `sail pint --test` -> passed. `sail composer types:check` -> phpstan 0 errors.
+- `pnpm types:check` / `pnpm build` not run (no frontend change).
+
+### Work Unit Evidence (PR 5)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest --filter=CreateFirstAdministrator` -> 10 passed, 74 assertions |
+| Runtime harness | Pest `artisan()` with `expectsQuestion()` against MySQL, plus a real `POST /login` with the temporary password. Real-terminal smoke pending the human (see report) |
+| Rollback boundary | Delete `app/Actions/Users/CreateFirstAdministrator.php`, `app/Console/Commands/CreateFirstAdministrator.php`, `tests/Feature/Console/`; tasks.md 5.x checkboxes |
+
+### PR 5 deviations / notes
+- Prompt validation runs once after the three answers (not inside `text(validate:)`) so a failure exits 1 as the design says instead of re-asking.
+- Email is trimmed before validation; the User mutator lowercases on storage.
+- Spanish copy for messages chosen here (no spec text).
+- No design deviation. No DEC-PENDIENTE.
 
 ## Next
 
