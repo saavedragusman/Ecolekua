@@ -1,4 +1,5 @@
 import { home } from '@/routes';
+import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
 
 // Display order of the navigation groups. Groups without a visible entry are
@@ -36,7 +37,7 @@ export type NavEntry = {
 // (`App\Enums\PermissionName`). `home` uses its Wayfinder helper; the other
 // hrefs are the URIs declared in design.md "Routes and authorization" and
 // switch to Wayfinder helpers when their routes exist (`users.index` done in
-// 4.18; roles and audit in 6.12 and 7.8).
+// 4.18, `roles.index` in 6.12; audit in 7.8).
 export const NAV_ENTRIES: NavEntry[] = [
     {
         key: 'home',
@@ -58,11 +59,10 @@ export const NAV_ENTRIES: NavEntry[] = [
         priority: 10,
     },
     {
-        // TODO(6.12): replace with the Wayfinder `roles.index` helper.
         key: 'roles',
         label: 'Roles',
         icon: 'admin_panel_settings',
-        href: '/roles',
+        href: rolesIndex.url(),
         permission: 'roles.view',
         group: 'Administración',
         priority: 20,

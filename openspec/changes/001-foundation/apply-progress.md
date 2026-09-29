@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (106/117; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
+## Completed tasks (108/117; 6.10 and 6.12 in the PR 6b section, 6.11 pending human; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -591,6 +591,42 @@ Backend only; no frontend, no dependency (types:check/build for the frontend not
 - Roles list is unpaginated (7 seeded roles; spec does not ask for pagination).
 - No DEC-PENDIENTE.
 
+## PR 6b — Roles frontend pages (tasks 6.10, 6.12; 6.11 pending human; branch feat/001-foundation-6b-roles-pages, child of PR 6a)
+
+Frontend + test edits only; no backend code, no dependency.
+
+- [x] 6.10 `resources/js/pages/roles/{Index,Create,Show,Edit}.vue` (layout `AppLayout`; Wayfinder helpers `@/routes/roles` and `@/routes/roles/permissions` `update`; `useForm` + `form.submit(route())`; `usePermissions().can()` for UI gating only). Index: `DataTable` (name + "Protegido" badge, description, users_count, permissions_count, "Ver detalle"), "Nuevo rol" gated by `roles.manage`. Create: name + description. Edit: name (disabled with explanatory hint for `is_protected`) + description. Show: summary, protected-role explanation text, "Editar datos" (`roles.manage`), permissions form (checkbox per catalog entry labelled with the Spanish `description`; `roles.manage`) or a read-only permission list (`roles.view` only), "Eliminar rol" card hidden for protected roles, with `ConfirmDialog`. Support: `types/roles.ts` (`RoleSummary`, `PermissionItem`, `RoleDetail`).
+- [ ] 6.11 [manual check] pending the human (checklist in the PR 6b report).
+- [x] 6.12 `NAV_ENTRIES` Roles now uses `rolesIndex.url()` from the Wayfinder `@/routes/roles`; TODO(6.12) removed. Wayfinder regenerated with `sail artisan wayfinder:generate`.
+
+### TDD Cycle Evidence (PR 6b)
+
+| Task | Test File | Layer | RED | GREEN |
+|------|-----------|-------|-----|-------|
+| 6.10 (pages) | tests/Feature/Roles/RoleManagementTest.php (`ensure_pages_exist=false` `beforeEach` removed; new test `FND-016 renders the create and edit role pages ...` asserting `roles/Create` and `roles/Edit` with `role.name`/`role.is_protected` props) | Integration (HTTP + Inertia component assertion) | `sail pest tests/Feature/Roles` -> 26 tests, 24 passed, 2 failed: `Inertia page component file [roles/Index] does not exist.` and `[roles/Create] does not exist.` | pages created; `sail artisan test` 182 passed, 974 assertions |
+| 6.10 (Vue behavior), 6.12 | none | Frontend | NO RED POSSIBLE: no JS test framework, none added (documented exception) | types:check, lint, build OK |
+
+No controller props change was needed (6a proposal sufficed).
+
+### Observed evidence (PR 6b)
+- `./vendor/bin/sail artisan test` -> 182 passed, 974 assertions (0 skipped). `sail pint` then `sail pint --test` -> passed. `sail composer types:check` -> phpstan 0 errors.
+- `sail pnpm types:check` (vue-tsc) exit 0, no errors. `sail pnpm exec vp lint` exit 0, no output. `vp fmt resources/js` applied. `sail pnpm build` -> built in 976ms. `rg 'dark:|\[#' resources/js` -> no matches.
+
+### Work Unit Evidence (PR 6b)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Feature/Roles` -> green inside the 182-test suite (RED before pages: 2 failed) |
+| Runtime harness | Inertia component assertions over HTTP; pages compiled by `pnpm build`; NOT viewed in a browser (6.11 pending human) |
+| Rollback boundary | Delete `resources/js/pages/roles/`, `resources/js/types/roles.ts`; revert `resources/js/navigation.ts` and the test edits in `RoleManagementTest.php` |
+
+### PR 6b deviations / gaps
+- Delete role uses `ConfirmDialog`. design-system §7.10 rule wording ("cierre sesiones, invalide credenciales o desactive algo") does not explicitly cover irreversible deletion; applied by spirit, doc NOT changed. Suggest clarifying §7.10/UI-07 to include irreversible deletions.
+- Backend rejections (E-22 role with users, E-23 protected, E-25 last administrator) arrive as the native error flash (`RenderBusinessRuleViolation`) and are shown by the layout's `FlashMessage`; the permissions form additionally shows a validation error for `permissions` in a `role="alert"` block.
+- Protected role: name input disabled and delete card hidden, each with explanatory text (UI convenience; backend authorizes). The disabled name is still sent unchanged on save (backend accepts unchanged name, E-23).
+- Users with only `roles.view` see a read-only permission list (the catalog prop is empty for them by design).
+- Role list not paginated (6a decision). No DEC-PENDIENTE.
+
 ## Next
 
-PR 4c ready for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.
+PR 6b ready for review and commit after the human runs 6.11. Then Phase 7. (Previously: PR 4c for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.
