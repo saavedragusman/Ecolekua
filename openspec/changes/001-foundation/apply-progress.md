@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (108/117; 6.10 and 6.12 in the PR 6b section, 6.11 pending human; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
+## Completed tasks (114/123; 6.13-6.18 in the PR 6c section; 6.10 and 6.12 in the PR 6b section, 6.11 pending human; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -627,6 +627,38 @@ No controller props change was needed (6a proposal sufficed).
 - Users with only `roles.view` see a read-only permission list (the catalog prop is empty for them by design).
 - Role list not paginated (6a decision). No DEC-PENDIENTE.
 
+## PR 6c — Permission coherence per role and users status filter (amendment DEC-022, DEC-023; tasks 6.13-6.18; branch feat/001-foundation-6c-permission-coherence-user-filter, child of PR 6b)
+
+Decisions confirmed by the user on 2026-09-29 were recorded BEFORE code (AGENTS.md §6): spec `docs/specs/001-foundation.md` v1.3 (§16 DEC-022, DEC-023 + changelog row), decision notes in the delta specs `roles-permissions` and `user-management` (no new E-xx), design Decision 23, design-system §7.11.
+
+- [x] 6.13 DOCS as above. [x] 6.14 RED `tests/Feature/Roles/PermissionCoherenceTest.php` (13 tests, names start with `DEC-022`). [x] 6.15 GREEN `SyncRolePermissions::ensureCoherent()` (ValidationException on `permissions`, before any write and before the no-change early return; `CreateRole` accepts no permissions so it needs no check).
+- [x] 6.16 RED `tests/Feature/Users/UserStatusFilterTest.php` (9 tests, names start with `DEC-023`). [x] 6.17 GREEN `UserController::index(Request)` (`status` default/fallback `active`, `counts`, `withQueryString()` kept). [x] 6.18 GREEN `resources/js/components/SegmentedTabs.vue`, `types/users.ts`, `users/Index.vue`.
+
+### TDD Cycle Evidence (PR 6c)
+
+| Task | Test File | Layer | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|-----|-------|-------------|----------|
+| 6.14-6.15 | tests/Feature/Roles/PermissionCoherenceTest.php | Integration (HTTP) | 13 written, 4 passed (acceptance cases), 9 failed: `Expected response status code [422] but received 302` | 13/13 | manage vs each of 5 `users.*` (dataset); swap on existing set; Administrador losing only `roles.view`; coherent sets; empty set; JSON vs HTML | phpstan param type fixed (`array<int, string>`), pint |
+| 6.16-6.17 | tests/Feature/Users/UserStatusFilterTest.php | Integration (HTTP + Inertia props) | 9 written, 2 passed (403 without permission, pagination), 7 failed: `Property [status] does not exist.` | 9/9 | default / inactive / all / unknown / non-string; counts under two views; page 2 link keeps `status` | pint, phpstan |
+| 6.18 | none | Frontend | NO RED POSSIBLE: no JS test framework, none added (documented exception) | types:check, lint, build OK | n/a | `vp fmt resources/js` |
+
+### Observed evidence (PR 6c)
+- `./vendor/bin/sail artisan test` -> 204 passed, 1106 assertions (0 skipped). LastAdministratorTest (E-25) green inside it.
+- `sail pint` then `sail pint --test` -> passed. `sail composer types:check` -> phpstan 0 errors (one initial `argument.type` on `ensureCoherent`'s `list<string>` param, fixed). `sail pnpm types:check` -> exit 0 (one initial error: `aria-label` prop name clashed with the attribute; prop renamed `label`). `sail pnpm exec vp lint` -> exit 0. `sail pnpm build` -> built in 1.34s. `rg 'dark:|\[#' resources/js` -> no matches.
+
+### Work Unit Evidence (PR 6c)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail artisan test tests/Feature/Roles tests/Feature/Users tests/Feature/AdministrativeProtections` -> 111 passed, 589 assertions (before the docblock fix; full suite 204 passed after) |
+| Runtime harness | Feature tests over HTTP with the real middleware stack and MySQL; Vue compiled by `pnpm build`; NOT viewed in a browser (checklist joins 6.11, pending the human) |
+| Rollback boundary | Revert `ensureCoherent()` in `SyncRolePermissions`, `status`/`counts` in `UserController::index`, `SegmentedTabs.vue`, `users/Index.vue` and `types/users.ts` edits, the two new test files; docs (spec v1.3, delta specs, design Decision 23, design-system §7.11) |
+
+### PR 6c deviations / notes
+- Validation lives in the Action, not the FormRequest (design Decision 23). Error is a `ValidationException` on `permissions`; `roles/Show.vue` already renders `errors.permissions` (first message only when both rules fail).
+- Unknown/non-string `status` -> `active` (technical choice, stated in Decision 23).
+- design-system §7.11 added for the new reusable `SegmentedTabs` component. No seeded data changed. No DEC-PENDIENTE. No dependency added. Size: 208 changed lines in tracked files plus 264 in three new files (about 470 authored lines, of which about 220 are tests and about 60 are docs). Slightly over the 400 budget as one cohesive work unit (RED tests and docs cannot be separated from the GREEN code); size:exception candidate only if the reviewer asks, not split artificially.
+
 ## Next
 
-PR 6b ready for review and commit after the human runs 6.11. Then Phase 7. (Previously: PR 4c for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.
+PR 6c ready for review and commit after the human runs the 4.17/6.11 checks (6.11 now also covers the users status tabs). PR 6b ready for review and commit after the human runs 6.11. Then Phase 7. (Previously: PR 4c for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.

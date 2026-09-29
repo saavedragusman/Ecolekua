@@ -602,6 +602,15 @@ Barra (píldora del tablero): `mb-space-sm flex items-center justify-around roun
 - Animaciones solo con `motion-safe:`. Sin dependencias nuevas.
 - Puede mostrar estado de procesamiento (botones deshabilitados mientras se envía). El componente solo emite `confirm` y `cancel`; el envío lo hace la página.
 
+### 7.11 `SegmentedTabs.vue` (vistas de filtro de un listado)
+
+Selector de vistas para filtrar un listado (por ejemplo Activos / Inactivos / Todos en Usuarios, DEC-023).
+
+- Son **enlaces** (`Link` de Inertia) dentro de un `<nav>` con nombre accesible (prop `label`), no un `tablist` ARIA: cada vista es una URL con su propio estado en la consulta. La vista seleccionada lleva `aria-current="page"`.
+- La vista seleccionada y los conteos los calcula el backend; el componente solo los muestra (por ejemplo "Activos (12)").
+- Contenedor: `flex w-full gap-space-xs rounded-lg bg-surface-container-high p-space-xs`; en `md:` se ajusta al contenido (`md:w-fit`). Ítem: `min-h-11 flex-1 rounded-lg px-space-md font-label-lg text-label-lg`; en `md:` `flex-none`. Seleccionado: `bg-primary text-on-primary`; reposo: `text-on-surface-variant hover:bg-surface-container-highest`.
+- En `< md` ocupa todo el ancho como control segmentado, con objetivos de al menos 44px. Foco visible según §8.1. Solo tokens del sistema, sin `dark:` ni hexadecimales.
+
 ---
 
 ---

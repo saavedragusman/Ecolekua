@@ -14,6 +14,11 @@ export type UserSummary = {
     roles: RoleOption[];
 };
 
+// Users list views resolved by the backend (DEC-023).
+export type UserStatusFilter = 'active' | 'inactive' | 'all';
+
+export type UserStatusCounts = Record<UserStatusFilter, number>;
+
 // Subset of Laravel's paginator JSON that the UI consumes.
 export type Paginated<T> = {
     data: T[];

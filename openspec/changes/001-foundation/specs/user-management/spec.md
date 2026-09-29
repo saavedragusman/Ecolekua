@@ -1,6 +1,6 @@
 # User Management Specification
 
-> Transcribed from `docs/specs/001-foundation.md` v1.2 (§8 "Usuarios", §11 "Usuarios y contraseñas", §16 "Decisiones de esta Spec"). Faithful transcription — no added, removed, or reinterpreted behavior. Original IDs (FND-xxx, E-xx) preserved verbatim.
+> Transcribed from `docs/specs/001-foundation.md` v1.3 (§8 "Usuarios", §11 "Usuarios y contraseñas", §16 "Decisiones de esta Spec"). Faithful transcription — no added, removed, or reinterpreted behavior. Original IDs (FND-xxx, E-xx) preserved verbatim. DEC-023 (v1.3) refines FND-010 and FND-011; the spec adds no E-xx scenario for it, so its tests are named by decision id (`DEC-023 …`).
 
 ## Purpose
 
@@ -68,6 +68,8 @@ Physical deletion of users is NOT permitted.
 Every new user MUST be created in active status, with a temporary password, and with at least one role assigned.
 
 > Decision note (DEC-020): An administrator with the corresponding permissions MAY modify their own data and reset their own password from user management, the same as with any other user. The only restrictions on themselves are those in FND-021: they MUST NOT deactivate themselves or modify their own roles. (Source: `docs/specs/001-foundation.md` §16, DEC-020)
+
+> Decision note (DEC-023, refines FND-010 and FND-011): users list by status. The user list MUST offer the views Active (default), Inactive and All. The filtering and the count of each view MUST be resolved by the backend. Physical deletion of users does not exist (BR-FND-005); removal remains deactivation. (Source: `docs/specs/001-foundation.md` §16, DEC-023; no E-xx scenario)
 
 #### Scenario: E-11 — Creación de usuario
 
