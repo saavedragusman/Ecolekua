@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (81/117; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section)
+## Completed tasks (90/117; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -422,6 +422,57 @@ Backend only; no frontend, no dependency added. Pages `users/{Index,Create,Show,
 - Pre-existing `composer types:check` failures (phpstan level 7, 3 errors in `app/Models/User.php::permissionNames` and `app/Support/Auth/LoginThrottle.php`, from earlier PRs) were fixed minimally: `permissionNames()` returns `array_values(array_map(strval(...), ...))`; `LoginThrottle::lockedRow()` returns `stdClass` and uses `sole()` (a missing row after `insertOrIgnore` would now throw instead of returning null and failing later). Behavior otherwise unchanged; auth tests still green.
 - No self-action guard on `update` (DEC-020).
 
+## PR 4b — Denial auditing, status, password reset, role assignment (tasks 4.7-4.15; branch feat/001-foundation-4b-user-lifecycle, child of PR 4a)
+
+Backend only; no frontend and no dependency touched (types:check/build not re-run). FND-021/E-26 self-guards are NOT here (task 6.8).
+
+- [x] 4.7 RED `tests/Feature/Authorization/PermissionAuthorizationTest.php` (E-10 x2, E-19 x5, E-20, E-21 x2).
+- [x] 4.8 GREEN `App\Exceptions\RenderAccessDenied` (audits `authorization.denied`: actor, `context = {route, method, parameters}`, IP; 403 `errors/Forbidden` Inertia or JSON 403) and `RenderBusinessRuleViolation` (back with native Inertia error flash; JSON 422), both registered in `bootstrap/app.php`. Decision 10 follow-up CONFIRMED: Laravel 13 `Handler::render` runs `prepareException` (AuthorizationException without status -> `AccessDeniedHttpException`) before `renderViaCallbacks`; the `AccessDeniedHttpException` hook is right. Recorded in tasks 4.8 and design open follow-ups.
+- [x] 4.9 RED `tests/Feature/Users/UserStatusTest.php` (E-09 HTTP-driven x2, E-18, FND-011 x3, FND-018 x3, FND-010 forbidden).
+- [x] 4.10 GREEN `ActivateUser`, `DeactivateUser` (transaction: `is_active` + `SessionInvalidator::forUser` + audit; no-op without audit if already in the target state; activate requires >=1 role), `UserPolicy::deactivate`, `UserStatusController`, routes `users.activate`/`users.deactivate` (POST).
+- [x] 4.11 RED `tests/Feature/Passwords/ResetPasswordTest.php` (E-15 x2, E-16 x2, E-28, FND-014 forbidden) + `tests/Feature/AdministrativeProtections/SelfActionTest.php` (DEC-020 x4).
+- [x] 4.12 GREEN `ResetUserPassword` (transaction: password + `must_change_password = true` + sessions deleted + value-less `users.password_reset` audit), `UserPolicy::resetPassword`, `ResetPasswordRequest` (`password` only, `Password::defaults()`, no `confirmed` per design Decision 12), `UserPasswordController` (self-reset -> `Auth::logout()` + session invalidate + redirect `login`), route `users.password.reset` (PUT).
+- [x] 4.13 RED `tests/Feature/Users/UserRolesTest.php` (9 tests).
+- [x] 4.14 GREEN `SyncUserRoles` (sync; `users.roles_assigned` new_values / `users.roles_removed` old_values `{roles: [{id, name}]}`; no audit when nothing changes; active user with an empty set -> `BusinessRuleViolation`), `UserPolicy::assignRoles`, `SyncUserRolesRequest` (`roles` present array of existing distinct ids), `UserRoleController`, route `users.roles.update` (PUT).
+- [x] 4.15 REFACTOR pint; every Action takes an optional `?AuditOrigin` and forwards it to `RecordAuditEvent`, which defaults to `AuditOrigin::fromRequest()` (asserted through `ip_address` not null in the status, roles and update tests).
+
+### TDD Cycle Evidence (PR 4b)
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4.7-4.8 | tests/Feature/Authorization/PermissionAuthorizationTest.php | Integration (HTTP) | Users suite 25/25 | 9 written, later 10 after splitting the Inertia test (first run with Users tests: 34 total, 30 passed, 4 failed/errored): the 4 E-19 tests failed (`No query results for model [AuditLog]` x2 = no denial audited; JSON test audit count 0 vs 1; Inertia assertion `Not a valid Inertia response` because an X-Inertia response is JSON: test split into full-page + `assertJsonPath`). E-10/E-20/E-21 passed at once (existing policy already satisfied them; regression proof) | 10/10, 44 assertions | FormRequest and Gate denials; full page, Inertia, JSON; permission revoked from role vs role detached; one vs two roles | pint, phpstan |
+| 4.9-4.10 | tests/Feature/Users/UserStatusTest.php | Integration (HTTP) | n/a (new) | 10 written, 0 passed: 404 on `POST /users/{id}/deactivate|activate`, `Target class [App\Actions\Users\DeactivateUser] does not exist`, `BindingResolutionException` for `ActivateUser` | 9/10 first run; the failing one was a test bug (second real login blocked by the first in-memory login: guest middleware redirected); test fixed to reset guard/session state; then 10/10, 46 assertions | active/inactive; with/without roles; HTML/JSON; target vs bystander session; permitted/forbidden | pint, phpstan |
+| 4.11-4.12 | tests/Feature/Passwords/ResetPasswordTest.php, tests/Feature/AdministrativeProtections/SelfActionTest.php | Integration (HTTP, real sessions) | n/a (new; DEC-020 self-edit already implemented in 4a) | 10 written, 9 failed with 404 on `PUT /users/{id}/password`, 1 passed (self-edit DEC-020, existing behavior) | 10/10, 57 assertions | 9/10/exact-10 chars; open session vs none; own vs other target; permitted/forbidden | pint, phpstan |
+| 4.13-4.14 | tests/Feature/Users/UserRolesTest.php | Integration (HTTP) | n/a (new) | 9 written, 0 passed (404 on `PUT /users/{id}/roles`, `Target class [App\Actions\Users\SyncUserRoles] does not exist`) | 9/9, 32 assertions | add only / remove only / replace / no change; active vs inactive empty; invalid id; forbidden | pint, phpstan |
+| 4.15 | all | Integration | 130 tests | n/a | full suite 130 passed, 667 assertions | n/a | pint passed, phpstan 0 errors |
+
+### Observed evidence (PR 4b)
+- `./vendor/bin/sail artisan test` -> 130 passed, 667 assertions (91 + 39 new). `./vendor/bin/sail pint` -> passed, then `sail pint --test` -> passed. `./vendor/bin/sail composer types:check` -> phpstan passed, 0 errors.
+- Frontend untouched: `pnpm types:check` / `pnpm build` not run.
+
+### Work Unit Evidence (PR 4b)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Feature/Authorization tests/Feature/Users tests/Feature/Passwords tests/Feature/AdministrativeProtections` -> all green inside the 130-test suite |
+| Runtime harness | Feature tests over HTTP with the real middleware stack, MySQL and the `database` session driver (real `sessions` rows via `loginWithRealSession()` / `requestWithSession()`) for E-09, E-10, E-15 and DEC-020 |
+| Rollback boundary | Delete `app/Actions/Users/{ActivateUser,DeactivateUser,ResetUserPassword,SyncUserRoles}.php`, `app/Exceptions/Render*.php`, `app/Http/Controllers/Users/User{Status,Password,Role}Controller.php`, `app/Http/Requests/Users/{ResetPassword,SyncUserRoles}Request.php`, the 5 new test files; revert `bootstrap/app.php`, `routes/web.php`, `UserPolicy.php`, the docblock in `BusinessRuleViolation.php`, tasks.md/design.md notes |
+
+### PR 4b deviations / notes
+- Edits to earlier-PR files: `UserPolicy` (3 abilities added), `routes/web.php` (4 routes), `bootstrap/app.php` (2 hooks), `BusinessRuleViolation` docblock only; `design.md` open follow-up ticked; `tasks.md` 4.8 records the Decision 10 outcome.
+- Hooks are invokable classes (`RenderAccessDenied`, `RenderBusinessRuleViolation`) called from closures in `bootstrap/app.php`, so the audit logic is testable and the file stays small (design shows an inline closure).
+- `authorization.denied` context keys chosen here: `route`, `method`, `parameters` (design lists the contents, not the keys). Only `AccessDeniedHttpException` is audited: an explicit `abort(403)` (plain `HttpException`) is not.
+- Activate/deactivate on a user already in the target state is a silent no-op (no audit); the design does not say.
+- Roles field is `roles` (list of ids), `present` (may be empty): the empty-set rule for active users is a `BusinessRuleViolation` in the Action, as in the design table, not a validation error. An inactive user may be left with no roles (design only protects active users).
+- Password reset takes only `password` (no `confirmed`; design Decision 12: admin-set temporary passwords do not use it).
+- Flash copy in Spanish chosen here (no spec text).
+- `SyncUserRoles`/`DeactivateUser` do not yet call `EnsureAdministrationIsPreserved` nor guard self-actions (task 6.8, FND-020/021, E-25/E-26): an administrator can currently deactivate themselves or the last administrator through these routes until 6.8.
+
+### PR 4b review follow-ups (user decisions, design Decision 21)
+- The no-op status changes, the hook classes and the inactive-without-roles rule noted above are now confirmed decisions (design Decision 21 items 1-3), no longer open deviations.
+- E-25 (`LastAdministratorTest.php`, 3 cases) and E-26 (`SelfActionTest.php`, 2 cases) added as Pest `->todo()` tests pointing to tasks 6.5-6.6 and 6.7-6.8, so the gap shows as pending on every run.
+- New rule AGENTS.md §7.2: denials only via Policies, never `abort(403)`/`abort_if(…, 403)`/`abort_unless(…, 403)`. `tests/Feature/Architecture/NoManualForbiddenTest.php` scans `app/`. RED observed with a temporary probe `app/ZzProbe.php` containing `abort_unless(false, 403)` (1 failed, offender `ZzProbe.php`); probe removed, then GREEN.
+
 ## Next
 
-PR 4a ready for review and commit. Then PR 4b (tasks 4.7-4.15): denial auditing, status, password reset, role assignment. Human browser checks from 2.11 / 3c / 3d are still pending.
+PR 4b ready for review and commit. Then PR 4c (tasks 4.16-4.18): users frontend pages. Human browser checks from 2.11 / 3c / 3d are still pending.

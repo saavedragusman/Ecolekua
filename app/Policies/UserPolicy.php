@@ -30,4 +30,28 @@ class UserPolicy
     {
         return $actor->hasPermission(PermissionName::UsersUpdate);
     }
+
+    /**
+     * Governs both activating and deactivating (design "Routes and authorization").
+     */
+    public function deactivate(User $actor, User $user): bool
+    {
+        return $actor->hasPermission(PermissionName::UsersDeactivate);
+    }
+
+    /**
+     * No self guard: an administrator may reset their own password (DEC-020).
+     */
+    public function resetPassword(User $actor, User $user): bool
+    {
+        return $actor->hasPermission(PermissionName::UsersResetPassword);
+    }
+
+    /**
+     * The self-change guard (FND-021) is enforced in SyncUserRoles, not here (task 6.8).
+     */
+    public function assignRoles(User $actor, User $user): bool
+    {
+        return $actor->hasPermission(PermissionName::UsersAssignRoles);
+    }
 }

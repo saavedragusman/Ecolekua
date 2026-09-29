@@ -279,6 +279,17 @@ Editing one's own email changes the login identifier. The session is keyed by us
 **Alternatives considered**: (a) raising the bar to 6+ items (cramped at 375 px, does not scale to the future modules); (b) a hamburger drawer (rejected by design-system §6.2; the "Más" sheet keeps the primary destinations always visible); (c) a JS/UI dependency for the sheet and menu (rejected: native `<dialog>` and a small custom popup are enough, AGENTS.md §2 requires justification for new dependencies).
 **Rationale**: the bar cannot hold the future modules (Comercial, Producción, Inventario, Administración) at 44-48 px targets; a single configuration removes the duplicated permission/active logic between `AppLayout`, `BottomNav` and `SideNav`; account actions belong to a user menu, not to the navigation of the business modules. FND-019, FND-004, FND-015, design-system §1.2 and §8.
 
+### Decision 21: User lifecycle technical rules from the PR 4b review (user decisions)
+
+**Choice** (technical decisions confirmed by the user; no new business behavior):
+1. **Idempotent status changes**: `ActivateUser` on an active user and `DeactivateUser` on an inactive user are no-ops: nothing is written, no session is invalidated and no audit row is recorded, because there is no state change to audit (FND-022 audits changes, not requests).
+2. **Exception render hooks as classes**: the `AccessDeniedHttpException` and `BusinessRuleViolation` render hooks live in invokable classes (`app/Exceptions/RenderAccessDenied.php`, `app/Exceptions/RenderBusinessRuleViolation.php`) called from thin closures in `bootstrap/app.php` `withExceptions`, instead of inline closures, so they are readable, typed and testable.
+3. **Roles and status (FND-018)**: "an active user must have at least one role" is enforced in both directions: `SyncUserRoles` rejects leaving an active user without roles; an inactive user may end up with no roles, but `ActivateUser` rejects activating a user without at least one role (`BusinessRuleViolation`).
+4. **No manual 403** (AGENTS.md §7.2): permission denials always go through Policies (`authorize`/`can`), never `abort(403)`/`abort_if(…, 403)`/`abort_unless(…, 403)`, so the `AccessDeniedHttpException` hook audits them (`authorization.denied`, FND-022). `tests/Feature/Architecture/NoManualForbiddenTest.php` scans `app/` and fails on any occurrence.
+5. **Visible temporary gap**: until tasks 6.5-6.8, E-25 (last administrator, FND-020) and E-26 (self-actions, FND-021) exist as Pest `->todo()` tests in `tests/Feature/AdministrativeProtections/`, so every run reports them as pending. Tasks 6.5 and 6.7 replace them with real tests.
+
+**Rationale**: keeps the audit trail meaningful (only real changes), keeps FND-018 consistent across every path that can produce an active user, and turns an easy-to-miss convention (policy-only denials) into an enforced check.
+
 ## Data Flow
 
 Request pipeline (web group, in order after Laravel's session and CSRF middleware):
@@ -755,6 +766,6 @@ The five business questions raised by the previous version of this design (DEC-P
 ## Technical Follow-ups (not business decisions)
 
 - [ ] **Trigger privileges in the production MySQL.** Confirm which of binlog-off, `log_bin_trust_function_creators=1` or a privileged migration account the hosting allows (Decision 11). If none, the user must choose fallback F2 or F3.
-- [ ] Confirm in Laravel 13 that `render` callbacks receive `AccessDeniedHttpException` for policy denials (Decision 10). The E-19 RED test settles it during apply.
+- [x] Confirm in Laravel 13 that `render` callbacks receive `AccessDeniedHttpException` for policy denials (Decision 10). Confirmed in PR 4b (Handler source and E-19 tests): the `AccessDeniedHttpException` hook is correct.
 - [ ] `$request->ip()` behind a reverse proxy needs `trustProxies` configured once the production topology is known (FND-023 IP accuracy).
 - [ ] Confirm during apply that Pest's `expectsQuestion()` drives Laravel Prompts `text()` in the Laravel 13 test harness (Decision 17). If it does not, the command falls back to `$this->ask()`, which keeps the same behavior and tests.
