@@ -10,6 +10,7 @@ return [
     'date_format' => 'El campo :attribute no tiene el formato :format.',
     'distinct' => 'El campo :attribute tiene un valor duplicado.',
     'email' => 'El campo :attribute debe ser un correo electrónico válido.',
+    'enum' => 'El valor seleccionado en :attribute no es válido.',
     'exists' => 'El valor seleccionado en :attribute no es válido.',
     'integer' => 'El campo :attribute debe ser un número entero.',
     'max' => [
@@ -46,6 +47,8 @@ return [
         'description' => 'descripción',
         'roles' => 'roles',
         'permissions' => 'permisos',
+        'user_id' => 'usuario',
+        'action' => 'acción',
         'from' => 'fecha inicial',
         'to' => 'fecha final',
     ],

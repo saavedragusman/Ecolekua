@@ -2,8 +2,10 @@
 
 use App\Exceptions\AuditLogIsImmutable;
 use App\Models\AuditLog;
+use App\Policies\AuditLogPolicy;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 
 function insertAuditRow(string $action = 'auth.login', string $email = 'ana@ecolekua.com'): int
 {
@@ -15,6 +17,33 @@ function insertAuditRow(string $action = 'auth.login', string $email = 'ana@ecol
         'context' => json_encode(['source' => 'test']),
     ]);
 }
+
+it('E-29 (a) no registered route other than GET audit.index targets audit records', function () {
+    $auditRoutes = collect(Route::getRoutes()->getRoutes())->filter(function ($route): bool {
+        $action = $route->getActionName();
+
+        return str_contains($route->uri(), 'audit')
+            || str_contains($action, 'Audit')
+            || str_starts_with((string) $route->getName(), 'audit');
+    });
+
+    expect($auditRoutes)->toHaveCount(1);
+
+    $route = $auditRoutes->first();
+
+    expect($route->getName())->toBe('audit.index')
+        ->and($route->methods())->toBe(['GET', 'HEAD'])
+        ->and($route->uri())->toBe('audit');
+});
+
+it('E-29 (a) audit records expose no write ability in the policy', function () {
+    $abilities = collect(get_class_methods(AuditLogPolicy::class))
+        ->reject(fn (string $method): bool => str_starts_with($method, '__'))
+        ->values()
+        ->all();
+
+    expect($abilities)->toBe(['viewAny']);
+});
 
 it('E-29 (b) the model refuses to update an audit record', function () {
     $id = insertAuditRow();

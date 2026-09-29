@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Audit\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
@@ -36,6 +37,9 @@ Route::post('/users/{user}/activate', [UserStatusController::class, 'activate'])
 Route::post('/users/{user}/deactivate', [UserStatusController::class, 'deactivate'])->name('users.deactivate');
 Route::put('/users/{user}/password', [UserPasswordController::class, 'update'])->name('users.password.reset');
 Route::put('/users/{user}/roles', [UserRoleController::class, 'update'])->name('users.roles.update');
+
+// Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
+Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
 
 Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
 Route::get('/roles/create', [RoleController::class, 'create'])->name('roles.create');
