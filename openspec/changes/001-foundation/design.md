@@ -290,6 +290,12 @@ Editing one's own email changes the login identifier. The session is keyed by us
 
 **Rationale**: keeps the audit trail meaningful (only real changes), keeps FND-018 consistent across every path that can produce an active user, and turns an easy-to-miss convention (policy-only denials) into an enforced check.
 
+### Decision 22: Confirmation step for destructive actions (PR 4c, user decision)
+
+**Choice** (UX/technical decision by the user, 2026-09-29, option B of the pending question; no business behavior): every UI action that closes sessions, invalidates credentials or deactivates something goes through a `ConfirmDialog` (design-system §7.10, UI-07) before the request is sent. In this change: "Desactivar usuario" and "Restablecer contraseña" on `users/Show`. Activating an account and other reversible edits do not need it. The dialog is native `<dialog>` + `showModal()` (same approach as `MoreSheet`), initial focus on "Cancelar", Esc/backdrop cancel, no dependency. It is a convenience: the backend authorizes and validates regardless.
+
+**Rationale**: both actions have immediate effects on someone else's sessions or credentials and are not undoable from the UI; an explicit step avoids accidental clicks, especially on touch devices.
+
 ## Data Flow
 
 Request pipeline (web group, in order after Laravel's session and CSRF middleware):

@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (90/117; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
+## Completed tasks (93/117; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -210,6 +210,7 @@ No RED step: Phase 2 frontend has no JS test framework and none was added (AGENT
 - `sail pnpm exec vp lint` -> exit 0, no output. `sail pnpm check` (fmt+lint+types) fails ONLY on pre-existing formatting of non-JS files (docs, openspec, `resources/css/app.css`); my 3 flagged `.vue` files were fixed with `vp fmt` and no `resources/js` file is flagged now.
 - `sail pnpm build` -> `built in 1.01s`; built CSS contains `min-h-11`, `size-11`, `pb-safe`, `pb-28`, `px-space-lg`, `font-label-lg`, `bg-primary-container`, `bg-success-container`, `accent-primary`, `lg:pl-64`, `focus-visible:ring-secondary-container`.
 - `sail artisan test` -> 27 passed, 135 assertions. `sail pint --test` -> passed.
+- After 4.19: `sail artisan test` 132 passed + 5 todo, `pint --test` passed, phpstan 0 errors, `pnpm types:check` exit 0, `vp lint` exit 0, `pnpm build` built in 1.32s, `pnpm check` flags no `resources/js` file.
 - `rg 'dark:|\[#' resources/js resources/views` -> no matches (Welcome.vue removed).
 
 ### Work Unit Evidence (PR 2b)
@@ -473,6 +474,46 @@ Backend only; no frontend and no dependency touched (types:check/build not re-ru
 - E-25 (`LastAdministratorTest.php`, 3 cases) and E-26 (`SelfActionTest.php`, 2 cases) added as Pest `->todo()` tests pointing to tasks 6.5-6.6 and 6.7-6.8, so the gap shows as pending on every run.
 - New rule AGENTS.md §7.2: denials only via Policies, never `abort(403)`/`abort_if(…, 403)`/`abort_unless(…, 403)`. `tests/Feature/Architecture/NoManualForbiddenTest.php` scans `app/`. RED observed with a temporary probe `app/ZzProbe.php` containing `abort_unless(false, 403)` (1 failed, offender `ZzProbe.php`); probe removed, then GREEN.
 
+## PR 4c — Users frontend pages (tasks 4.16, 4.18; 4.17 pending human; branch feat/001-foundation-4c-users-pages, child of PR 4b)
+
+- [x] 4.16 `resources/js/pages/users/{Index,Create,Show,Edit}.vue` (layout `AppLayout` via `defineOptions`; Wayfinder helpers `@/routes/users`, `@/routes/users/password` `reset`, `@/routes/users/roles` `update`; `useForm` + `form.submit(route())`). Index: `DataTable` (name, email, roles, `StatusBadge`, "Ver detalle") + `AppPagination` (only when `last_page > 1`) + "Nuevo usuario" gated by `users.create`. Create: identity fields, temporary password, roles as `AppCheckbox` array (`form.roles` = ids). Edit: identity fields. Show: summary card, "Editar datos" (`users.update`), roles form (`users.assign_roles`), password reset form (`users.reset_password`, `password` only), activate/deactivate form (`users.deactivate`, both directions per `UserPolicy::deactivate`). Per-field errors through `AppInput`/`AppCheckbox` (`aria-describedby`); `roles` error shown in a `role="alert"` paragraph. Support files: `types/users.ts` (`UserSummary`, `RoleOption`, `Paginated`), `composables/usePermissions.ts` (`can()`, UI only).
+- [ ] 4.17 [manual check] pending the human (checklist in the PR 4c report).
+- [x] 4.18 `NAV_ENTRIES` Usuarios now uses `usersIndex.url()` from the Wayfinder `@/routes/users`; TODO(4.18) removed. Wayfinder regenerated with `sail artisan wayfinder:generate` (output is gitignored; `pnpm build` regenerates it too).
+
+### Backend change (test-first)
+`UserController::show` now also sends `roles` (role options): all roles when the actor passes `assignRoles` (`users.assign_roles`), `[]` otherwise, so a view-only user does not receive the role catalogue. Test: `it('FND-010 exposes the role options on the detail page only ...')` in `CreateUserTest.php`.
+
+- [x] 4.19 `components/ConfirmDialog.vue` (native `<dialog>` + `showModal()`, `v-model:open`, props `title`/`message`/`confirmLabel`/`processing`, emits `confirm`/`cancel`; Esc and backdrop = cancel; `autofocus` on Cancelar; `aria-labelledby`/`aria-describedby`; no dependency). Used in `users/Show.vue` for "Desactivar usuario" and "Restablecer contraseña" (the request is sent only on confirm; activating stays direct because it is reversible and does not touch sessions). Docs recorded first: design-system §7.10 + UI-07 (Confirmada) + §11 checklist item; design Decision 22; tasks 4.19. Route: direct inline. No RED possible (no JS test framework).
+
+### TDD Cycle Evidence (PR 4c)
+
+| Task | Test File | Layer | RED | GREEN |
+|------|-----------|------|-----|-------|
+| 4.16 (pages) | tests/Feature/Users/CreateUserTest.php (FND-010 page test; `ensure_pages_exist` override removed) | Integration (HTTP + Inertia component assertion) | Override removed: `Inertia page component file [users/Index] does not exist.` (1 failed). New role-options test: `users/Show does not exist` (1 failed) | pages created; `sail artisan test` 137 tests, 132 passed, 5 todo (E-25/E-26), 688 assertions |
+| 4.16 (Vue behavior) | none | Frontend | NO RED POSSIBLE: no JS test framework, none added (documented exception) | types:check, lint, build OK |
+| 4.18 | none | Frontend | same exception | types:check, build OK |
+| 4.19 | none | Frontend | same exception | types:check, lint, build OK; backend suite unchanged (137 / 132 passed / 5 todo) |
+
+### Observed evidence (PR 4c)
+- `./vendor/bin/sail artisan test` -> 137 tests, 132 passed, 5 skipped (todo), 688 assertions. `sail pint` then `sail pint --test` -> passed. `sail composer types:check` -> phpstan 0 errors.
+- `sail pnpm types:check` (vue-tsc) exit 0. `sail pnpm exec vp lint` exit 0, no output. `sail pnpm build` -> built in 933ms (`Show-*.js` etc. emitted). `vp fmt resources/js` applied; `sail pnpm check` flags no `resources/js` file.
+- `rg 'dark:|\[#' resources/js` -> no matches. `rg -n "abort\(|abort_if|abort_unless" app` -> no matches (no manual 403).
+
+### Work Unit Evidence (PR 4c)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Feature/Users` after pages -> green inside the 137-test suite |
+| Runtime harness | Inertia component assertions over HTTP; pages compiled by `pnpm build`; NOT viewed in a browser (4.17 pending human) |
+| Rollback boundary | Delete `resources/js/pages/users/`, `components/ConfirmDialog.vue`, design-system §7.10/UI-07, design Decision 22, `types/users.ts`, `composables/usePermissions.ts`; revert `navigation.ts`, the `roles` prop in `UserController::show`, and the test edits in `CreateUserTest.php` |
+
+### PR 4c deviations / gaps
+- RESOLVED (user, 2026-09-29, option B; design Decision 22, design-system §7.10 and UI-07): destructive actions require a confirmation dialog. Implemented in task 4.19 below.
+- Self-actions (deactivate/reset own account, last administrator) are not guarded in UI or backend until task 6.8; the UI shows the buttons to anyone with the permission.
+- Roles list in Index/Show shows names only; a Show role-form submit that empties an active user's roles is rejected by the backend and shown as an error flash (no frontend rule).
+- Users `Index` has no search/filter/sort (spec does not ask).
+- Dates are not displayed on these pages.
+
 ## Next
 
-PR 4b ready for review and commit. Then PR 4c (tasks 4.16-4.18): users frontend pages. Human browser checks from 2.11 / 3c / 3d are still pending.
+PR 4c ready for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.
