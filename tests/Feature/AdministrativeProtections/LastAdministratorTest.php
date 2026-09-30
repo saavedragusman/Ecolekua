@@ -25,8 +25,21 @@ function e25PermissionIds(array $names): array
 
 function e25Message(): string
 {
-    return 'La operación dejaría al sistema sin un usuario activo con los permisos users.assign_roles y roles.manage.';
+    return 'La operación dejaría al sistema sin ningún usuario activo con los permisos «Asignar y retirar roles a usuarios» y «Crear, modificar y eliminar roles y asignarles permisos».';
 }
+
+it('E-25 explains the rejection with the permission descriptions, not their technical names', function () {
+    administrator();
+    $actor = userWithPermissions(PermissionName::UsersDeactivate);
+    $admin = User::query()->whereHas('roles', fn ($query) => $query->where('is_protected', true))->firstOrFail();
+
+    $message = $this->actingAs($actor)->postJson("/users/{$admin->id}/deactivate")->assertStatus(422)->json('message');
+
+    expect($message)->not->toContain('users.assign_roles')
+        ->and($message)->not->toContain('roles.manage')
+        ->and($message)->toContain(PermissionName::UsersAssignRoles->description())
+        ->and($message)->toContain(PermissionName::RolesManage->description());
+});
 
 it('E-25 rejects deactivating the last active administrator', function () {
     $admin = administrator();
