@@ -217,7 +217,7 @@ Depends on Phase 1 and Phase 3 (authorization stack, session invalidation).
 ### PR 4c — Users frontend pages
 
 - [x] 4.16 GREEN — create `resources/js/pages/users/Index.vue` (`DataTable` + `StatusBadge`), `Create.vue`, `Show.vue` (hosts the roles, reset, and activation forms), `Edit.vue`, wired to the Wayfinder-generated routes and `AppLayout`.
-- [ ] 4.17 [manual check] Verify against `docs/ui/design-system.md` §11: 44px touch targets, `DataTable` responsiveness, action buttons gated by permission (UI-only convenience; the backend already authorizes per §7.1).
+- [x] 4.17 [manual check] Verify against `docs/ui/design-system.md` §11: 44px touch targets, `DataTable` responsiveness, action buttons gated by permission (UI-only convenience; the backend already authorizes per §7.1).
 - [x] 4.18 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/users` URI in `NAV_ENTRIES` (Usuarios) with the Wayfinder-generated `users.index` helper. (design Decisions 19 and 20)
 
 - [x] 4.19 GREEN — add `resources/js/components/ConfirmDialog.vue` (design-system §7.10, design Decision 22, UI-07) and use it in `users/Show.vue` for "Desactivar usuario" and "Restablecer contraseña" (the form submits only after confirming; activating does not need it). Route: direct inline (component plus one page edit; already-understood pattern from `MoreSheet`). Checks: `sail pnpm types:check`, `sail pnpm exec vp lint`, `sail pnpm build`, `rg 'dark:|\[#' resources/js`; no RED possible (no JS test framework). Manual keyboard checks join 4.17.
@@ -262,7 +262,7 @@ Depends on Phase 3 (authorization) and Phase 4 (`DeactivateUser`, `SyncUserRoles
 ### PR 6b — Roles frontend pages
 
 - [x] 6.10 GREEN — create `resources/js/pages/roles/Index.vue`, `Create.vue`, `Show.vue` (hosts the permissions form), `Edit.vue`.
-- [ ] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
+- [x] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
 - [x] 6.12 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/roles` URI in `NAV_ENTRIES` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decisions 19 and 20)
 
 ### PR 6c — Permission coherence per role and users status filter (amendment; DEC-022, DEC-023)

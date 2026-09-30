@@ -1,9 +1,9 @@
 # Apply Progress: 001-foundation
 
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
-Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
+Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). Work-unit commits made by the user (or on explicit request) per PR; every chain branch pushed with upstream (see each PR section and `verify-report.md`).
 
-## Completed tasks (122/124 counted from tasks.md; only manual checks 4.17 and 6.11 remain; 7.1-7.8 in the PR 7 section; 6.13-6.18 in the PR 6c section; 6.10 and 6.12 in the PR 6b section, 6.11 pending human; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
+## Completed tasks (124/124 counted from tasks.md; manual checks 4.17 and 6.11 confirmed by the human on 2026-09-29; 7.1-7.8 in the PR 7 section; 6.13-6.18 in the PR 6c section; 6.10 and 6.12 in the PR 6b section, 6.11 pending human; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -702,4 +702,4 @@ Decisions confirmed by the user on 2026-09-29 were recorded BEFORE code (AGENTS.
 
 ## Next
 
-PR 7a committed; PR 7b ready for review and commit. Open items for change 001: manual checks 4.17 and 6.11 (human), then `/sdd-verify` and archive. Earlier: PR 6c ready for review and commit after the human runs the 4.17/6.11 checks (6.11 now also covers the users status tabs). PR 6b ready for review and commit after the human runs 6.11. Then Phase 7. (Previously: PR 4c for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.
+2026-09-29: the human confirmed the manual browser checks 4.17 (users pages, status tabs), 6.11 (roles pages) and the audit page; 124/124 tasks done. PR 7a and 7b committed and pushed; every chain branch has an upstream. Next: `/sdd-verify`, then `/sdd-archive` after human confirmation. (Superseded note:) PR 7a committed; PR 7b ready for review and commit. Open items for change 001: manual checks 4.17 and 6.11 (human), then `/sdd-verify` and archive. Earlier: PR 6c ready for review and commit after the human runs the 4.17/6.11 checks (6.11 now also covers the users status tabs). PR 6b ready for review and commit after the human runs 6.11. Then Phase 7. (Previously: PR 4c for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.
