@@ -72,6 +72,7 @@ No JS test framework: Vue pages are proven only by vue-tsc, the build and the hu
 
 - W1 and W2 addressed by the orchestrator after verify (2026-09-29): apply-progress header updated to 124/124 with the real commit state; the five delta spec headers now cite v1.3 (their content is unchanged from v1.2 for those domains). Pending commit by the user.
 - S6 fixed (2026-09-29, Strict TDD): the E-25 message in `EnsureAdministrationIsPreserved::assert()` now uses the catalog descriptions («Asignar y retirar roles a usuarios», «Crear, modificar y eliminar roles y asignarles permisos») built from `PermissionName::description()`, never the technical names. RED: new test `E-25 explains the rejection with the permission descriptions, not their technical names` plus the updated message helper → 6 of 12 failed; GREEN: 12/12; full suite 221 passed; pint and phpstan pass. The DEC-022 messages in `SyncRolePermissions` already used descriptions (no change).
+- S7 resolved (2026-09-29, user edit): `docs/ui/design-system.md` §7.10 rule and the UI-07 row in §10 now cover "eliminar algo de forma irreversible" with "eliminar un rol" as example, matching `roles/Show.vue`'s use of `ConfirmDialog`.
 
 ## Next
 
