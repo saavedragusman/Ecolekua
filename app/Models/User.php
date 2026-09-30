@@ -94,7 +94,7 @@ class User extends Authenticatable
      */
     public function permissionNames(): array
     {
-        return DB::table('role_user')
+        $names = DB::table('role_user')
             ->join('permission_role', 'permission_role.role_id', '=', 'role_user.role_id')
             ->join('permissions', 'permissions.id', '=', 'permission_role.permission_id')
             ->where('role_user.user_id', $this->getKey())
@@ -102,5 +102,7 @@ class User extends Authenticatable
             ->orderBy('permissions.name')
             ->pluck('permissions.name')
             ->all();
+
+        return array_values(array_map(strval(...), $names));
     }
 }
