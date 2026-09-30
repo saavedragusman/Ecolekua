@@ -146,7 +146,7 @@ Cuando la respuesta llegue, se registra en la spec correspondiente (sección de 
 ## 7. Principios no negociables (resumen)
 
 1. **Backend como autoridad.** Precios, descuentos, anticipos, disponibilidad, reservas, inventario, estados, producción, tiempos, calidad, reprocesos, comisiones y permisos se calculan y validan en el servidor. El frontend (incluido el portal público) solo muestra resultados.
-2. **Autorización en backend.** Toda operación protegida valida permisos con Policies/Gates. Ocultar un botón no es seguridad. **No usar `Gate::before` ni ningún "superadmin" implícito**: nadie tiene permisos no asignados.
+2. **Autorización en backend.** Toda operación protegida valida permisos con Policies/Gates. Ocultar un botón no es seguridad. **No usar `Gate::before` ni ningún "superadmin" implícito**: nadie tiene permisos no asignados. Las denegaciones por falta de permiso se hacen **siempre** con Policy (`authorize`, `can`), nunca con `abort(403)`, `abort_if(…, 403)` ni `abort_unless(…, 403)`, para que queden auditadas (FND-022). Una prueba de arquitectura (`tests/Feature/Architecture/NoManualForbiddenTest.php`) falla si aparece uno en `app/`.
 3. **Permisos, no nombres de rol.** El código nunca pregunta `hasRole('Administrador')`; pregunta por permisos `modulo.accion`.
 4. **Transacciones** en toda operación que afecte varias entidades (confirmar pedidos, anticipos, reservas, movimientos de inventario, órdenes y resultados de producción, defectos, reprocesos). Nada parcialmente ejecutado.
 5. **Inventario trazable.** Toda variación de cantidad se hace mediante un movimiento con: ítem, cantidad, tipo, fecha, usuario, referencia y motivo. Nunca `update` directo de existencias. Disponible = físico − reservado.
