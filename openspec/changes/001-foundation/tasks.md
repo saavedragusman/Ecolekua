@@ -129,13 +129,13 @@ Depends on Phase 1 (schema/models) and Phase 2 (layouts/components).
 
 ### PR 3a — Protected-by-default + public route declaration + route cleanup
 
-- [ ] 3.1 RED — write `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30): enumerate `Route::getRoutes()`, skip names in `PublicRoutes::NAMES`, assert every other route returns 302 to `route('login')` for a guest; assert `PublicRoutes::NAMES === ['login', 'login.store']` and both names are registered. Expected RED: `home` (`GET /`) is currently unauthenticated and `login`/`login.store` don't exist. [FND-026, E-30]
-- [ ] 3.2 GREEN — create `app/Support/Http/PublicRoutes.php` (`NAMES = ['login', 'login.store']`, `contains(?string $routeName): bool`).
-- [ ] 3.3 GREEN — create `app/Http/Middleware/RequireAuthentication.php` (extends `Illuminate\Auth\Middleware\Authenticate`; skips the check only when `PublicRoutes::contains($request->route()?->getName())`).
-- [ ] 3.4 GREEN — modify `bootstrap/app.php`: remove `health: '/up'`; append `RequireAuthentication` to the `web` group; `redirectGuestsTo(fn () => route('login'))`.
-- [ ] 3.5 GREEN — modify `config/filesystems.php` (`local.serve => false`, removes the unauthenticated `GET|PUT /storage/{path}` routes) and `config/inertia.php` (`devtools.enabled => env('INERTIA_DEVTOOLS_ENABLED', false)`, removes `/_inertia/devtools/*` in `local`).
-- [ ] 3.6 GREEN — add placeholder `login` (GET) / `login.store` (POST) routes to `routes/web.php` returning a stub response (the real `LoginController` lands in PR 3b), so E-30's public-route assertions are meaningful against a non-trivial route table. Run 3.1 — GREEN.
-- [ ] 3.7 REFACTOR — `sail pint`; confirm `sail artisan route:list` shows no route outside the `web` group.
+- [x] 3.1 RED — write `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30): enumerate `Route::getRoutes()`, skip names in `PublicRoutes::NAMES`, assert every other route returns 302 to `route('login')` for a guest; assert `PublicRoutes::NAMES === ['login', 'login.store']` and both names are registered. Expected RED: `home` (`GET /`) is currently unauthenticated and `login`/`login.store` don't exist. [FND-026, E-30]
+- [x] 3.2 GREEN — create `app/Support/Http/PublicRoutes.php` (`NAMES = ['login', 'login.store']`, `contains(?string $routeName): bool`).
+- [x] 3.3 GREEN — create `app/Http/Middleware/RequireAuthentication.php` (extends `Illuminate\Auth\Middleware\Authenticate`; skips the check only when `PublicRoutes::contains($request->route()?->getName())`).
+- [x] 3.4 GREEN — modify `bootstrap/app.php`: remove `health: '/up'`; append `RequireAuthentication` to the `web` group; `redirectGuestsTo(fn () => route('login'))`.
+- [x] 3.5 GREEN — modify `config/filesystems.php` (`local.serve => false`, removes the unauthenticated `GET|PUT /storage/{path}` routes) and `config/inertia.php` (`devtools.enabled => env('INERTIA_DEVTOOLS_ENABLED', false)`, removes `/_inertia/devtools/*` in `local`).
+- [x] 3.6 GREEN — add placeholder `login` (GET) / `login.store` (POST) routes to `routes/web.php` returning a stub response (the real `LoginController` lands in PR 3b), so E-30's public-route assertions are meaningful against a non-trivial route table. Run 3.1 — GREEN.
+- [x] 3.7 REFACTOR — `sail pint`; confirm `sail artisan route:list` shows no route outside the `web` group.
 
 ### PR 3b — Login, logout, throttle, session pinning
 

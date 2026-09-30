@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (38/104; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.10 and 2.13 in the PR 2b section; 2.11 manual check pending the human)
+## Completed tasks (46/108; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -237,6 +237,38 @@ No RED step: Phase 2 frontend has no JS test framework and none was added (AGENT
 4. Flash: native Inertia v3 flash typed as `{ type: 'success' | 'error', message: string }` via `InertiaConfig.flashDataType` (`types/global.d.ts`). `FlashMessage.vue` now takes no props, reads `usePage().flash` and is mounted in `AppLayout` and `AuthLayout`; the `info` type was dropped. Task 3.24 reworded (no custom shared `flash`).
    Evidence: `sail pnpm types:check` exit 0; `vp lint` exit 0; `sail pnpm build` OK.
 
+## PR 3a — Protected by default, public route list, route cleanup (tasks 3.1-3.7; branch feat/001-foundation-3a-protected-by-default, child of PR 2b)
+
+- [x] 3.1 RED `tests/Feature/Authorization/ProtectedByDefaultTest.php` (3 tests: route walk, exact public list, `contains()`).
+- [x] 3.2 `app/Support/Http/PublicRoutes.php`. [x] 3.3 `app/Http/Middleware/RequireAuthentication.php` (extends `Authenticate`, skips only public names).
+- [x] 3.4 `bootstrap/app.php`: `health: '/up'` removed, middleware appended first in the web group, `redirectGuestsTo(login)`.
+- [x] 3.5 `config/filesystems.php` `local.serve=false`; `config/inertia.php` gained `devtools.enabled = env('INERTIA_DEVTOOLS_ENABLED', false)` (key did not exist there before).
+- [x] 3.6 `routes/web.php`: placeholder `login` (GET) / `login.store` (POST) returning 501 (real controller in PR 3b). `/` kept on the interim `Welcome` route (page deleted in 2b; replaced in 3c), protected.
+- [x] 3.7 pint + route list.
+
+### TDD Cycle Evidence (PR 3a)
+
+| Task | Test File | Layer | RED | GREEN | REFACTOR |
+|------|-----------|-------|-----|-------|----------|
+| 3.1 | tests/Feature/Authorization/ProtectedByDefaultTest.php | Integration | 3 written, 3/3 errored: `Class "App\Support\Http\PublicRoutes" not found`; after 3.2 only: 1 passed, 2 failed (`GET up did not redirect a guest`: 200; `Public route [login] is not registered`) | 3.2-3.6: 3/3 passed, 10 assertions | pint fixed an unused import |
+
+### Observed evidence (PR 3a)
+- `sail artisan route:list` -> exactly 3 routes: `GET / home`, `GET login`, `POST login.store` (no `/up`, no `/storage/{path}`, no devtools).
+- `sail artisan test` -> 30 passed, 145 assertions. `sail pint --test` -> passed. `sail pnpm types:check` OK, `sail pnpm build` OK.
+- Devtools routes only register under `APP_ENV=local`; the test env cannot prove that part, so it is verified via `route:list` in the Sail (local) environment.
+
+### Work Unit Evidence (PR 3a)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Feature/Authorization` -> 3 passed, 10 assertions |
+| Runtime harness | `sail artisan route:list` -> 3 routes, all in the web group |
+| Rollback boundary | Revert `PublicRoutes`, `RequireAuthentication`, `bootstrap/app.php`, `config/{filesystems,inertia}.php`, `routes/web.php`, and the test file |
+
+### PR 3a deviations / notes
+- `/` will redirect guests to `/login`, which returns 501 until PR 3b.
+- The middleware is appended before `HandleInertiaRequests` (design order).
+
 ## Next
 
-Human: run the 2.11 manual check (light/dark, no flash, 375/768/1280, touch targets, keyboard focus) after wiring a page to the layouts (Forbidden or Phase 3 login) or via a temporary route. Then PR 3a (task 3.1+).
+PR 3b (tasks 3.8+): login, logout, throttle, session pinning.
