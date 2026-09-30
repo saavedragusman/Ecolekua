@@ -4,6 +4,7 @@ namespace App\Support\Auth;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use stdClass;
 
 /**
  * Failed-login counter and lockout per normalized email (FND-003, DEC-017, DEC-018).
@@ -76,7 +77,7 @@ class LoginThrottle
     /**
      * Ensures the row exists and returns it locked FOR UPDATE.
      */
-    private function lockedRow(string $normalizedEmail): object
+    private function lockedRow(string $normalizedEmail): stdClass
     {
         DB::table('login_throttles')->insertOrIgnore([
             'email' => $normalizedEmail,
@@ -85,6 +86,6 @@ class LoginThrottle
             'updated_at' => now(),
         ]);
 
-        return DB::table('login_throttles')->where('email', $normalizedEmail)->lockForUpdate()->first();
+        return DB::table('login_throttles')->where('email', $normalizedEmail)->lockForUpdate()->sole();
     }
 }
