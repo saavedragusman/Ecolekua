@@ -11,6 +11,9 @@ class AuditLog extends Model
     /** Audit rows are never updated, so there is no updated_at column. */
     public const UPDATED_AT = null;
 
+    /** Keep the microsecond precision of `created_at` (timestamp(6)). */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     /**
      * @var list<string>
      */

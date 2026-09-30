@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (15/102)
+## Completed tasks (26/102)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -21,6 +21,18 @@ Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No
 - [x] 1.13 RED AuditActionTest
 - [x] 1.14 GREEN AuditAction enum
 - [x] 1.15 REFACTOR pint + migrate:fresh
+
+- [x] 1.16 RED AuditRedactorTest
+- [x] 1.17 GREEN AuditRedactor
+- [x] 1.18 RED AuditOriginTest
+- [x] 1.19 GREEN AuditOrigin
+- [x] 1.20 RED AuditRecordTest (initial subset)
+- [x] 1.21 GREEN RecordAuditEvent
+- [x] 1.22 RED FoundationSeederTest
+- [x] 1.23 GREEN PermissionCatalogSeeder, RoleSeeder, FoundationSeeder, DatabaseSeeder
+- [x] 1.24 GREEN UserFactory states + RoleFactory
+- [x] 1.25 infra: phpunit.xml, Pest.php, TestCase.php, ExampleTests deleted
+- [x] 1.26 REFACTOR pint + full suite
 
 E-29(a) intentionally deferred to task 7.6.
 
@@ -97,6 +109,33 @@ E-29(a) intentionally deferred to task 7.6.
 - `users.is_active` index is named by Laravel default `users_is_active_index`.
 - Existing `tests/Feature/*ExampleTest` untouched (deleted in 1.25).
 
+## Observed evidence (PR 1c)
+
+- RED 1.16: `sail pest tests/Unit/AuditRedactorTest.php` -> tests 4, passed 0, errors 4, `Class "App\Support\Audit\AuditRedactor" not found`. GREEN 1.17: passed 4/4.
+- RED 1.18: `sail pest tests/Unit/AuditOriginTest.php` -> tests 2, passed 0, errors 2, `Class "App\Support\Audit\AuditOrigin" not found`. GREEN 1.19: passed 2/2, 12 assertions.
+- RED 1.20: `sail pest tests/Feature/Audit/AuditRecordTest.php` -> tests 7, errors 7, `Target class [App\Actions\Audit\RecordAuditEvent] does not exist.` GREEN 1.21 first run: 5/7; two failures were (a) `created_at` lost microseconds (`...59.000000`): fixed by `$dateFormat = 'Y-m-d H:i:s.u'` on `AuditLog`; (b) MySQL JSON reorders object keys: test assertion changed from `toBe` to `toEqual` for `new_values`. Then `sail pest tests/Feature/Audit` -> 12 passed, 42 assertions.
+- RED 1.22: `sail pest tests/Feature/FoundationSeederTest.php` -> tests 3, errors 3, `Target class [Database\Seeders\FoundationSeeder] does not exist.` GREEN 1.23: passed 3/3, 16 assertions.
+- 1.24 (no dedicated test; states exercised by later phases): tinker in a rolled-back transaction: `inactive()->mustChangePassword()->withPermissions(UsersView, "x.y")` -> is_active false, must_change_password true, permissionNames ["users.view","x.y"], hasPermission("x.y") true.
+- 1.25/1.26: `sail pint app database tests` passed; `sail pint --test` passed; `sail artisan test` -> 27 passed, 135 assertions (13 - 2 deleted examples + 16 new). Session driver under tests resolves to `database` (phpunit.xml no longer forces `array`).
+- Runtime harness: `migrate:fresh --seed` clean; `db:seed --class=FoundationSeeder` run twice -> DONE both; tinker: roles 7, permissions 9, permission_role rows 9 (idempotent).
+
+## Work Unit Evidence (PR 1c)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Unit/AuditRedactorTest.php tests/Unit/AuditOriginTest.php tests/Feature/Audit/AuditRecordTest.php tests/Feature/FoundationSeederTest.php` -> all green; full suite 27 passed, 135 assertions |
+| Runtime harness | `sail artisan db:seed --class=FoundationSeeder` twice -> 7 roles, 9 permissions, 9 permission_role rows |
+| Rollback boundary | Revert `app/Actions/Audit/RecordAuditEvent.php`, `app/Support/Audit/*`, `database/seeders/*`, `database/factories/{RoleFactory,UserFactory}.php`, `app/Models/Role.php` HasFactory, `AuditLog::$dateFormat`, `phpunit.xml`, `tests/{Pest,TestCase}.php`, restore the two ExampleTest files |
+
+## PR 1c deviations / notes
+
+- `AuditLog` gained `$dateFormat = 'Y-m-d H:i:s.u'` (touches 1a file) so `created_at` keeps timestamp(6) precision.
+- `RecordAuditEvent`: `actor_email` defaults to `$actor->email` when an actor exists and no `actorEmail` is passed (design only specifies the failed-login case); `entity_type` = `$entity->getMorphClass()` (full class name; design does not fix the format).
+- `Role` gained `HasFactory` (needed for `RoleFactory`); `RoleFactory::protected()` state added.
+- `withPermissions()` creates a dedicated role per user and `firstOrCreate`s permissions by name (allows ad-hoc names such as `testing.e24` for E-24).
+- `RefreshDatabase` is applied to Feature via `tests/Pest.php`; the redundant `uses(RefreshDatabase::class)` was removed from the three Feature tests.
+- `loginWithRealSession()` / `requestWithSession()` are implemented per design but NOT yet exercised: they need `POST /login`, which lands in PR 3b (task 3.14). Expect possible adjustment then.
+
 ## Next
 
-PR 1c, tasks 1.16..1.26.
+Phase 2 (PR 2a), tasks 2.1..2.5.
