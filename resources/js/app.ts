@@ -14,6 +14,8 @@ void createInertiaApp({
         });
     },
     progress: {
-        color: '#4B5563',
+        // Token reference (no hex): the progress bar is drawn by JS outside
+        // Tailwind, so it reads the `secondary` token from app.css directly.
+        color: 'var(--color-secondary)',
     },
 });

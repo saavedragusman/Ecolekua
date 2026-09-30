@@ -69,6 +69,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operating Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Timezone in which Ecolekua operates (DEC-019). Dates are always stored in
+    | UTC (`timezone` above); this value is only used to display them and to
+    | interpret calendar-date filters. It is a confirmed business value, so it
+    | is a literal and not an environment variable.
+    |
+    */
+
+    'operating_timezone' => 'America/Caracas',
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
@@ -78,7 +92,7 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    'locale' => env('APP_LOCALE', 'es'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
 
