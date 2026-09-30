@@ -2,10 +2,11 @@
 
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
+use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\HomeController;
 use Illuminate\Support\Facades\Route;
 
-// Interim: replaced by HomeController / Home.vue in PR 3c. Protected by default (not public).
-Route::inertia('/', 'Welcome')->name('home');
+Route::get('/', HomeController::class)->name('home');
 
 // Declared public by FND-026 (PublicRoutes); reachable only by guests.
 Route::middleware('guest')->group(function () {
@@ -14,3 +15,6 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::post('/logout', LogoutController::class)->name('logout');
+
+Route::get('/password', [PasswordController::class, 'edit'])->name('password.edit');
+Route::put('/password', [PasswordController::class, 'update'])->name('password.update');

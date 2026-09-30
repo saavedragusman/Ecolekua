@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (56/108; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section)
+## Completed tasks (66/108; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -304,6 +304,42 @@ No RED step: Phase 2 frontend has no JS test framework and none was added (AGENT
 - Tests use a test-only route `/_test/protected` registered per test (not in the app).
 - Failed non-locked attempts carry no `reason` in the audit context (design only specifies `reason=locked`).
 
+## PR 3c — Home, forced/own password change, login and password pages (tasks 3.18-3.27; branch feat/001-foundation-3c-home-password, child of PR 3b)
+
+- [x] 3.18 `HomeController` + `pages/Home.vue` (greeting; navigation is the layout's permission-filtered nav, no metrics); `home` route is now `GET /` -> `HomeController` (interim `Welcome` route gone).
+- [x] 3.19 RED `tests/Feature/Passwords/ForcedPasswordChangeTest.php` (E-14, 5 tests) + `tests/Feature/HomeTest.php` + `tests/Feature/Auth/SharedPropsTest.php`.
+- [x] 3.20 `EnsurePasswordIsChanged` (allowlist `password.edit`, `password.update`, `logout`; native Inertia flash on redirect) appended after `EnsureUserIsActive`; `LoginController::store` redirects to `password.edit` when `must_change_password`.
+- [x] 3.21 RED `OwnPasswordChangeTest.php` (E-16, E-17 x2, FND-013 x2, E-28, FND-012, FND-015). [x] 3.22 `NotCurrentPassword`, `ChangeOwnPassword`, `UpdatePasswordRequest`, `PasswordController`, routes `password.edit`/`password.update`, `Password::defaults(min 10)` in every environment, `validation.not_current_password` (es).
+- [x] 3.23 `pages/auth/Login.vue` (no remember-me) and `pages/auth/ChangePassword.vue` (AuthLayout while a forced change is pending, AppLayout otherwise), both using Wayfinder route helpers (`@/routes/login`, `@/routes/password`) with `useForm`.
+- [x] 3.24 `HandleInertiaRequests`: `auth.user` = only `id, first_name, last_name, email, must_change_password` (null for guests), lazy `auth.permissions`; no custom `flash` prop.
+- [x] 3.25 E-30 re-run inside the full suite (GREEN, 6 routes, only `login`/`login.store` public). [x] 3.26 pint; middleware order `RequireAuthentication` -> `EnsureUserIsActive` -> `EnsurePasswordIsChanged` -> `HandleInertiaRequests` (bootstrap/app.php). [x] 3.27 `AppLayout` Inicio and Cambiar contraseña now use Wayfinder helpers (`home.url()`, `password.edit`).
+
+### TDD Cycle Evidence (PR 3c)
+
+| Task | Test File | RED | GREEN |
+|------|-----------|-----|-------|
+| 3.19/3.21/3.18/3.24 | HomeTest, SharedPropsTest, Passwords/* | 17 written: 12 failed/errored (`Route [password.edit] not defined`, `Inertia page component file [auth/Login] does not exist`, 404s, `Welcome` instead of `Home`), 2 trivially passing guest checks | 17/17 after 3.18, 3.20, 3.22, 3.24 (flash assertion switched to `assertInertiaFlash`, because flash is not a page prop) |
+| 3.23 | N/A | Frontend: no JS test framework (documented exception) | types:check, lint, build OK |
+
+### Observed evidence (PR 3c)
+- `sail artisan test` -> 66 passed, 331 assertions. `sail pint --test` passed. `sail pnpm types:check` OK, `vp lint` exit 0, `sail pnpm build` OK. `rg 'dark:|\[#' resources/js resources/views` -> no matches.
+- `sail artisan route:list` -> 6 routes (`/`, `login` GET/POST, `logout`, `password` GET/PUT), all in the web group.
+
+### Work Unit Evidence (PR 3c)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Feature/HomeTest.php tests/Feature/Passwords tests/Feature/Auth` -> all green within the 66-test suite |
+| Runtime harness | Feature tests over HTTP (real middleware stack, real sessions); the pages are compiled by `pnpm build` but NOT yet viewed in a browser (human check needed: login page, forced change flow, own change, flash banner, light/dark) |
+| Rollback boundary | Revert `HomeController`, `EnsurePasswordIsChanged`, `NotCurrentPassword`, `ChangeOwnPassword`, `UpdatePasswordRequest`, `PasswordController`, `AppServiceProvider` password defaults, `HandleInertiaRequests`, `LoginController` redirect, `routes/web.php`, `bootstrap/app.php`, `lang/es/validation.php`, `tests/TestCase.php`, the three pages and `AppLayout` nav hrefs |
+
+### PR 3c deviations / notes
+- `tests/TestCase.php` now calls `$this->withoutVite()` so PHP tests do not depend on compiled assets (`public/build`).
+- `auth.user` is built with `->only([...])` rather than an API resource class (design only lists the fields).
+- Own-password change does not invalidate the user's other sessions: the spec does not ask for it (only admin reset does, FND-014), so it was not added.
+- Flash success text "Su contraseña fue actualizada." and the forced-change error text are Spanish copy chosen here (no spec text).
+- Password rule set is `Password::min(10)` only (FND-013); the previous production-only complexity/uncompromised rules were removed as the task states.
+
 ## Next
 
-PR 3c (3.18+): Home, forced/own password change, Login.vue/ChangePassword.vue, shared props.
+Phase 3 complete. Human: browser check of the login / change-password pages. Then PR 4a (tasks 4.1+): user policy, CreateUser, UpdateUser.

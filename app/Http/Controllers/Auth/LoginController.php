@@ -26,6 +26,11 @@ class LoginController extends Controller
             throw ValidationException::withMessages(['email' => $result->message()]);
         }
 
+        // A pending forced change (FND-014) takes precedence over the intended URL.
+        if ($request->user()->must_change_password) {
+            return redirect()->route('password.edit');
+        }
+
         return redirect()->intended(route('home'));
     }
 }

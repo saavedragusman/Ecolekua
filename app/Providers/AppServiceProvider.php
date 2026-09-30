@@ -37,14 +37,7 @@ class AppServiceProvider extends ServiceProvider
             app()->isProduction(),
         );
 
-        Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
-                ->mixedCase()
-                ->letters()
-                ->numbers()
-                ->symbols()
-                ->uncompromised()
-            : null,
-        );
+        // FND-013: at least 10 characters in every environment; no other complexity rules.
+        Password::defaults(fn (): Password => Password::min(10));
     }
 }
