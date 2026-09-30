@@ -3,6 +3,7 @@
 use App\Enums\PermissionName;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Cookie\CookieValuePrefix;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -50,14 +51,14 @@ function administrator(): User
 }
 
 /**
- * Performs a real `POST /login` and returns the raw (still encrypted) session cookie value,
+ * Performs a real `POST /login` and returns the decrypted session id from the response cookie,
  * so the database session mechanism is exercised instead of the guard's in-memory user.
  */
 function loginWithRealSession(User $user, string $password = 'password'): string
 {
     $response = test()->post('/login', ['email' => $user->email, 'password' => $password]);
 
-    $cookie = $response->getCookie(config('session.cookie'), false);
+    $cookie = $response->getCookie(config('session.cookie'));
 
     expect($cookie)->not->toBeNull('The login did not start a session.');
 
@@ -65,16 +66,24 @@ function loginWithRealSession(User $user, string $password = 'password'): string
 }
 
 /**
- * Sends a request carrying only the given session cookie: the guard's cached user is
- * forgotten first, so the user is re-resolved from the persisted session.
+ * Sends a request carrying only the given session id (encrypted like a browser cookie): the guard's cached user and the
+ * in-memory session store are forgotten first, so the user is re-resolved from the persisted session.
  *
  * @param  array<string, mixed>  $data
  */
 function requestWithSession(string $sessionCookie, string $method, string $uri, array $data = []): TestResponse
 {
+    // Drop the in-memory session store and guard state kept by the shared test application,
+    // so the request is resolved only from the cookie and the persisted `sessions` row.
     app('auth')->forgetGuards();
+    app('session')->forgetDrivers();
+    app()->forgetInstance('session.store');
+    app()->forgetInstance('auth.driver');
 
-    return test()
-        ->withUnencryptedCookie(config('session.cookie'), $sessionCookie)
-        ->call($method, $uri, $data);
+    $name = config('session.cookie');
+
+    // `call()` ignores the client's default cookies, so the encrypted cookie is passed explicitly.
+    $cookie = encrypt(CookieValuePrefix::create($name, app('encrypter')->getKey()).$sessionCookie, false);
+
+    return test()->call($method, $uri, $data, [$name => $cookie]);
 }
