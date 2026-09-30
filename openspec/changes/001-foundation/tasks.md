@@ -260,9 +260,9 @@ Depends on Phase 3 (authorization) and Phase 4 (`DeactivateUser`, `SyncUserRoles
 
 ### PR 6b — Roles frontend pages
 
-- [ ] 6.10 GREEN — create `resources/js/pages/roles/Index.vue`, `Create.vue`, `Show.vue` (hosts the permissions form), `Edit.vue`.
+- [x] 6.10 GREEN — create `resources/js/pages/roles/Index.vue`, `Create.vue`, `Show.vue` (hosts the permissions form), `Edit.vue`.
 - [ ] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
-- [ ] 6.12 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/roles` URI in `NAV_ENTRIES` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decisions 19 and 20)
+- [x] 6.12 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/roles` URI in `NAV_ENTRIES` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decisions 19 and 20)
 
 **Phase 6 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 

@@ -7,11 +7,6 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 
-beforeEach(function () {
-    // The role pages ship with PR 6b; the controllers already render them.
-    config(['inertia.testing.ensure_pages_exist' => false]);
-});
-
 it('E-22 rejects deleting a role that has at least one user assigned', function () {
     $actor = administrator();
     $role = Role::factory()->create();
@@ -156,6 +151,16 @@ it('FND-016 lets roles.view list and show roles with their permissions but not m
         fn ($page) => $page->component('roles/Show')->where('role.name', 'Administrador')->has('role.permissions', 9),
     );
     $this->actingAs($viewer)->get('/roles/create')->assertForbidden();
+});
+
+it('FND-016 renders the create and edit role pages for who can manage roles', function () {
+    $manager = userWithPermissions(PermissionName::RolesView, PermissionName::RolesManage);
+    $role = Role::factory()->create(['name' => 'Ventas de prueba']);
+
+    $this->actingAs($manager)->get('/roles/create')->assertOk()
+        ->assertInertia(fn ($page) => $page->component('roles/Create'));
+    $this->actingAs($manager)->get("/roles/{$role->id}/edit")->assertOk()
+        ->assertInertia(fn ($page) => $page->component('roles/Edit')->where('role.name', 'Ventas de prueba')->where('role.is_protected', false));
 });
 
 it('FND-016 sends the permission catalog on the role detail only to who can manage roles', function () {
