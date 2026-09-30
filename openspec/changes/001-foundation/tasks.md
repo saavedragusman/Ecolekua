@@ -13,7 +13,7 @@
 | Estimated changed lines | ~4,450 authored lines total (additions + deletions, generated Wayfinder files excluded per design.md) |
 | 400-line budget risk | High |
 | Chained PRs recommended | Yes |
-| Suggested split | 14 chained PR work units across 7 phases (see table below) |
+| Suggested split | 15 chained PR work units across 7 phases (see table below; 3d added by the navigation amendment, design Decision 20) |
 | Delivery strategy | ask-on-risk |
 | Chain strategy | feature-branch-chain (user, 2026-09-28): PR #1 targets tracker branch `feat/001-foundation`; each child PR targets the previous PR branch; only the tracker merges to `main` |
 
@@ -36,6 +36,7 @@ Three work units (3b, 6a, 7) land close to or slightly over 400 lines by design 
 | 3a | Protected-by-default middleware + public route list + route cleanup | PR 6 | `sail pest --filter=E-30` | `sail artisan route:list` shows only `login`/`login.store` unauthenticated | Revert `bootstrap/app.php` middleware line, `PublicRoutes`, `RequireAuthentication`, config changes, placeholder routes |
 | 3b | Login, logout, throttle, session pinning | PR 7 | `sail pest --filter=Auth` | `sail artisan route:list --name=login` confirms `guest`-gated routes | Revert session config, `LoginThrottle`, `AttemptLogin`, `LoginController`/Request, `SessionInvalidator`, `EnsureUserIsActive`, `Logout`, routes, `lang/es/auth.php` |
 | 3c | Home page, forced/own password change | PR 8 | `sail pest --filter=Password` | `sail artisan route:list` shows `password.edit`/`password.update`/`home` | Revert `HomeController`/`Home.vue`, `EnsurePasswordIsChanged`, password Action/Request/Controller/routes, `AppServiceProvider` password policy, `Login.vue`/`ChangePassword.vue` |
+| 3d | Navigation redesign: grouped `NAV_ENTRIES`, "Más" bottom sheet, user menu, image logo (amendment, design Decision 20) | PR 8b | `sail pnpm types:check && sail pnpm exec vp lint` | `sail pnpm build`; manual browser check (375/1280 px, both themes, keyboard) | Revert `resources/js/navigation.ts`, `useNavigation.ts`, `MoreSheet.vue`, `UserMenu.vue`, `SideNav`/`BottomNav`/`AppLayout` edits, move the logo back |
 | 4a | User policy, `CreateUser`, `UpdateUser` | PR 9 | `sail pest --filter=CreateUserTest,UpdateUserTest` | `sail artisan route:list --name=users` | Revert `UserRules`, `UserPolicy`, FormRequests, `CreateUser`/`UpdateUser` Actions, `UserController`, the 5 new routes |
 | 4b | Status, password reset, role assignment, denial auditing | PR 10 | `sail pest --filter=Users,Authorization,Passwords` | N/A — fully covered by HTTP feature tests | Revert render hooks, `ActivateUser`/`DeactivateUser`/`ResetUserPassword`/`SyncUserRoles`, their Requests/Controllers/routes, `BusinessRuleViolation` |
 | 4c | Users frontend pages | PR 11 | `sail pnpm types:check` | N/A — pages consume already-tested routes | Revert the four `users/*.vue` pages |
@@ -111,7 +112,7 @@ Can start in parallel with Phase 1 (no shared files). No JS test framework is co
 
 - [x] 2.6 GREEN — create `resources/js/types/auth.ts` (`AuthUser` DTO + `permissions: string[]`).
 - [x] 2.7 GREEN — create components in `resources/js/components/`: `AppButton.vue`, `IconButton.vue`, `AppIcon.vue`, `AppInput.vue`, `AppSelect.vue`, `AppCheckbox.vue` (design-system §1.2/§7.4, not in §7's base list), `AppCard.vue`, `StatusBadge.vue` (active→`active`, inactive→`neutral`, always with text), `DataTable.vue`, `BottomNav.vue`, `SideNav.vue`, `AppPagination.vue`, `FlashMessage.vue`.
-- [x] 2.8 GREEN — create `resources/js/layouts/AuthLayout.vue` (centered `AppCard`, used by login/forced change) and `resources/js/layouts/AppLayout.vue` (sidebar at `lg`+, `BottomNav` below `lg`, at most 5 destinations — Inicio, Usuarios, Roles, Auditoría, Cambiar contraseña — each shown only if its permission is in `auth.permissions`; Inicio and Cambiar contraseña always shown).
+- [x] 2.8 GREEN — create `resources/js/layouts/AuthLayout.vue` (centered `AppCard`, used by login/forced change) and `resources/js/layouts/AppLayout.vue` (sidebar at `lg`+, `BottomNav` below `lg`, at most 5 destinations — Inicio, Usuarios, Roles, Auditoría, Cambiar contraseña — each shown only if its permission is in `auth.permissions`; Inicio and Cambiar contraseña always shown). _Superseded by PR 3d (design Decision 20): max 4 destinations + "Más" sheet; "Cambiar contraseña" moved to the user menu._
 - [x] 2.9 GREEN — create `resources/js/pages/errors/Forbidden.vue` (403 page; wired to the exception render hook in Phase 4, task 4.8).
 - [x] 2.10 [cleanup] Delete `resources/js/pages/Welcome.vue` (replaced by `Home.vue` in Phase 3).
 - [x] 2.13 GREEN — create `resources/js/composables/useAppearance.ts` (reads/writes `localStorage` key `appearance`, toggles `.dark` on `<html>`; light default) and a theme toggle control in the ERP layout (`AppLayout.vue`) with a Spanish accessible label (`aria-label`, ≥44px target). No `dark:` classes (UI-06).
@@ -161,11 +162,27 @@ Depends on Phase 1 (schema/models) and Phase 2 (layouts/components).
 - [x] 3.24 GREEN — modify `app/Http/Middleware/HandleInertiaRequests.php` to share the `AuthUser` DTO (`id, first_name, last_name, email, must_change_password`), lazy `permissions` (flash uses Inertia v3's native flash, no custom shared prop: design Decision 19).
 - [x] 3.25 [verify] Re-run `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30) with the now-larger route table — must stay GREEN with only `login`/`login.store` public.
 - [x] 3.26 REFACTOR — `sail pint`; confirm the full middleware order (`RequireAuthentication` → `EnsureUserIsActive` → `EnsurePasswordIsChanged` → `HandleInertiaRequests`).
-- [x] 3.27 REFACTOR — in `resources/js/layouts/AppLayout.vue` replace the hardcoded `home` usage/`password.edit` URI in `DESTINATIONS` (Inicio, Cambiar contraseña) with the Wayfinder-generated helpers; keep `sail pnpm types:check` and `sail pnpm build` green. (design Decision 19)
+- [x] 3.27 REFACTOR — in `resources/js/layouts/AppLayout.vue` replace the hardcoded `home` usage/`password.edit` URI in `DESTINATIONS` (Inicio, Cambiar contraseña) with the Wayfinder-generated helpers; keep `sail pnpm types:check` and `sail pnpm build` green. (design Decision 19; `DESTINATIONS` was replaced by `NAV_ENTRIES` in PR 3d, task 3.29/3.35)
+
+### PR 3d — Navigation redesign (amendment, design Decision 20)
+
+> User-approved UX/technical amendment (not a business decision): supersedes the 5-destination bar. Frontend only; there is no JS test framework and none is added, so no RED step is possible (same documented exception as Phase 2). No backend change. Route declaration: every task below is **direct inline** — the amendment was delegated to a single sdd-apply writer as one work unit; no further delegation.
+
+- [x] 3.28 DOCS — record design Decision 20 (navigation model), update design-system §6.2 and §7.8, reconcile 2.8, 4.18, 6.12 and 7.8 (they now migrate `NAV_ENTRIES` in `resources/js/navigation.ts`), add this section. Route: direct inline. Check: `rg '5 destinos|máximo de 5' docs` returns nothing.
+- [x] 3.29 GREEN — create `resources/js/navigation.ts` (`NAV_ENTRIES`, `NAV_GROUPS`, types; Inicio + Usuarios/Roles/Auditoría only; permissions verified against `App\Enums\PermissionName`; `home` via Wayfinder, other URIs with pointers to 4.18/6.12/7.8). Route: direct inline. Check: `sail pnpm types:check`.
+- [x] 3.30 GREEN — create `resources/js/composables/useNavigation.ts` (`primary` max 4, `overflow` grouped, `grouped`, active state). Route: direct inline. Check: `sail pnpm types:check`.
+- [x] 3.31 GREEN — move `logo-blanco.webp` to `resources/images/` and rework `SideNav.vue` (image logo, group sections, ungrouped first). Route: direct inline. Check: `sail pnpm build` emits the asset.
+- [x] 3.32 GREEN — rework `BottomNav.vue` (`primary` + "Más" button only with overflow; items >= 48 px). Route: direct inline. Check: `types:check`, `vp lint`.
+- [x] 3.33 GREEN — create `resources/js/components/MoreSheet.vue` (native `<dialog>`, `showModal()`, `aria-labelledby`, closes on backdrop and on navigation, grouped entries, >= 44 px, `pb-safe`, `motion-safe:`). Route: direct inline. Check: `types:check`, `vp lint`, `build`.
+- [x] 3.34 GREEN — create `resources/js/components/UserMenu.vue` (initials avatar, `aria-haspopup="menu"`, `aria-expanded`, Cambiar contraseña, Cerrar sesión via POST `logout`, closes on Esc and outside click). Route: direct inline. Check: `types:check`, `vp lint`, `build`.
+- [x] 3.35 REFACTOR — `AppLayout.vue`: remove `DESTINATIONS`, use `useNavigation()`, mount `UserMenu` beside the theme toggle. Route: direct inline. Check: `types:check`, `vp lint`, `build`.
+- [x] 3.36 [verify] `sail pnpm types:check`, `sail pnpm exec vp lint`, `sail pnpm build`, `sail artisan test`, `sail pint --test`, `rg 'dark:|\[#' resources/js` (no matches). Manual browser check (375 px and 1280 px, both themes, keyboard) is the human's.
+
+**PR 3d closing checks**: the five commands of 3.36. **Work-unit commit**: one commit for PR 3d (frontend only).
 
 **Phase 3 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
-**Work-unit commits**: one commit per PR (3a, 3b, 3c).
+**Work-unit commits**: one commit per PR (3a, 3b, 3c, 3d).
 
 ---
 
@@ -200,7 +217,7 @@ Depends on Phase 1 and Phase 3 (authorization stack, session invalidation).
 
 - [ ] 4.16 GREEN — create `resources/js/pages/users/Index.vue` (`DataTable` + `StatusBadge`), `Create.vue`, `Show.vue` (hosts the roles, reset, and activation forms), `Edit.vue`, wired to the Wayfinder-generated routes and `AppLayout`.
 - [ ] 4.17 [manual check] Verify against `docs/ui/design-system.md` §11: 44px touch targets, `DataTable` responsiveness, action buttons gated by permission (UI-only convenience; the backend already authorizes per §7.1).
-- [ ] 4.18 REFACTOR — in `AppLayout.vue` replace the hardcoded `/users` URI in `DESTINATIONS` (Usuarios) with the Wayfinder-generated `users.index` helper. (design Decision 19)
+- [ ] 4.18 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/users` URI in `NAV_ENTRIES` (Usuarios) with the Wayfinder-generated `users.index` helper. (design Decisions 19 and 20)
 
 **Phase 4 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
@@ -243,7 +260,7 @@ Depends on Phase 3 (authorization) and Phase 4 (`DeactivateUser`, `SyncUserRoles
 
 - [ ] 6.10 GREEN — create `resources/js/pages/roles/Index.vue`, `Create.vue`, `Show.vue` (hosts the permissions form), `Edit.vue`.
 - [ ] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
-- [ ] 6.12 REFACTOR — in `AppLayout.vue` replace the hardcoded `/roles` URI in `DESTINATIONS` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decision 19)
+- [ ] 6.12 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/roles` URI in `NAV_ENTRIES` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decisions 19 and 20)
 
 **Phase 6 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
@@ -262,7 +279,7 @@ Depends on Phase 1 (`audit_logs`) and Phase 3 (authorization stack). Independent
 - [ ] 7.5 GREEN — create `resources/js/pages/audit/Index.vue` (filters by user/action/date-range; prints `occurred_at` as received, no client-side conversion).
 - [ ] 7.6 RED/GREEN — complete E-29(a) in `tests/Feature/Audit/AuditImmutabilityTest.php` (route enumeration: no registered route other than `GET audit.index` targets `audit_logs`); expected already-GREEN once `audit.index` is the only audit-affecting route registered by task 7.4. [FND-024; E-29]
 - [ ] 7.7 REFACTOR — `sail pint`; re-run `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30) against the final, complete route table for the whole change.
-- [ ] 7.8 REFACTOR — in `AppLayout.vue` replace the hardcoded `/audit` URI in `DESTINATIONS` (Auditoría) with the Wayfinder-generated `audit.index` helper; after this, `DESTINATIONS` holds no hardcoded URI. (design Decision 19)
+- [ ] 7.8 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/audit` URI in `NAV_ENTRIES` (Auditoría) with the Wayfinder-generated `audit.index` helper; after this, `NAV_ENTRIES` holds no hardcoded URI. (design Decisions 19 and 20)
 
 **Phase 7 closing checks (also the final closing checks for the whole change)**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 

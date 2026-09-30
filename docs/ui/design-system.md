@@ -462,8 +462,8 @@ El prototipo define tamaños `*-mobile` pero no los usa. En este proyecto son ob
 
 ### 6.2 Micro-ERP (`resources/js/layouts/`)
 
-- **Móvil y tablet (`< lg`): navegación inferior** (Bottom Nav, sección 7.8), con un máximo de 5 destinos. Sin menú hamburguesa.
-- **Escritorio (`lg:`): sidebar** fijo, con `bg-primary-container`. Ítems inactivos en `text-on-primary-container`; ítem activo en `bg-secondary-container text-primary rounded-lg`.
+- **Móvil y tablet (`< lg`): navegación inferior** (Bottom Nav, sección 7.8), con un máximo de **4 destinos** más un botón **"Más"**. "Más" abre un panel inferior (bottom sheet, sección 7.8) con el resto de destinos agrupados. El panel inferior no es un menú hamburguesa: los destinos principales siempre están visibles y el panel solo agrupa los restantes. El menú de usuario (Cambiar contraseña, Cerrar sesión) vive en el encabezado, no en la navegación.
+- **Escritorio (`lg:`): sidebar** fijo, con `bg-primary-container`, el logotipo en imagen arriba (blanco: solo sobre esta superficie, oscura en ambos temas) y secciones por grupo con encabezado (los ítems sin grupo, como Inicio, primero). Ítems inactivos en `text-on-primary-container`; ítem activo en `bg-secondary-container text-primary rounded-lg`.
 - Contenedor de contenido: `bg-surface min-h-dvh px-gutter-mobile md:px-gutter pt-space-md pb-28 lg:pb-space-xl`. El `pb-28` evita que la navegación inferior tape el contenido.
 
 ### 6.3 Portal público (`resources/views/portal/`)
@@ -568,6 +568,12 @@ Pista: `h-2 w-full rounded-full bg-surface-container-high overflow-hidden`. Rell
 Contenedor: `fixed inset-x-0 bottom-0 z-40 lg:hidden px-space-md pb-safe`.
 Barra (píldora del tablero): `mb-space-sm flex items-center justify-around rounded-full bg-surface-container-high shadow-md p-space-xs`.
 Ítem: `inline-flex flex-col items-center justify-center min-h-12 min-w-12 rounded-full text-on-surface-variant`. Ítem activo: `bg-primary text-on-primary`, con `aria-current="page"`.
+
+**Máximo de 4 destinos** en la barra. Si existen más destinos visibles para el usuario, se añade un quinto botón "Más" (icono `more_horiz`, `aria-haspopup="dialog"`) que abre el panel inferior `MoreSheet.vue`. Los destinos de la barra son los que no pertenecen al grupo Administración, ordenados por prioridad; el resto va al panel. La configuración vive en un único lugar (`resources/js/navigation.ts`) y la comparten Bottom Nav, panel y sidebar.
+
+**`MoreSheet.vue`** (panel inferior, `< lg`): elemento nativo `<dialog>` abierto con `showModal()` (foco atrapado y cierre con Esc). `aria-labelledby` apunta al título "Más opciones". Se cierra al pulsar el fondo y al navegar. Destinos agrupados con encabezado de grupo, objetivos de al menos 44px, `pb-safe`, sin dependencias nuevas. Animaciones solo con `motion-safe:`.
+
+**`UserMenu.vue`** (encabezado del ERP): botón con avatar de iniciales y nombre (`aria-haspopup="menu"`, `aria-expanded`); el menú ofrece "Cambiar contraseña" y "Cerrar sesión" y se cierra con Esc y al pulsar fuera. El botón de tema se mantiene a su lado.
 
 ### 7.9 `ProductionTimer.vue` (botón de tiempo del operario)
 

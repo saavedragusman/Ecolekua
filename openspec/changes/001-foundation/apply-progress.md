@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (66/108; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section)
+## Completed tasks (75/117; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -340,6 +340,46 @@ No RED step: Phase 2 frontend has no JS test framework and none was added (AGENT
 - Flash success text "Su contraseña fue actualizada." and the forced-change error text are Spanish copy chosen here (no spec text).
 - Password rule set is `Password::min(10)` only (FND-013); the previous production-only complexity/uncompromised rules were removed as the task states.
 
+## PR 3d — Navigation redesign (amendment, design Decision 20; tasks 3.28-3.36; branch feat/001-foundation-3d-navigation, child of PR 3c)
+
+User-approved UX/technical amendment (not business). Frontend only; no backend change, no dependency added. Total tasks now 117 (108 + 9); done 75/117.
+
+- [x] 3.28 DOCS: design Decision 20 added; Decision 15 (layouts bullet) and Decision 19 items 2 and 3 annotated "Superseded by Decision 20" (history kept); design-system §6.2 and §7.8 rewritten (max 4 destinations + "Más" bottom sheet, not a hamburger; user menu in header; `MoreSheet`/`UserMenu` notes); tasks.md: 3d row in the units table, new PR 3d section, forecast "15 chained PR work units", 2.8 marked superseded, 3.27 pointer, 4.18/6.12/7.8 now reference `NAV_ENTRIES` in `resources/js/navigation.ts`.
+- [x] 3.29 `resources/js/navigation.ts` (`NAV_ENTRIES`, `NAV_GROUPS`, `NavEntry`, `NavGroup`; Inicio + Usuarios/Roles/Auditoría; permissions `users.view`/`roles.view`/`audit.view` verified in `app/Enums/PermissionName.php`; `home.url()` via Wayfinder, other hrefs with TODO(4.18/6.12/7.8)).
+- [x] 3.30 `composables/useNavigation.ts` (`primary` max 4 outside Administración, `overflow`, `grouped`). `types/navigation.ts`: `NavItem` gained `key`; new `NavSection`.
+- [x] 3.31 `logo-blanco.webp` moved (plain `mv`, was untracked) to `resources/images/logo-blanco.webp`; `SideNav.vue` reworked (image logo, group headings, ungrouped first; prop is now `sections`). Import `@/../images/logo-blanco.webp` works (build emitted `logo-blanco-*.webp`).
+- [x] 3.32 `BottomNav.vue`: props `items` + `overflow`, "Más" button (`more_horiz`, `aria-haspopup="dialog"`, `aria-expanded`) only when overflow is non-empty; items `min-h-12`, `flex-1 min-w-0`, `whitespace-nowrap` labels.
+- [x] 3.33 `components/MoreSheet.vue`: native `<dialog>` + `showModal()`, `aria-labelledby`, closes on backdrop click, Esc (native `close` event) and Inertia `navigate`, grouped entries `min-h-12`, `pb-safe`, `motion-safe:` slide-in via `starting:`.
+- [x] 3.34 `components/UserMenu.vue`: initials avatar + name (`hidden sm:inline`), `aria-haspopup="menu"`, `aria-expanded`, "Cambiar contraseña" (Wayfinder `password.edit`) and "Cerrar sesión" (Inertia `Link` `method="post"` `as="button"` to Wayfinder `logout`), Esc / outside click / focusout / navigate close, ArrowUp/Down, focus to first item on open and back to the button on Esc.
+- [x] 3.35 `AppLayout.vue`: `DESTINATIONS`, local active logic and the plain name span removed; uses `useNavigation()`; `UserMenu` beside the theme toggle.
+- [x] 3.36 verification below. Manual browser check pending (human).
+
+### TDD note (PR 3d)
+No RED step possible: frontend-only unit, no JS test framework, none added (same documented exception as Phase 2/3c pages). No backend behavior changed, so no Pest test was written. Backend suite re-run as regression only.
+
+### Observed evidence (PR 3d)
+- `./vendor/bin/sail pnpm types:check` -> `vue-tsc --noEmit`, exit 0, no errors.
+- `./vendor/bin/sail pnpm exec vp lint` -> exit 0, no output.
+- `./vendor/bin/sail pnpm build` -> built in 1.24s; emitted `logo-blanco-*.webp`; built CSS contains `starting:open:translate-y-full` (inside `prefers-reduced-motion:no-preference`), `backdrop`, `pb-safe`, `max-h-*`, `ring-secondary-container`, `max-w-40`.
+- `./vendor/bin/sail artisan test` -> 66 passed, 331 assertions. `./vendor/bin/sail pint --test` -> passed.
+- `rg 'dark:|\[#' resources/js` -> no matches. `vp fmt resources/js` applied; `sail pnpm check` flags no `resources/js` file (only the known docs/openspec/AGENTS/README/app.css formatting).
+- Logo surface: `--color-primary-container` is `#081a72` (light) and `#0a1454` (dark) in `resources/css/app.css`, so the white logo sits on a dark surface in both themes.
+
+### Work Unit Evidence (PR 3d)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pnpm types:check && ./vendor/bin/sail pnpm exec vp lint && ./vendor/bin/sail pnpm build` -> all exit 0; `sail artisan test` 66 passed, 331 assertions |
+| Runtime harness | N/A for automation (no JS test framework, no browser in the agent environment); manual browser check pending the human (375 px / 1280 px, both themes, keyboard) |
+| Rollback boundary | Delete `resources/js/{navigation.ts,composables/useNavigation.ts,components/MoreSheet.vue,components/UserMenu.vue}`, `resources/images/`; restore `SideNav.vue`, `BottomNav.vue`, `AppLayout.vue`, `types/navigation.ts`, design-system §6.2/§7.8, design Decision 20, tasks.md PR 3d edits |
+
+### PR 3d deviations / notes
+- `NavItem` (types/navigation.ts) gained a required `key` and `SideNav`'s prop changed from `items` to `sections`; `BottomNav` gained `overflow`. Only AppLayout consumes them.
+- `MoreSheet` is mounted inside `BottomNav` (owns the open state), not in `AppLayout`; the dialog is `lg:hidden`.
+- "Cambiar contraseña" is no longer a navigation destination; the plain user-name text in the header was replaced by `UserMenu`.
+- `mobile-version.png` (reference screenshot) left untracked in the repo root, untouched.
+- Wayfinder `logout` helper lives in the gitignored generated `resources/js/routes/index.ts` (regenerated by the build).
+
 ## Next
 
-Phase 3 complete. Human: browser check of the login / change-password pages. Then PR 4a (tasks 4.1+): user policy, CreateUser, UpdateUser.
+PR 3d ready for the human browser check and commit. Then PR 4a (tasks 4.1+): user policy, CreateUser, UpdateUser. (Earlier: Phase 3 complete; browser check of login / change-password pages pending.)
