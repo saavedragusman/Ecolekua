@@ -66,9 +66,17 @@ export default defineConfig({
         semi: true,
         singleAttributePerLine: false,
         htmlWhitespaceSensitivity: 'css',
+        // Repository documentation is excluded from formatting; the check covers code only.
         ignorePatterns: [
             '.github/**',
             'composer.json',
+            'docs/**',
+            'openspec/**',
+            'specs/**',
+            '.atl/**',
+            'README.md',
+            'AGENTS.md',
+            'CLAUDE.md',
             'resources/js/components/ui/*',
             'resources/views/mail/*',
         ],
