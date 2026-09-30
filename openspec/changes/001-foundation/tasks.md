@@ -109,13 +109,13 @@ Can start in parallel with Phase 1 (no shared files). No JS test framework is co
 
 ### PR 2b — Layouts, base components, Forbidden page
 
-- [ ] 2.6 GREEN — create `resources/js/types/auth.ts` (`AuthUser` DTO + `permissions: string[]`).
-- [ ] 2.7 GREEN — create components in `resources/js/components/`: `AppButton.vue`, `IconButton.vue`, `AppIcon.vue`, `AppInput.vue`, `AppSelect.vue`, `AppCheckbox.vue` (design-system §1.2/§7.4, not in §7's base list), `AppCard.vue`, `StatusBadge.vue` (active→`active`, inactive→`neutral`, always with text), `DataTable.vue`, `BottomNav.vue`, `SideNav.vue`, `AppPagination.vue`, `FlashMessage.vue`.
-- [ ] 2.8 GREEN — create `resources/js/layouts/AuthLayout.vue` (centered `AppCard`, used by login/forced change) and `resources/js/layouts/AppLayout.vue` (sidebar at `lg`+, `BottomNav` below `lg`, at most 5 destinations — Inicio, Usuarios, Roles, Auditoría, Cuenta — each shown only if its permission is in `auth.permissions`; Inicio and Cuenta always shown).
-- [ ] 2.9 GREEN — create `resources/js/pages/errors/Forbidden.vue` (403 page; wired to the exception render hook in Phase 4, task 4.8).
-- [ ] 2.10 [cleanup] Delete `resources/js/pages/Welcome.vue` (replaced by `Home.vue` in Phase 3).
-- [ ] 2.13 GREEN — create `resources/js/composables/useAppearance.ts` (reads/writes `localStorage` key `appearance`, toggles `.dark` on `<html>`; light default) and a theme toggle control in the ERP layout (`AppLayout.vue`) with a Spanish accessible label (`aria-label`, ≥44px target). No `dark:` classes (UI-06).
-- [ ] 2.11 [manual check] Verify against `docs/ui/design-system.md` §11 checklist: both themes checked (light default, dark via the 2.13 toggle) with no flash on load; 44px touch targets, ≥16px inputs, mobile-first breakpoints, accessibility rules §8, `rounded-lg` (UI-01) and success/warning tokens (UI-02) applied per their "Propuesta" recommendation.
+- [x] 2.6 GREEN — create `resources/js/types/auth.ts` (`AuthUser` DTO + `permissions: string[]`).
+- [x] 2.7 GREEN — create components in `resources/js/components/`: `AppButton.vue`, `IconButton.vue`, `AppIcon.vue`, `AppInput.vue`, `AppSelect.vue`, `AppCheckbox.vue` (design-system §1.2/§7.4, not in §7's base list), `AppCard.vue`, `StatusBadge.vue` (active→`active`, inactive→`neutral`, always with text), `DataTable.vue`, `BottomNav.vue`, `SideNav.vue`, `AppPagination.vue`, `FlashMessage.vue`.
+- [x] 2.8 GREEN — create `resources/js/layouts/AuthLayout.vue` (centered `AppCard`, used by login/forced change) and `resources/js/layouts/AppLayout.vue` (sidebar at `lg`+, `BottomNav` below `lg`, at most 5 destinations — Inicio, Usuarios, Roles, Auditoría, Cambiar contraseña — each shown only if its permission is in `auth.permissions`; Inicio and Cambiar contraseña always shown).
+- [x] 2.9 GREEN — create `resources/js/pages/errors/Forbidden.vue` (403 page; wired to the exception render hook in Phase 4, task 4.8).
+- [x] 2.10 [cleanup] Delete `resources/js/pages/Welcome.vue` (replaced by `Home.vue` in Phase 3).
+- [x] 2.13 GREEN — create `resources/js/composables/useAppearance.ts` (reads/writes `localStorage` key `appearance`, toggles `.dark` on `<html>`; light default) and a theme toggle control in the ERP layout (`AppLayout.vue`) with a Spanish accessible label (`aria-label`, ≥44px target). No `dark:` classes (UI-06).
+- [x] 2.11 [manual check] Verify against `docs/ui/design-system.md` §11 checklist: both themes checked (light default, dark via the 2.13 toggle) with no flash on load; 44px touch targets, ≥16px inputs, mobile-first breakpoints, accessibility rules §8, `rounded-lg` (UI-01) and success/warning tokens (UI-02) applied per their "Propuesta" recommendation.
 
 **Phase 2 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
@@ -158,9 +158,10 @@ Depends on Phase 1 (schema/models) and Phase 2 (layouts/components).
 - [ ] 3.21 RED — write `tests/Feature/Passwords/OwnPasswordChangeTest.php`: E-16 (own change with <10-char password rejected), E-17 (correct current password changes it; incorrect current password rejects it), E-28 (own-change audit row contains no password/hash values), FND-013 no-reuse (`NotCurrentPassword`), and `it('FND-012 ...')` asserting the stored `password` column is hashed (`Hash::check()` succeeds, the raw column never equals the plaintext value). [FND-012, FND-013, FND-015; E-16, E-17, E-28]
 - [ ] 3.22 GREEN — create `app/Rules/NotCurrentPassword.php`, `app/Actions/Auth/ChangeOwnPassword.php`, `app/Http/Requests/Auth/UpdatePasswordRequest.php` (`current_password` + `NotCurrentPassword` + `confirmed`), `app/Http/Controllers/Auth/PasswordController.php`; add `password.edit`/`password.update` authenticated routes; modify `app/Providers/AppServiceProvider.php` → `Password::defaults(fn () => Password::min(10))` in every environment (replacing the current production-only 12-char/complexity/`uncompromised()` rules). Run 3.21 — GREEN.
 - [ ] 3.23 GREEN — create `resources/js/pages/auth/Login.vue` and `resources/js/pages/auth/ChangePassword.vue`, wired to the controllers above and `AuthLayout`.
-- [ ] 3.24 GREEN — modify `app/Http/Middleware/HandleInertiaRequests.php` to share the `AuthUser` DTO (`id, first_name, last_name, email, must_change_password`), lazy `permissions`, and `flash`.
+- [ ] 3.24 GREEN — modify `app/Http/Middleware/HandleInertiaRequests.php` to share the `AuthUser` DTO (`id, first_name, last_name, email, must_change_password`), lazy `permissions` (flash uses Inertia v3's native flash, no custom shared prop: design Decision 19).
 - [ ] 3.25 [verify] Re-run `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30) with the now-larger route table — must stay GREEN with only `login`/`login.store` public.
 - [ ] 3.26 REFACTOR — `sail pint`; confirm the full middleware order (`RequireAuthentication` → `EnsureUserIsActive` → `EnsurePasswordIsChanged` → `HandleInertiaRequests`).
+- [ ] 3.27 REFACTOR — in `resources/js/layouts/AppLayout.vue` replace the hardcoded `home` usage/`password.edit` URI in `DESTINATIONS` (Inicio, Cambiar contraseña) with the Wayfinder-generated helpers; keep `sail pnpm types:check` and `sail pnpm build` green. (design Decision 19)
 
 **Phase 3 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
@@ -199,6 +200,7 @@ Depends on Phase 1 and Phase 3 (authorization stack, session invalidation).
 
 - [ ] 4.16 GREEN — create `resources/js/pages/users/Index.vue` (`DataTable` + `StatusBadge`), `Create.vue`, `Show.vue` (hosts the roles, reset, and activation forms), `Edit.vue`, wired to the Wayfinder-generated routes and `AppLayout`.
 - [ ] 4.17 [manual check] Verify against `docs/ui/design-system.md` §11: 44px touch targets, `DataTable` responsiveness, action buttons gated by permission (UI-only convenience; the backend already authorizes per §7.1).
+- [ ] 4.18 REFACTOR — in `AppLayout.vue` replace the hardcoded `/users` URI in `DESTINATIONS` (Usuarios) with the Wayfinder-generated `users.index` helper. (design Decision 19)
 
 **Phase 4 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
@@ -241,6 +243,7 @@ Depends on Phase 3 (authorization) and Phase 4 (`DeactivateUser`, `SyncUserRoles
 
 - [ ] 6.10 GREEN — create `resources/js/pages/roles/Index.vue`, `Create.vue`, `Show.vue` (hosts the permissions form), `Edit.vue`.
 - [ ] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
+- [ ] 6.12 REFACTOR — in `AppLayout.vue` replace the hardcoded `/roles` URI in `DESTINATIONS` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decision 19)
 
 **Phase 6 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
@@ -259,6 +262,7 @@ Depends on Phase 1 (`audit_logs`) and Phase 3 (authorization stack). Independent
 - [ ] 7.5 GREEN — create `resources/js/pages/audit/Index.vue` (filters by user/action/date-range; prints `occurred_at` as received, no client-side conversion).
 - [ ] 7.6 RED/GREEN — complete E-29(a) in `tests/Feature/Audit/AuditImmutabilityTest.php` (route enumeration: no registered route other than `GET audit.index` targets `audit_logs`); expected already-GREEN once `audit.index` is the only audit-affecting route registered by task 7.4. [FND-024; E-29]
 - [ ] 7.7 REFACTOR — `sail pint`; re-run `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30) against the final, complete route table for the whole change.
+- [ ] 7.8 REFACTOR — in `AppLayout.vue` replace the hardcoded `/audit` URI in `DESTINATIONS` (Auditoría) with the Wayfinder-generated `audit.index` helper; after this, `DESTINATIONS` holds no hardcoded URI. (design Decision 19)
 
 **Phase 7 closing checks (also the final closing checks for the whole change)**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 

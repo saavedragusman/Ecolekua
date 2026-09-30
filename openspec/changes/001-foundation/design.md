@@ -198,7 +198,7 @@ CREATE TRIGGER audit_logs_block_delete BEFORE DELETE ON audit_logs FOR EACH ROW
 - `config/app.php` default locale is `es`. The new `lang/es/validation.php` and `lang/es/auth.php` cover only the rules and messages used here.
 - Layouts:
   - `AuthLayout.vue`: login and forced change; a centred `AppCard`.
-  - `AppLayout.vue`: a sidebar at `lg` and `BottomNav` below `lg`, with at most 5 destinations: Inicio, Usuarios, Roles, Auditoría, Cuenta. Each entry is shown only if the corresponding permission is in `auth.permissions`, and Inicio and Cuenta are always shown.
+  - `AppLayout.vue`: a sidebar at `lg` and `BottomNav` below `lg`, with at most 5 destinations: Inicio, Usuarios, Roles, Auditoría, Cambiar contraseña. Each entry is shown only if the corresponding permission is in `auth.permissions`, and Inicio and Cambiar contraseña are always shown.
 - Components (built once in `resources/js/components/`): `AppButton`, `IconButton`, `AppIcon`, `AppInput`, `AppSelect`, `AppCheckbox`, `AppCard`, `StatusBadge`, `DataTable`, `BottomNav`, `SideNav`, `AppPagination`, `FlashMessage`.
   - `AppCheckbox` is not in design-system §7. It follows §1.2 (44 px target including its label) and the §7.4 tokens.
   - UI-01 (success/warning tokens) and UI-02 (`rounded-lg` in the ERP) apply their "Propuesta" recommendation.
@@ -254,6 +254,16 @@ A self password reset follows FND-014 exactly as for any other user: the passwor
 Editing one's own email changes the login identifier. The session is keyed by user id, so it stays valid.
 **Alternatives considered**: Forbidding self-edit and self-reset in user management, rejected by DEC-020.
 **Rationale**: DEC-020, FND-010, FND-021, DEC-010.
+
+### Decision 19: Frontend shell follow-ups from the PR 2b review (user decisions)
+
+**Choice**:
+1. **`GET /` (`home`)** stays on the interim `Route::inertia('/', 'Welcome')` (page deleted in PR 2b) until PR 3c (`HomeController` + `Home.vue`). `home` is NOT a public route (FND-026): it stays protected by default and redirects a guest to `login` (E-30 already enforces this). No merge to `main` before PR 3c.
+2. **Navigation URIs**: `AppLayout.vue` keeps hardcoded URIs in `DESTINATIONS` only until each route exists. In the PR that registers each route, `DESTINATIONS` switches to the Wayfinder-generated helpers (explicit tasks 3.27, 4.18, 6.12, 7.8).
+3. **Label**: the fifth destination is **"Cambiar contraseña"** (target `password.edit`), not "Cuenta": the user can only change their own password (DEC-010, FND-015). No account/profile page exists.
+4. **Flash**: use Inertia v3's native flash (`Inertia::flash([...])` on the backend, `usePage().flash` on the frontend) with shape `{ type: 'success' | 'error', message: string }`, typed through `InertiaConfig.flashDataType` in `resources/js/types/global.d.ts`. There is no custom shared `flash` prop. `FlashMessage.vue` reads `page.flash` itself and is mounted in `AppLayout` and `AuthLayout`.
+**Alternatives considered**: a shared `flash` prop in `HandleInertiaRequests` (rejected: duplicates the native mechanism); a public `/` (rejected by FND-026).
+**Rationale**: FND-026, DEC-010, FND-015, design-system §7.
 
 ## Data Flow
 
@@ -349,7 +359,7 @@ Generated Wayfinder files (`resources/js/actions/**`, `resources/js/routes/**`) 
 | `config/app.php` | Modify | Default locale `es`; `timezone` stays `UTC`; add literal `'operating_timezone' => 'America/Caracas'` (DEC-019, Decision 16) |
 | `routes/web.php` | Modify | Public login routes (`guest`), all protected routes (listed in Interfaces) |
 | `app/Providers/AppServiceProvider.php` | Modify | `Password::defaults(fn () => Password::min(10))` in all environments |
-| `app/Http/Middleware/HandleInertiaRequests.php` | Modify | Share user DTO (`id, first_name, last_name, email, must_change_password`), lazy `permissions`, `flash` |
+| `app/Http/Middleware/HandleInertiaRequests.php` | Modify | Share user DTO (`id, first_name, last_name, email, must_change_password`), lazy `permissions`; flash uses Inertia v3's native flash, no custom shared prop (Decision 19) |
 | `app/Http/Middleware/RequireAuthentication.php` | Create | Protected by default (Decision 5) |
 | `app/Http/Middleware/EnsureUserIsActive.php` | Create | Per-request active check (Decision 6) |
 | `app/Http/Middleware/EnsurePasswordIsChanged.php` | Create | Forced password change (Decision 8) |

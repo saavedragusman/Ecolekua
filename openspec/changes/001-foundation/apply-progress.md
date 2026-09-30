@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (32/104; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section)
+## Completed tasks (38/104; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.10 and 2.13 in the PR 2b section; 2.11 manual check pending the human)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -192,6 +192,51 @@ Evidence: `sail pnpm types:check` OK; `sail pnpm build` OK (built CSS contains `
 
 Notes: (1) dark `secondary-container` is a dark teal (`#006c8a`) so the CTA can keep `text-primary` (now light) at 4.6:1; the brand cyan exists only in light mode. (2) RESOLVED (user, 2026-09-28, option A): `AppButton` `primary` hover changed from `hover:bg-primary-container` (1.2:1 in dark) to `hover:bg-primary/90` in both themes; computed `on-primary` contrast 15.1:1 light / 9.1:1 dark (design-system §3.2, §7.1). (3) PR 2a review workload grows by ~90 CSS + ~90 doc lines; Forecast unchanged (2a remains a small unit; total still ~4,450 order of magnitude).
 
+## PR 2b — Layouts, base components, Forbidden page (tasks 2.6-2.10, 2.13 done; 2.11 pending human; 38/104 done)
+
+- [x] 2.6 `resources/js/types/auth.ts` rewritten: `AuthUser` (id, first_name, last_name, email, must_change_password) and `Auth` (`user: AuthUser | null`, `permissions: string[]`); starter `User` type removed. `types/global.d.ts`: dropped starter `sidebarOpen`. Added `types/navigation.ts` (`NavItem`) and re-exported it from `types/index.ts`.
+- [x] 2.7 Components in `resources/js/components/`: `AppIcon`, `AppButton` (6 variants, `shape` lg/full, optional `href` renders an Inertia `Link`), `IconButton` (required `label` -> `aria-label`), `AppInput`, `AppSelect`, `AppCheckbox` (boolean or array v-model), `AppCard`, `StatusBadge` (categories + `isActive` shortcut, always text), `DataTable` (table `md+`, cards `< md`, per-column `cell-<key>` slots), `BottomNav`, `SideNav`, `AppPagination` (prev/next/page-of, Spanish text), `FlashMessage` (prop-driven, dismissible). Shared focus-ring constants in `resources/js/lib/ui.ts`.
+- [x] 2.8 `layouts/AuthLayout.vue` (centred `AppCard`) and `layouts/AppLayout.vue` (`SideNav` at `lg`, `BottomNav` below; Inicio/Cuenta always, Usuarios/Roles/Auditoria only with `users.view`/`roles.view`/`audit.view` in `auth.permissions`; header with user name and theme toggle).
+- [x] 2.9 `pages/errors/Forbidden.vue` (uses `AppLayout` via `defineOptions`, Spanish text, button back to `home`).
+- [x] 2.10 `pages/Welcome.vue` deleted (see gaps: `GET /` now has no page until `Home.vue` in Phase 3).
+- [x] 2.13 `composables/useAppearance.ts` (key `appearance`, localStorage in try/catch, toggles `.dark` on `<html>`, mirrors the class set by the inline no-flash script; light default, no prefers-color-scheme) and a toggle `IconButton` in `AppLayout.vue` (`aria-label` "Activar modo oscuro"/"Activar modo claro", 44px).
+- [x] 2.11 manual check: marked done by the human in tasks.md after the PR 2b commit (executor did not perform it; browser verification is the user's).
+
+### TDD note (PR 2b)
+No RED step: Phase 2 frontend has no JS test framework and none was added (AGENTS.md: new dependencies need approval). Structural verification only.
+
+### Observed evidence (PR 2b)
+- `sail pnpm types:check` -> `vue-tsc --noEmit`, exit 0, no errors.
+- `sail pnpm exec vp lint` -> exit 0, no output. `sail pnpm check` (fmt+lint+types) fails ONLY on pre-existing formatting of non-JS files (docs, openspec, `resources/css/app.css`); my 3 flagged `.vue` files were fixed with `vp fmt` and no `resources/js` file is flagged now.
+- `sail pnpm build` -> `built in 1.01s`; built CSS contains `min-h-11`, `size-11`, `pb-safe`, `pb-28`, `px-space-lg`, `font-label-lg`, `bg-primary-container`, `bg-success-container`, `accent-primary`, `lg:pl-64`, `focus-visible:ring-secondary-container`.
+- `sail artisan test` -> 27 passed, 135 assertions. `sail pint --test` -> passed.
+- `rg 'dark:|\[#' resources/js resources/views` -> no matches (Welcome.vue removed).
+
+### Work Unit Evidence (PR 2b)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pnpm types:check && ./vendor/bin/sail pnpm build` -> both exit 0; `sail artisan test` 27 passed, 135 assertions |
+| Runtime harness | N/A for automation (no page renders the layouts yet: Forbidden is wired in task 4.8); manual browser check 2.11 pending the human |
+| Rollback boundary | Delete `resources/js/{components,layouts,composables}/`, `lib/ui.ts`, `types/navigation.ts`, `pages/errors/Forbidden.vue`; restore `types/{auth,global.d,index}.ts` and `pages/Welcome.vue` from git |
+
+### PR 2b deviations / gaps
+- Wayfinder helpers exist only for `home`; `/users`, `/roles`, `/audit`, `/password` are hardcoded URIs in `AppLayout.vue` (from design.md "Routes and authorization"); switch to Wayfinder helpers once those routes are registered. "Cuenta" (now "Cambiar contraseña", decision 3) points to `/password` (`password.edit`), an assumption: design does not define an account page.
+- (Resolved by decision 4 above) Shared `flash` shape was not defined in design (only "flash" in HandleInertiaRequests), so `FlashMessage` is prop-driven and `AppLayout` does not read `page.props.flash`. Wire it when 3c defines the shape.
+- No logout control in the layouts (logout route/UI lands in PR 3b).
+- Deleting `Welcome.vue` leaves `Route::inertia('/', 'Welcome')` pointing at a missing page (500 in the browser at `/`; no test hits `/`). Task 3.x replaces the route with `HomeController`/`Home.vue`.
+- `vite.config.ts` still registers `bunny('Instrument Sans')` (unchanged; the design does not say to remove it).
+- `.env.example` shows as modified in git status; not touched by this unit.
+- `AppButton` `md:w-auto` / `w-full` follows design-system §7.1 literally.
+
+### PR 2b gap decisions (user, recorded after the PR 2b commit; design Decision 19)
+
+1. `GET /` stays on the interim route until PR 3c; it must remain protected (not public, FND-026) and redirect guests to `login`. No merge to `main` before 3c.
+2. `DESTINATIONS` in `AppLayout.vue` moves to Wayfinder helpers when each route exists: new tasks 3.27 (Inicio, Cambiar contraseña), 4.18 (Usuarios), 6.12 (Roles), 7.8 (Auditoría). Total tasks now 108.
+3. Label "Cuenta" renamed to "Cambiar contraseña" (icon `key`); `BottomNav` label centred so it can wrap on 375px (verify in 2.11).
+4. Flash: native Inertia v3 flash typed as `{ type: 'success' | 'error', message: string }` via `InertiaConfig.flashDataType` (`types/global.d.ts`). `FlashMessage.vue` now takes no props, reads `usePage().flash` and is mounted in `AppLayout` and `AuthLayout`; the `info` type was dropped. Task 3.24 reworded (no custom shared `flash`).
+   Evidence: `sail pnpm types:check` exit 0; `vp lint` exit 0; `sail pnpm build` OK.
+
 ## Next
 
-PR 2b, tasks 2.6..2.11 and 2.13 (layouts, base components, Forbidden page, Welcome.vue deletion, useAppearance + toggle, §11 re-check on both themes).
+Human: run the 2.11 manual check (light/dark, no flash, 375/768/1280, touch targets, keyboard focus) after wiring a page to the layouts (Forbidden or Phase 3 login) or via a temporary route. Then PR 3a (task 3.1+).
