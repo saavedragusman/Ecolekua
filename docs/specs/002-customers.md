@@ -172,6 +172,7 @@ Un cliente de tipo empresa puede tener **una** persona de contacto, opcional, co
 Un cliente, de cualquier tipo, puede tener **una** dirección, opcional (DEC-CLI-06).
 
 - Cuando se registra, la dirección requiere **dirección**, **ciudad** y **estado**; la referencia es opcional (DEC-CLI-17).
+- El **estado** se elige de una lista cerrada con las 24 entidades federales de Venezuela (23 estados y el Distrito Capital); el backend rechaza cualquier otro valor. La ciudad es texto libre (DEC-CLI-33).
 - La relación entre esta dirección y la dirección de entrega de un pedido se define en `006` (§10).
 
 ### CLI-007 — Observaciones
@@ -623,6 +624,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 | DEC-CLI-30 | Validación del número de documento | A) Formato + dígito verificador del RIF · B) Solo formato | **Confirmada** (2026-09-30): **A**. Cédula 6–9 dígitos; RIF 8 dígitos + verificador; pasaporte 5–20 alfanuméricos; se guarda sin separadores y en mayúsculas | — |
 | DEC-CLI-31 | 29 de febrero en fechas conmemorativas | A) Válido · B) Rechazado | **Confirmada** (2026-09-30): **A** | — En años no bisiestos, la spec de Notificaciones decide el día del aviso |
 | DEC-CLI-32 | Coherencia de permisos `customers.*` | A) Los permisos de escritura, asignación y cartera exigen `customers.view` · B) Permisos independientes | **Confirmada** (2026-09-30): **A** | — Misma regla y mismo comportamiento que DEC-022 de `001` |
+| DEC-CLI-33 | Valores del campo "estado" de la dirección | A) Lista cerrada de las 24 entidades federales de Venezuela · B) Texto libre | **Confirmada** (2026-09-30): **A**; la ciudad sigue siendo texto libre | — Hace útil la agrupación de entregas y reportes de DEC-CLI-17 |
 
 ### Decisiones técnicas
 
