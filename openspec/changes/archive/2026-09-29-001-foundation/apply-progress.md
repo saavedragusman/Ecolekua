@@ -1,9 +1,9 @@
 # Apply Progress: 001-foundation
 
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
-Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
+Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). Work-unit commits made by the user (or on explicit request) per PR; every chain branch pushed with upstream (see each PR section and `verify-report.md`).
 
-## Completed tasks (114/123; 6.13-6.18 in the PR 6c section; 6.10 and 6.12 in the PR 6b section, 6.11 pending human; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
+## Completed tasks (124/124 counted from tasks.md; manual checks 4.17 and 6.11 confirmed by the human on 2026-09-29; 7.1-7.8 in the PR 7 section; 6.13-6.18 in the PR 6c section; 6.10 and 6.12 in the PR 6b section, 6.11 pending human; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -659,6 +659,47 @@ Decisions confirmed by the user on 2026-09-29 were recorded BEFORE code (AGENTS.
 - Unknown/non-string `status` -> `active` (technical choice, stated in Decision 23).
 - design-system §7.11 added for the new reusable `SegmentedTabs` component. No seeded data changed. No DEC-PENDIENTE. No dependency added. Size: 208 changed lines in tracked files plus 264 in three new files (about 470 authored lines, of which about 220 are tests and about 60 are docs). Slightly over the 400 budget as one cohesive work unit (RED tests and docs cannot be separated from the GREEN code); size:exception candidate only if the reviewer asks, not split artificially.
 
+## PR 7 — Audit query (tasks 7.1-7.8; branch feat/001-foundation-7-audit-query, child of PR 6c)
+
+- [x] 7.1 `config/app.php`: literal `'operating_timezone' => 'America/Caracas'` (`timezone` stays `UTC`).
+- [x] 7.2 RED `tests/Feature/Audit/AuditQueryTest.php` (14 tests: FND-025 permission/filters user, action, dates, combined, invalid, pagination + query string, options; FND-023 no password/hash exposed; DEC-019 day boundary, last microsecond, `occurred_at` `09/03/2026 23:30:00`, UTC storage untouched).
+- [x] 7.3 `app/Support/Time/OperatingTime.php` (`format`, `dayStartUtc`, `nextDayStartUtc`).
+- [x] 7.4 `AuditLogPolicy` (`viewAny` -> `audit.view` only), `AuditLogIndexRequest` (`user_id` exists, `action` enum, `from`/`to` `Y-m-d`, `to` `after_or_equal:from`; `authorize()` through the Policy), `AuditLogController@index` (half-open UTC range, newest first, 25 per page, `withQueryString()`), route `GET /audit` `audit.index`. Props: `logs` (paginated DTOs: id, occurred_at, actor, action, action_label, entity, ip_address, old_values, new_values), `filters`, `users` (options), `actions` (options). Spanish validation strings added (`enum`, attributes `user_id`, `action`).
+- [x] 7.5 `resources/js/pages/audit/Index.vue` (+ `types/audit.ts`): `AppSelect` user/action, `AppInput type=date` from/to, `DataTable`, `AppPagination`, old/new values in a native `<details>`; `occurred_at` printed as received.
+- [x] 7.6 E-29(a): route enumeration (only `GET audit.index` matches audit) plus a Policy-abilities test (`viewAny` only) in `AuditImmutabilityTest.php`.
+- [x] 7.7 pint; E-30 re-run against the final 25-route table.
+- [x] 7.8 `NAV_ENTRIES` Auditoría uses Wayfinder `@/routes/audit` `index.url()`; `rg "href: '" resources/js/navigation.ts` -> no matches (no hardcoded URI, no TODO left).
+
+### TDD Cycle Evidence (PR 7)
+
+| Task | Test File | Layer | RED | GREEN |
+|------|-----------|-------|-----|-------|
+| 7.2-7.4 | tests/Feature/Audit/AuditQueryTest.php | Integration (HTTP + Inertia props) | 14 written, 0 passed, 14 failed (404 on `/audit`, `Not a valid Inertia response`) | after 7.1, 7.3, 7.4: 13/14; the remaining test (`component('audit/Index')`) failed with `Inertia page component file [audit/Index] does not exist.` (RED for 7.5) |
+| 7.5 | same test (component assertion) | Integration | the failure above | page created: `sail artisan test tests/Feature/Audit` -> 28 passed, 195 assertions. Vue behavior itself: no JS test framework (documented exception) |
+| 7.6 | tests/Feature/Audit/AuditImmutabilityTest.php | Integration | No observed RED: expected already-GREEN (the task says so) because `audit.index` already existed when the test was written | 2 tests passed |
+
+### Observed evidence (PR 7)
+- `./vendor/bin/sail artisan test` -> 220 passed, 1261 assertions (0 skipped).
+- `./vendor/bin/sail pint` -> passed; `./vendor/bin/sail pint --test` -> passed.
+- `./vendor/bin/sail composer types:check` -> phpstan 0 errors (one initial `argument.type` on `AuditRedactor::redact()` because the `array` cast is typed `array|string`; fixed with an `is_array` guard in a private `payload()` helper).
+- `./vendor/bin/sail pnpm types:check` -> vue-tsc exit 0. `./vendor/bin/sail pnpm exec vp lint` -> exit 0 (re-run after `vp fmt resources/js`). `./vendor/bin/sail pnpm build` -> built in 993ms.
+- `rg 'dark:|\[#' resources/js` -> no matches. `route:list` -> 25 routes, `GET audit` `audit.index` the only audit route. E-30 -> 3 passed, 54 assertions.
+
+### Work Unit Evidence (PR 7)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail artisan test tests/Feature/Audit` -> 28 passed, 195 assertions |
+| Runtime harness | Feature tests over HTTP with the real middleware stack and MySQL; page compiled by `pnpm build`; NOT viewed in a browser (checklist in the PR 7 report) |
+| Rollback boundary | Delete `app/Support/Time/`, `app/Policies/AuditLogPolicy.php`, `app/Http/{Requests,Controllers}/Audit/`, `resources/js/{pages/audit,types/audit.ts}`, `tests/Feature/Audit/AuditQueryTest.php`; revert `config/app.php`, `routes/web.php`, `lang/es/validation.php`, `resources/js/navigation.ts` and the two E-29(a) tests |
+
+### PR 7 deviations / notes
+- Authored size: about 662 lines in 12 files (code about 440, tests about 222), over the 400/450 budget. Split confirmed by the user into two chained work units:
+  - **PR 7a** `feat/001-foundation-7a-audit-backend` (child of PR 6c), commit `a5b677a`: 7.1-7.4, 7.6, 7.7 (backend + tests). The `component('audit/Index')` test was left out of 7a because the page does not exist there; verified on its own: 219 passed, pint, phpstan 0 errors, build OK.
+  - **PR 7b** `feat/001-foundation-7b-audit-page` (child of PR 7a): 7.5, 7.8 (page, types, navigation) plus the restored component test and these progress files.
+- Choices not defined in the spec/design (technical, no business rule): page size 25, newest first, actor shown as full name or the attempted email (`actor_email`), entity as `Model #id`, `context` not displayed, payloads redacted again at read time, `user_id` filter lists every user, `action` filter lists the 18 `AuditAction` labels. No DEC-PENDIENTE.
+- The generated `resources/js/routes/audit` Wayfinder helper is gitignored; regenerated with `sail artisan wayfinder:generate` (the build also does it).
+
 ## Next
 
-PR 6c ready for review and commit after the human runs the 4.17/6.11 checks (6.11 now also covers the users status tabs). PR 6b ready for review and commit after the human runs 6.11. Then Phase 7. (Previously: PR 4c for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.
+2026-09-29: the human confirmed the manual browser checks 4.17 (users pages, status tabs), 6.11 (roles pages) and the audit page; 124/124 tasks done. PR 7a and 7b committed and pushed; every chain branch has an upstream. Next: `/sdd-verify`, then `/sdd-archive` after human confirmation. (Superseded note:) PR 7a committed; PR 7b ready for review and commit. Open items for change 001: manual checks 4.17 and 6.11 (human), then `/sdd-verify` and archive. Earlier: PR 6c ready for review and commit after the human runs the 4.17/6.11 checks (6.11 now also covers the users status tabs). PR 6b ready for review and commit after the human runs 6.11. Then Phase 7. (Previously: PR 4c for review and commit after the human runs 4.17. Then Phase 5 (DEC-021 seeded administrator) per tasks.md. Human browser checks from 2.11 / 3c / 3d are still pending.

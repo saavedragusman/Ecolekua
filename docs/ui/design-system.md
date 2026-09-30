@@ -593,7 +593,7 @@ Barra (píldora del tablero): `mb-space-sm flex items-center justify-around roun
 
 ### 7.10 `ConfirmDialog.vue` (confirmación de acciones destructivas)
 
-**Regla**: toda acción que cierre sesiones, invalide credenciales o desactive algo requiere esta confirmación antes de enviarse (por ejemplo desactivar un usuario o restablecer su contraseña). Las ediciones reversibles y sin efecto sobre sesiones (activar una cuenta, editar datos, cambiar roles) no la requieren. Decisión del usuario (2026-09-29, UI-07).
+**Regla**: toda acción que cierre sesiones, invalide credenciales, desactive algo o elimine algo de forma irreversible requiere esta confirmación antes de enviarse (por ejemplo desactivar un usuario, restablecer su contraseña o eliminar un rol). Las ediciones reversibles y sin efecto sobre sesiones (activar una cuenta, editar datos, cambiar roles) no la requieren. Decisión del usuario (2026-09-29, UI-07).
 
 - Elemento nativo `<dialog>` abierto con `showModal()`: foco atrapado y cierre con Esc, que equivale a "Cancelar". `aria-labelledby` apunta al título y `aria-describedby` al texto de consecuencia.
 - Contenido: título, texto que explica la consecuencia en español neutro y dos botones. "Cancelar" (`secondary`) y el de confirmar en variante `danger` con el verbo de la acción ("Desactivar", "Restablecer").
@@ -659,7 +659,7 @@ Cambios **permitidos y obligatorios** al llevar `desktop.html` a `resources/view
 | UI-04 | Menú móvil del portal público | Pendiente | Diseñarlo con los tokens existentes (el prototipo no lo tiene) |
 | UI-05 | Palabra "calidad" del H1 del portal en `text-secondary-container` (contraste 1.8:1) | Consultar con el cliente | No cambiar sin aprobación; proponer `text-secondary` o fondo oscuro |
 | UI-06 | Modo oscuro opcional en el ERP | Propuesta | Alternador manual, persistido en `localStorage` (`appearance`), claro por defecto, sin detección de `prefers-color-scheme`. Paleta oscura derivada de los tokens de marca (§2, contrastes en §3.2), pendiente de aprobación del cliente. El portal público queda excluido. Se implementa solo con tokens bajo `.dark`; `dark:` sigue prohibido. Hover de `AppButton` `primary` cambiado de `hover:bg-primary-container` (1.2:1 en oscuro) a `hover:bg-primary/90` en ambos temas (decidido 2026-09-28) |
-| UI-07 | Confirmación de acciones destructivas | Confirmada (usuario, 2026-09-29) | `ConfirmDialog.vue` (§7.10) para acciones que cierran sesiones, invalidan credenciales o desactivan algo |
+| UI-07 | Confirmación de acciones destructivas | Confirmada (usuario, 2026-09-29) | `ConfirmDialog.vue` (§7.10) para acciones que cierran sesiones, invalidan credenciales, desactivan algo o eliminan algo de forma irreversible |
 
 Hasta que una decisión pase a **Confirmada**, los agentes aplican la recomendación solo si la decisión figura como "Propuesta". Si figura como "Pendiente" o "Consultar", se detienen en esa parte.
 

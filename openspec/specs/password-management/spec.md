@@ -1,6 +1,6 @@
 # Password Management Specification
 
-> Transcribed from `docs/specs/001-foundation.md` v1.2 (§8 "Contraseñas", §11 "Usuarios y contraseñas", §16 "Decisiones de esta Spec"). Faithful transcription — no added, removed, or reinterpreted behavior. Original IDs (FND-xxx, E-xx) preserved verbatim.
+> Transcribed from `docs/specs/001-foundation.md` v1.3 (content for this domain unchanged since v1.2; §8 "Contraseñas", §11 "Usuarios y contraseñas", §16 "Decisiones de esta Spec"). Faithful transcription — no added, removed, or reinterpreted behavior. Original IDs (FND-xxx, E-xx) preserved verbatim.
 
 ## Purpose
 

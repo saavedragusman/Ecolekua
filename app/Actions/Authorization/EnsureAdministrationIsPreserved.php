@@ -40,7 +40,12 @@ class EnsureAdministrationIsPreserved
         }
 
         if (! $administrators->exists()) {
-            throw new BusinessRuleViolation('La operación dejaría al sistema sin un usuario activo con los permisos users.assign_roles y roles.manage.');
+            // User-facing copy uses the catalog descriptions, never the technical permission names.
+            throw new BusinessRuleViolation(sprintf(
+                'La operación dejaría al sistema sin ningún usuario activo con los permisos «%s» y «%s».',
+                PermissionName::UsersAssignRoles->description(),
+                PermissionName::RolesManage->description(),
+            ));
         }
     }
 

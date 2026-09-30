@@ -217,7 +217,7 @@ Depends on Phase 1 and Phase 3 (authorization stack, session invalidation).
 ### PR 4c — Users frontend pages
 
 - [x] 4.16 GREEN — create `resources/js/pages/users/Index.vue` (`DataTable` + `StatusBadge`), `Create.vue`, `Show.vue` (hosts the roles, reset, and activation forms), `Edit.vue`, wired to the Wayfinder-generated routes and `AppLayout`.
-- [ ] 4.17 [manual check] Verify against `docs/ui/design-system.md` §11: 44px touch targets, `DataTable` responsiveness, action buttons gated by permission (UI-only convenience; the backend already authorizes per §7.1).
+- [x] 4.17 [manual check] Verify against `docs/ui/design-system.md` §11: 44px touch targets, `DataTable` responsiveness, action buttons gated by permission (UI-only convenience; the backend already authorizes per §7.1).
 - [x] 4.18 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/users` URI in `NAV_ENTRIES` (Usuarios) with the Wayfinder-generated `users.index` helper. (design Decisions 19 and 20)
 
 - [x] 4.19 GREEN — add `resources/js/components/ConfirmDialog.vue` (design-system §7.10, design Decision 22, UI-07) and use it in `users/Show.vue` for "Desactivar usuario" and "Restablecer contraseña" (the form submits only after confirming; activating does not need it). Route: direct inline (component plus one page edit; already-understood pattern from `MoreSheet`). Checks: `sail pnpm types:check`, `sail pnpm exec vp lint`, `sail pnpm build`, `rg 'dark:|\[#' resources/js`; no RED possible (no JS test framework). Manual keyboard checks join 4.17.
@@ -262,7 +262,7 @@ Depends on Phase 3 (authorization) and Phase 4 (`DeactivateUser`, `SyncUserRoles
 ### PR 6b — Roles frontend pages
 
 - [x] 6.10 GREEN — create `resources/js/pages/roles/Index.vue`, `Create.vue`, `Show.vue` (hosts the permissions form), `Edit.vue`.
-- [ ] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
+- [x] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
 - [x] 6.12 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/roles` URI in `NAV_ENTRIES` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decisions 19 and 20)
 
 ### PR 6c — Permission coherence per role and users status filter (amendment; DEC-022, DEC-023)
@@ -288,18 +288,18 @@ Depends on Phase 3 (authorization) and Phase 4 (`DeactivateUser`, `SyncUserRoles
 
 Depends on Phase 1 (`audit_logs`) and Phase 3 (authorization stack). Independent of Phases 4–6 otherwise.
 
-- [ ] 7.1 [infra] Add the literal `'operating_timezone' => 'America/Caracas'` to `config/app.php` (`timezone` stays `UTC` — design.md Decision 16, DEC-019).
-- [ ] 7.2 RED — write `tests/Feature/Audit/AuditQueryTest.php`: DEC-019 boundary scenarios (insert rows at `2026-03-10 03:30:00 UTC` and `2026-03-10 04:00:00 UTC`; `from=to=2026-03-09` returns only the first, `from=to=2026-03-10` returns only the second; the Inertia prop shows `occurred_at = '09/03/2026 23:30:00'`; `config('app.timezone') === 'UTC'` and the stored `created_at` is unchanged); FND-025's filters (by user, action, date range, each independently); and `it('FND-025 ...')` asserting `audit.view` is required (403 without it). [FND-023, FND-025; DEC-019]
-- [ ] 7.3 GREEN — create `app/Support/Time/OperatingTime.php` (`format()` → `d/m/Y H:i:s` in `America/Caracas`; `dayStartUtc()` → inclusive UTC bound; `nextDayStartUtc()` → exclusive UTC bound).
-- [ ] 7.4 GREEN — create `app/Policies/AuditLogPolicy.php` (`viewAny` only → `audit.view`), `app/Http/Requests/Audit/AuditLogIndexRequest.php` (`from`/`to` as `Y-m-d`, `to after_or_equal:from`), `app/Http/Controllers/Audit/AuditLogController.php` (half-open UTC range query; DTO mapping with `occurred_at = OperatingTime::format(...)`); add `audit.index` route. Run 7.2 — GREEN.
-- [ ] 7.5 GREEN — create `resources/js/pages/audit/Index.vue` (filters by user/action/date-range; prints `occurred_at` as received, no client-side conversion).
-- [ ] 7.6 RED/GREEN — complete E-29(a) in `tests/Feature/Audit/AuditImmutabilityTest.php` (route enumeration: no registered route other than `GET audit.index` targets `audit_logs`); expected already-GREEN once `audit.index` is the only audit-affecting route registered by task 7.4. [FND-024; E-29]
-- [ ] 7.7 REFACTOR — `sail pint`; re-run `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30) against the final, complete route table for the whole change.
-- [ ] 7.8 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/audit` URI in `NAV_ENTRIES` (Auditoría) with the Wayfinder-generated `audit.index` helper; after this, `NAV_ENTRIES` holds no hardcoded URI. (design Decisions 19 and 20)
+- [x] 7.1 [infra] Add the literal `'operating_timezone' => 'America/Caracas'` to `config/app.php` (`timezone` stays `UTC` — design.md Decision 16, DEC-019).
+- [x] 7.2 RED — write `tests/Feature/Audit/AuditQueryTest.php`: DEC-019 boundary scenarios (insert rows at `2026-03-10 03:30:00 UTC` and `2026-03-10 04:00:00 UTC`; `from=to=2026-03-09` returns only the first, `from=to=2026-03-10` returns only the second; the Inertia prop shows `occurred_at = '09/03/2026 23:30:00'`; `config('app.timezone') === 'UTC'` and the stored `created_at` is unchanged); FND-025's filters (by user, action, date range, each independently); and `it('FND-025 ...')` asserting `audit.view` is required (403 without it). [FND-023, FND-025; DEC-019]
+- [x] 7.3 GREEN — create `app/Support/Time/OperatingTime.php` (`format()` → `d/m/Y H:i:s` in `America/Caracas`; `dayStartUtc()` → inclusive UTC bound; `nextDayStartUtc()` → exclusive UTC bound).
+- [x] 7.4 GREEN — create `app/Policies/AuditLogPolicy.php` (`viewAny` only → `audit.view`), `app/Http/Requests/Audit/AuditLogIndexRequest.php` (`from`/`to` as `Y-m-d`, `to after_or_equal:from`), `app/Http/Controllers/Audit/AuditLogController.php` (half-open UTC range query; DTO mapping with `occurred_at = OperatingTime::format(...)`); add `audit.index` route. Run 7.2 — GREEN.
+- [x] 7.5 GREEN — create `resources/js/pages/audit/Index.vue` (filters by user/action/date-range; prints `occurred_at` as received, no client-side conversion).
+- [x] 7.6 RED/GREEN — complete E-29(a) in `tests/Feature/Audit/AuditImmutabilityTest.php` (route enumeration: no registered route other than `GET audit.index` targets `audit_logs`); expected already-GREEN once `audit.index` is the only audit-affecting route registered by task 7.4. [FND-024; E-29]
+- [x] 7.7 REFACTOR — `sail pint`; re-run `tests/Feature/Authorization/ProtectedByDefaultTest.php` (E-30) against the final, complete route table for the whole change.
+- [x] 7.8 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/audit` URI in `NAV_ENTRIES` (Auditoría) with the Wayfinder-generated `audit.index` helper; after this, `NAV_ENTRIES` holds no hardcoded URI. (design Decisions 19 and 20)
 
 **Phase 7 closing checks (also the final closing checks for the whole change)**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
-**Work-unit commits**: one commit for PR 7 (backend + frontend + tests together, since it is under 400 lines as a single unit; split into 7a/7b only if the real diff drifts noticeably above ~450 lines).
+**Work-unit commits**: the real diff reached about 662 lines, so PR 7 was split (user decision): **PR 7a** backend + tests (7.1-7.4, 7.6, 7.7; commit `a5b677a`) and **PR 7b** page + navigation (7.5, 7.8), child of 7a.
 
 ---
 

@@ -1,6 +1,6 @@
 # Authorization Specification
 
-> Transcribed from `docs/specs/001-foundation.md` v1.2 (§8 "Autorización", "Protección por Defecto y Operaciones Públicas", §11 "Roles y autorización"). Faithful transcription — no added, removed, or reinterpreted behavior. Original IDs (FND-xxx, E-xx) preserved verbatim. No new decisions in §16 v1.2 (DEC-017..DEC-021) reference this domain's requirements.
+> Transcribed from `docs/specs/001-foundation.md` v1.3 (content for this domain unchanged since v1.2; §8 "Autorización", "Protección por Defecto y Operaciones Públicas", §11 "Roles y autorización"). Faithful transcription — no added, removed, or reinterpreted behavior. Original IDs (FND-xxx, E-xx) preserved verbatim. No new decisions in §16 v1.2 (DEC-017..DEC-021) reference this domain's requirements.
 
 ## Purpose
 
