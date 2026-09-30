@@ -84,6 +84,7 @@ El cliente **no es un usuario interno** del modelo de `001` (AGENTS §9). En est
 | `customers.assign` | ✓ | ✓ | — | — | — |
 | `customers.portfolio` | — | — | ✓ | — | — |
 
+- **Coherencia** (DEC-CLI-32, análoga a DEC-022 de `001`): al asignar permisos a cualquier rol, `customers.create`, `customers.update`, `customers.deactivate`, `customers.delete`, `customers.assign` y `customers.portfolio` exigen `customers.view`. Una asignación que no cumpla se rechaza y el rol no cambia. La matriz inicial de esta sección ya la cumple.
 - `001` asigna todos los permisos al Administrador solo al crear el rol (`RoleSeeder`). `design.md` debe definir cómo se aplica esta matriz a una base de datos existente.
 
 ---
@@ -188,6 +189,7 @@ Un usuario con `customers.deactivate` puede desactivar un cliente activo y react
 - Desactivar requiere confirmación con `ConfirmDialog` (design system §7.10, UI-07). Reactivar no la requiere.
 - Ninguna de las dos acciones borra datos ni relaciones.
 - Ambas quedan auditadas.
+- Desactivar un cliente que ya está inactivo, o reactivar uno que ya está activo, no produce cambios ni registro de auditoría, igual que en el módulo de Usuarios de `001`.
 - Un cliente inactivo no admite cotizaciones ni pedidos nuevos; las cotizaciones y pedidos que ya estén en curso siguen su flujo normal (DEC-CLI-09). Estas reglas las aplican `004` y `006` (§10).
 - Un cliente inactivo se puede editar (CLI-008) y reasignar (CLI-014) igual que uno activo (DEC-CLI-28).
 
@@ -197,9 +199,10 @@ Un usuario con `customers.delete` puede eliminar un cliente **solo si no tiene h
 
 - Uso previsto: duplicados, registros creados por error y datos de prueba. Los clientes con historial no se eliminan; se desactivan (CLI-009). Esto cumple AGENTS §7.9.
 - Eliminar requiere confirmación con `ConfirmDialog` (UI-07), variante `danger` y verbo "Eliminar".
+- La persona de contacto y la dirección forman parte del cliente: se eliminan junto con él, en la misma transacción.
 - La eliminación queda auditada con una copia de los valores anteriores del cliente, su persona de contacto y su dirección.
 - Si el cliente tiene historial, el backend rechaza la eliminación, indica el motivo y sugiere desactivarlo.
-- En esta spec todavía no existen registros dependientes. Cada spec que introduzca uno (`004`, `006`, …) añade su condición de bloqueo a la eliminación y su escenario de prueba. Además, las claves foráneas hacia el cliente usan restricción de borrado, para que la base de datos impida la eliminación aunque falte la validación.
+- En esta spec todavía no existen registros dependientes. Cada spec que introduzca uno (`004`, `006`, …) añade su condición de bloqueo a la eliminación y su escenario de prueba. Además, las claves foráneas de esos registros de historial hacia el cliente usan restricción de borrado, para que la base de datos impida la eliminación aunque falte la validación. La persona de contacto y la dirección no son historial y no bloquean la eliminación.
 
 ### CLI-011 — Listado y búsqueda
 
@@ -245,7 +248,7 @@ Toda ruta y acción de clientes valida el permiso correspondiente mediante Polic
 
 ### CLI-016 — Auditoría
 
-Se auditan el alta, la edición, la desactivación, la reactivación y la eliminación, registrando usuario, acción, cliente afectado, fecha y hora, IP y valores antes y después (AGENTS §7.8).
+Se auditan el alta (incluida la importación, CLI-018), la edición, la desactivación, la reactivación, la eliminación y la asignación o reasignación de asesora (CLI-014), registrando usuario, acción, cliente afectado, fecha y hora, IP y valores antes y después (AGENTS §7.8).
 
 ### CLI-017 — Fechas conmemorativas
 
@@ -264,7 +267,7 @@ El equipo técnico puede cargar una única vez la lista de clientes existentes d
 
 - Cada cliente importado pasa por las mismas validaciones del alta (CLI-001 a CLI-006, CLI-012, CLI-017).
 - Cada cliente creado queda auditado como un alta, identificando que proviene de la importación.
-- El archivo es CSV codificado en UTF-8 (DEC-CLI-20). Las columnas se definen en `design.md` a partir de los campos de §5.
+- El archivo es CSV codificado en UTF-8 (DEC-CLI-20). Las columnas se definen en `design.md` a partir de los campos de §5. Si el archivo no está en UTF-8 válido o no tiene las columnas esperadas, el comando no importa nada e indica el motivo.
 - **Todo o nada** (DEC-CLI-21): el comando valida primero todas las filas, incluidas las coincidencias entre filas del mismo archivo. Si alguna falla, no importa ningún cliente y entrega un informe con número de fila, campo y motivo. Si todas son válidas, las importa en una sola transacción.
 - **Teléfonos repetidos** (DEC-CLI-22), en el archivo o contra la base: el informe los lista como advertencia y el comando no importa. Solo se importan si se vuelve a ejecutar con una opción explícita de confirmación, después de revisarlos.
 - **Asesora** (DEC-CLI-23): el archivo tiene una columna opcional con el correo de la asesora. Si se informa, debe corresponder a un usuario activo con `customers.portfolio`; si no, la fila es inválida. Si está vacía, el cliente queda sin asesora. La asignación automática de CLI-014 no se aplica en la importación.
@@ -342,10 +345,10 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 
 ### E-10 — Eliminar un cliente sin historial (CLI-010, CLI-016)
 
-- **GIVEN** un cliente sin historial y un usuario con `customers.delete`
+- **GIVEN** un cliente de tipo empresa sin historial, con persona de contacto y dirección, y un usuario con `customers.delete`
 - **WHEN** confirma la eliminación
-- **THEN** el cliente deja de existir
-- **AND** la auditoría conserva quién lo eliminó, cuándo y una copia de sus valores anteriores
+- **THEN** el cliente, su persona de contacto y su dirección dejan de existir
+- **AND** la auditoría conserva quién lo eliminó, cuándo y una copia de los valores anteriores del cliente, su persona de contacto y su dirección
 
 ### E-11 — Buscar clientes (CLI-011)
 
@@ -373,6 +376,8 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 - **WHEN** se intenta registrar otro cliente con el mismo teléfono sin confirmar
 - **THEN** el backend no crea el cliente y devuelve una advertencia que identifica el cliente que coincide
 - **AND** si el usuario reenvía la petición confirmando, el cliente se crea
+- **AND** al editar otro cliente para ponerle ese mismo teléfono, el backend devuelve la misma advertencia y solo guarda con confirmación
+- **AND** al editar otros datos de un cliente cuyo teléfono ya coincide con el de otro cliente, sin cambiar el teléfono, el backend guarda sin advertencia (DEC-CLI-27)
 
 ### E-15 — Visibilidad y filtro Mis clientes (CLI-011, CLI-014)
 
@@ -433,7 +438,7 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 
 ### E-23 — Cambiar una empresa a persona natural (CLI-002, CLI-016)
 
-- **GIVEN** un cliente de tipo empresa con aniversario cargado y un usuario con `customers.update`
+- **GIVEN** un cliente de tipo empresa con aniversario y persona de contacto cargados y un usuario con `customers.update`
 - **WHEN** cambia el tipo a persona natural
 - **THEN** el cliente queda como persona natural, sin aniversario ni persona de contacto
 - **AND** la auditoría registra el cambio de tipo y los valores eliminados
@@ -508,6 +513,60 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 - **THEN** el cliente sigue asignado a esa asesora
 - **AND** se indica que la asesora no está disponible
 
+### E-34 — Validar el número de documento (CLI-003)
+
+- **GIVEN** un usuario con `customers.create`
+- **WHEN** registra un cliente con un documento que no cumple su formato: una cédula con menos de 6 o más de 9 dígitos, un RIF con dígito verificador incorrecto o un pasaporte con menos de 5 o más de 20 caracteres
+- **THEN** el backend rechaza la petición con un error de validación en el documento
+- **AND** no se crea ningún cliente
+
+### E-35 — Tipo de documento según el tipo de cliente (CLI-003)
+
+- **GIVEN** un usuario con `customers.create`
+- **WHEN** registra un cliente de tipo persona natural con un RIF J, o un cliente de tipo empresa con una cédula
+- **THEN** el backend rechaza la petición con un error de validación en el documento
+
+### E-36 — Normalizar el documento antes de comparar (CLI-003, CLI-012)
+
+- **GIVEN** un cliente registrado con un RIF válido escrito con guiones
+- **WHEN** se registra otro cliente con el mismo RIF escrito en minúsculas, con puntos y espacios
+- **THEN** el backend lo reconoce como el mismo documento y rechaza el alta por duplicado
+- **AND** el documento del primer cliente está guardado en mayúsculas y sin separadores
+
+### E-37 — Teléfono del cliente: solo celulares de Venezuela (CLI-004)
+
+- **GIVEN** un usuario con `customers.create`
+- **WHEN** registra un cliente con un teléfono fijo venezolano o con un número de otro país
+- **THEN** el backend rechaza la petición con un error de validación en el teléfono
+
+### E-38 — Teléfono fijo en la persona de contacto (CLI-005)
+
+- **GIVEN** un cliente de tipo empresa y un usuario con `customers.update`
+- **WHEN** registra una persona de contacto con un teléfono fijo venezolano
+- **THEN** la persona de contacto se guarda con el teléfono normalizado
+- **AND** si el teléfono es de otro país, el backend lo rechaza con un error de validación
+
+### E-39 — Importación con un archivo ilegible (CLI-018)
+
+- **GIVEN** un archivo que no está en UTF-8 válido o al que le faltan columnas esperadas
+- **WHEN** se ejecuta el comando de importación
+- **THEN** no se crea ningún cliente
+- **AND** el comando indica el motivo
+
+### E-40 — Cambio de estado sin efecto (CLI-009)
+
+- **GIVEN** un cliente inactivo y un usuario con `customers.deactivate`
+- **WHEN** envía la petición de desactivación
+- **THEN** el cliente sigue inactivo
+- **AND** no se registra ninguna entrada de auditoría
+
+### E-41 — Coherencia de permisos de clientes (§4, DEC-CLI-32)
+
+- **GIVEN** un usuario con permiso para gestionar roles y un rol sin `customers.view`
+- **WHEN** intenta asignarle `customers.update` (o cualquier otro permiso `customers.*` distinto de `customers.view`) sin `customers.view`
+- **THEN** el backend rechaza la asignación con un error de validación
+- **AND** los permisos del rol no cambian
+
 ---
 
 ## 8. Interfaz (ERP)
@@ -563,6 +622,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 | DEC-CLI-29 | Cartera de una asesora no disponible | A) Los clientes siguen asignados, marcados "asesora no disponible", reasignación manual · B) Desasignación automática | **Confirmada** (2026-09-30): **A** | — No modifica `001` |
 | DEC-CLI-30 | Validación del número de documento | A) Formato + dígito verificador del RIF · B) Solo formato | **Confirmada** (2026-09-30): **A**. Cédula 6–9 dígitos; RIF 8 dígitos + verificador; pasaporte 5–20 alfanuméricos; se guarda sin separadores y en mayúsculas | — |
 | DEC-CLI-31 | 29 de febrero en fechas conmemorativas | A) Válido · B) Rechazado | **Confirmada** (2026-09-30): **A** | — En años no bisiestos, la spec de Notificaciones decide el día del aviso |
+| DEC-CLI-32 | Coherencia de permisos `customers.*` | A) Los permisos de escritura, asignación y cartera exigen `customers.view` · B) Permisos independientes | **Confirmada** (2026-09-30): **A** | — Misma regla y mismo comportamiento que DEC-022 de `001` |
 
 ### Decisiones técnicas
 
@@ -603,7 +663,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 12. Requisitos no funcionales y Definition of Done
 
-- [ ] Cada escenario E-xx tiene al menos una prueba Pest cuyo nombre empieza por su ID.
+- [ ] Cada escenario E-xx tiene al menos una prueba Pest cuyo nombre empieza por su ID, salvo E-19, que no es comprobable en `002` porque aún no existen registros dependientes; se prueba en `004` y `006` (§10).
 - [ ] Las pruebas se ejecutan sobre MySQL (base `testing` de Sail).
 - [ ] Autorización con Policies; ninguna comprobación por nombre de rol.
 - [ ] Alta, edición, desactivación, reactivación y eliminación dentro de Actions (`app/Actions/Customers/`) con transacción cuando afecten a varias entidades (cliente + persona de contacto + dirección).
