@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - main
+  # `edited` re-runs the checks when a chained PR is retargeted to a new base branch.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
