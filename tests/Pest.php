@@ -40,7 +40,8 @@ function userWithPermissions(PermissionName|string ...$permissions): User
 }
 
 /**
- * A user holding the protected Administrador role, which the seeder gives all 9 permissions.
+ * A user holding the protected Administrador role, which the seeder gives the Administrador
+ * grants of the initial matrix (every permission except `customers.portfolio`).
  */
 function administrator(): User
 {

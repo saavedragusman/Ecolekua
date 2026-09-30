@@ -3,7 +3,7 @@
 namespace App\Enums;
 
 /**
- * Audited events of spec 001 (FND-022). The backed value is stored in `audit_logs.action`.
+ * Audited events of spec 001 (FND-022) and spec 002 (CLI-016). The backed value is stored in `audit_logs.action`.
  */
 enum AuditAction: string
 {
@@ -25,6 +25,12 @@ enum AuditAction: string
     case RolePermissionsGranted = 'roles.permissions_granted';
     case RolePermissionsRevoked = 'roles.permissions_revoked';
     case AuthorizationDenied = 'authorization.denied';
+    case CustomerCreated = 'customers.created';
+    case CustomerUpdated = 'customers.updated';
+    case CustomerDeactivated = 'customers.deactivated';
+    case CustomerActivated = 'customers.activated';
+    case CustomerDeleted = 'customers.deleted';
+    case CustomerAdvisorAssigned = 'customers.advisor_assigned';
 
     /**
      * Spanish label shown in the audit query.
@@ -50,6 +56,12 @@ enum AuditAction: string
             self::RolePermissionsGranted => 'Permisos asignados a un rol',
             self::RolePermissionsRevoked => 'Permisos retirados de un rol',
             self::AuthorizationDenied => 'Acceso denegado',
+            self::CustomerCreated => 'Cliente creado',
+            self::CustomerUpdated => 'Cliente modificado',
+            self::CustomerDeactivated => 'Cliente desactivado',
+            self::CustomerActivated => 'Cliente reactivado',
+            self::CustomerDeleted => 'Cliente eliminado',
+            self::CustomerAdvisorAssigned => 'Asesora de cliente asignada',
         };
     }
 }

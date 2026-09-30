@@ -17,9 +17,10 @@ use Illuminate\Validation\ValidationException;
 /**
  * Replaces the permissions of a role (FND-016). Granted and revoked permissions are audited
  * separately by name; when nothing changes nothing is written. A new catalog permission is
- * never assigned automatically (FND-017), only through this Action. Removing users.assign_roles
+ * only assigned automatically where its spec states an initial grant (FND-017, DEC-CLI-11,
+ * see InitialRolePermissions); every later change goes through this Action. Removing users.assign_roles
  * or roles.manage from the last administrator's roles is rejected (FND-020, E-25). The submitted
- * set must also be coherent (DEC-022), otherwise a validation error on `permissions` is raised.
+ * set must also be coherent (DEC-022, DEC-CLI-32), otherwise a validation error on `permissions` is raised.
  */
 class SyncRolePermissions
 {
@@ -66,8 +67,10 @@ class SyncRolePermissions
 
     /**
      * DEC-022: `roles.manage` requires `roles.view`, and every `users.*` permission other than
-     * `users.view` requires `users.view`. The whole submitted set is checked, so the role never
-     * changes when the assignment is incoherent.
+     * `users.view` requires `users.view`. DEC-CLI-32: every `customers.*` permission other than
+     * `customers.view` requires `customers.view`. The whole submitted set is checked and all
+     * violations are reported together, so the role never changes when the assignment is
+     * incoherent.
      *
      * @param  array<int, string>  $names
      *
@@ -92,6 +95,19 @@ class SyncRolePermissions
 
         if (! $has(PermissionName::UsersView) && array_filter($usersDependents, $has) !== []) {
             $messages[] = 'Los permisos de gestión de usuarios requieren también «Consultar listado y detalle de usuarios».';
+        }
+
+        $customersDependents = [
+            PermissionName::CustomersCreate,
+            PermissionName::CustomersUpdate,
+            PermissionName::CustomersDeactivate,
+            PermissionName::CustomersDelete,
+            PermissionName::CustomersAssign,
+            PermissionName::CustomersPortfolio,
+        ];
+
+        if (! $has(PermissionName::CustomersView) && array_filter($customersDependents, $has) !== []) {
+            $messages[] = 'Los permisos de clientes requieren también «Ver el listado y la ficha de todos los clientes».';
         }
 
         if ($messages !== []) {

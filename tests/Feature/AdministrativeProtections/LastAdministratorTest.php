@@ -73,11 +73,12 @@ it('E-25 rejects removing users.assign_roles or roles.manage from the roles of t
     $actor = userWithPermissions(PermissionName::RolesManage);
     $protected = Role::query()->where('is_protected', true)->firstOrFail();
     $remaining = Permission::query()->where('name', '!=', $permission)->pluck('id')->all();
+    $before = $protected->permissions()->count();
 
     $this->actingAs($actor)->putJson("/roles/{$protected->id}/permissions", ['permissions' => $remaining])
         ->assertStatus(422)->assertJson(['message' => e25Message()]);
 
-    expect($protected->permissions()->count())->toBe(9)
+    expect($protected->permissions()->count())->toBe($before)
         ->and(AuditLog::query()->where('action', 'like', 'roles.permissions_%')->count())->toBe(0)
         ->and($admin->fresh()->hasPermission($permission))->toBeTrue();
 })->with(['users.assign_roles', 'roles.manage']);
@@ -90,7 +91,7 @@ it('E-25 allows revoking permissions of the administrator role that do not affec
 
     $this->actingAs($actor)->put("/roles/{$protected->id}/permissions", ['permissions' => $remaining])->assertRedirect();
 
-    expect($protected->permissions()->count())->toBe(8);
+    expect($protected->permissions()->count())->toBe(count($remaining));
 });
 
 it('E-25 allows deactivating an administrator while another active administrator remains', function () {
