@@ -4,7 +4,7 @@
 |---|---|
 | Spec | 001 |
 | Nombre | Foundation |
-| Versión | 1.2 |
+| Versión | 1.3 |
 | Estado | Confirmada |
 | Documentos rectores | `docs/constitution.md`, `docs/business/business-rules.md` |
 
@@ -15,6 +15,7 @@
 | 1.0 | Versión inicial. |
 | 1.1 | Unificada longitud mínima de contraseña (FND-013). Corregida referencia de "Operación sensible". Definidas operación pública y protección por defecto (FND-026, E-30, BR-FND-010, DEC-015). Aclarado que clientes y visitantes del portal no son usuarios (DEC-014). Actor en auditoría de operaciones públicas (FND-023). Orden y dependencias de specs alineados con el cronograma comprometido (sección 15, DEC-016). |
 | 1.2 | Decisiones surgidas en Design: reinicio del contador de intentos fallidos (DEC-017), mensaje durante el bloqueo (DEC-018), zona horaria de operación (DEC-019), acciones del administrador sobre sí mismo (DEC-020), creación del primer administrador (DEC-021). |
+| 1.3 | Decisiones surgidas de la prueba manual: coherencia de permisos por rol (DEC-022) y filtro de usuarios por estado (DEC-023). |
 
 ---
 
@@ -688,6 +689,8 @@ Las siguientes decisiones completan comportamientos que la versión anterior dej
 | DEC-019 | La zona horaria de operación de Ecolekua es `America/Caracas`. Las fechas se almacenan en UTC; la consulta de auditoría las muestra y filtra por rango de fechas en esa zona horaria (FND-025). | Confirmada |
 | DEC-020 | Un administrador con los permisos correspondientes puede modificar sus propios datos y restablecer su propia contraseña desde la gestión de usuarios, igual que con cualquier otro usuario. Las únicas restricciones sobre sí mismo son las de FND-021: no puede desactivarse ni modificar sus propios roles (FND-010, FND-021, DEC-010). | Confirmada |
 | DEC-021 | El primer administrador se crea mediante un comando de consola interactivo que solicita nombre, apellido y correo, genera una contraseña temporal que obliga a cambiarla en el primer inicio de sesión, solo se ejecuta si no existe ya un usuario activo con rol Administrador y queda registrado en la auditoría como evento de consola. No se almacenan credenciales en variables de entorno ni en el código (FND-014, FND-020, FND-022). | Confirmada |
+| DEC-022 | Coherencia de permisos por rol: al asignar permisos a cualquier rol, `roles.manage` exige `roles.view`, y cualquier permiso `users.*` distinto de `users.view` (`users.create`, `users.update`, `users.deactivate`, `users.reset_password`, `users.assign_roles`) exige `users.view`. Una asignación que no cumpla se rechaza y el rol no cambia. Origen: prueba manual en la que se retiró `roles.view` al rol Administrador y el usuario perdió acceso a la interfaz de roles conservando `roles.manage` (FND-017, FND-018, FND-020). | Confirmada |
+| DEC-023 | Filtro de usuarios por estado: el listado de usuarios ofrece las vistas Activos (por defecto), Inactivos y Todos; el filtrado y el conteo de cada vista los resuelve el backend. No existe eliminación física de usuarios (BR-FND-005); la baja sigue siendo la desactivación (FND-010, FND-011). | Confirmada |
 
 ---
 

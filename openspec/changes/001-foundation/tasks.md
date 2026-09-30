@@ -1,6 +1,6 @@
 # Tasks: 001-foundation — Authentication, Users, Roles/Permissions, Authorization and Audit
 
-> Source of truth for behavior: `docs/specs/001-foundation.md` v1.2 (FND-001..FND-026, E-01..E-30, DEC-001..DEC-021, all `Confirmada`).
+> Source of truth for behavior: `docs/specs/001-foundation.md` v1.3 (FND-001..FND-026, E-01..E-30, DEC-001..DEC-023, all `Confirmada`; DEC-022/023 added by the PR 6c amendment).
 > Plan: `openspec/changes/001-foundation/design.md` (the project's only plan artifact). This file breaks the design's **7 PR-slice outline** (`design.md` → "Migration / Rollout" → "PR slice outline") into smaller, independently reviewable work units, because slices 1, 3, 4, and 5 individually exceed the 400-line review budget.
 > Naming: `Phase N` = one design slice (1, 2, 3, 4, 4b→**Phase 5**, 5→**Phase 6**, 6→**Phase 7**). Each phase is split into lettered PR work units (`1a`, `1b`, …) that are the actual chained-PR candidates. Task numbering (`N.M`) is continuous within a phase across its PR work units.
 > Test-first: `strict_tdd: true` (`openspec/config.yaml`). Every behavior task pairs a RED test (named after its scenario/decision ID) → a GREEN implementation task → a REFACTOR task. Pure structural migrations with no directly testable behavior yet are the one documented exception (Phase 1, see note there); their correctness is proven by the first consuming feature test in a later phase.
@@ -13,7 +13,7 @@
 | Estimated changed lines | ~4,450 authored lines total (additions + deletions, generated Wayfinder files excluded per design.md) |
 | 400-line budget risk | High |
 | Chained PRs recommended | Yes |
-| Suggested split | 15 chained PR work units across 7 phases (see table below; 3d added by the navigation amendment, design Decision 20) |
+| Suggested split | 16 chained PR work units across 7 phases (see table below; 3d added by the navigation amendment, design Decision 20; 6c added by the DEC-022/DEC-023 amendment, design Decision 23) |
 | Delivery strategy | ask-on-risk |
 | Chain strategy | feature-branch-chain (user, 2026-09-28): PR #1 targets tracker branch `feat/001-foundation`; each child PR targets the previous PR branch; only the tracker merges to `main` |
 
@@ -43,6 +43,7 @@ Three work units (3b, 6a, 7) land close to or slightly over 400 lines by design 
 | 5 | First-administrator console command | PR 12 | `sail pest --filter=CreateFirstAdministrator` | `sail artisan users:create-administrator` run once against `migrate:fresh --seed` | Revert `CreateFirstAdministrator` Action + Command (the nullable-actor `CreateUser` signature ships with PR 9 and stays) |
 | 6a | Roles CRUD, permission sync, last-administrator protection, self-action guards | PR 13 | `sail pest --filter=Roles,AdministrativeProtections` | N/A — fully covered by HTTP feature tests | Revert `RolePolicy`, Role Requests/Actions/Controllers/routes, `EnsureAdministrationIsPreserved`, the self-action guard additions |
 | 6b | Roles frontend pages | PR 14 | `sail pnpm types:check` | N/A | Revert the four `roles/*.vue` pages |
+| 6c | Permission coherence per role (DEC-022) and users status filter (DEC-023) | PR 6c (amendment; child of 6b) | `sail pest --filter=DEC-022,DEC-023` | N/A — HTTP feature tests; UI compiled by `sail pnpm build` | Revert the coherence check in `SyncRolePermissions`, the `status`/`counts` props in `UserController::index`, `SegmentedTabs.vue`, the `users/Index.vue` and `types/users.ts` edits, the two new test files |
 | 7 | Audit query in the operating timezone | PR 15 | `sail pest --filter=Audit` | `sail artisan route:list --name=audit` shows only `audit.index` | Revert `OperatingTime`, `AuditLogPolicy`, `AuditLogIndexRequest`, `AuditLogController`, `audit/Index.vue`, `operating_timezone` config key |
 
 ---
@@ -264,9 +265,22 @@ Depends on Phase 3 (authorization) and Phase 4 (`DeactivateUser`, `SyncUserRoles
 - [ ] 6.11 [manual check] Verify against `docs/ui/design-system.md` §11 for the roles pages.
 - [x] 6.12 REFACTOR — in `resources/js/navigation.ts` replace the hardcoded `/roles` URI in `NAV_ENTRIES` (Roles) with the Wayfinder-generated `roles.index` helper. (design Decisions 19 and 20)
 
+### PR 6c — Permission coherence per role and users status filter (amendment; DEC-022, DEC-023)
+
+> Amendment from two user-confirmed decisions (2026-09-29, spec v1.3, design Decision 23). Branch `feat/001-foundation-6c-permission-coherence-user-filter`, child of PR 6b (feature-branch-chain). Route: every task is **direct inline** (one sdd-apply writer for the whole work unit, no further delegation). The manual browser check of the new tabs joins 6.11.
+
+- [x] 6.13 DOCS — record DEC-022 and DEC-023 in `docs/specs/001-foundation.md` §16 (v1.2 → v1.3 with a changelog row), transcribe them as decision notes in the delta specs `roles-permissions` and `user-management` (no new E-xx), add design Decision 23 and design-system §7.11. Route: direct inline. Check: `rg 'DEC-022|DEC-023' docs openspec` shows spec, delta specs and design. [DEC-022, DEC-023]
+- [x] 6.14 RED — write `tests/Feature/Roles/PermissionCoherenceTest.php`: `roles.manage` without `roles.view` and each `users.*` (create, update, deactivate, reset_password, assign_roles) without `users.view` → 422 / validation error on `permissions`, role unchanged, no `roles.permissions_*` audit row; also the swap case, the Administrador role losing only `roles.view`, and acceptance of coherent sets and the empty set. Route: direct inline. [DEC-022; FND-017, FND-018, FND-020]
+- [x] 6.15 GREEN — `SyncRolePermissions::ensureCoherent()` throws `ValidationException` on `permissions` before any write and before the no-change early return (design Decision 23). Route: direct inline. Check: `sail pest --filter=DEC-022` plus `tests/Feature/AdministrativeProtections/LastAdministratorTest.php` (E-25) still green. [DEC-022]
+- [x] 6.16 RED — write `tests/Feature/Users/UserStatusFilterTest.php`: default = active only; `?status=inactive`; `?status=all`; unknown and non-string values → `active`; `counts` prop correct and independent of the view; pagination links keep `status`; still requires `users.view`. Route: direct inline. [DEC-023; FND-010, FND-011]
+- [x] 6.17 GREEN — `UserController::index(Request)` resolves `status` (default and fallback `active`), sends `status` and `counts`, filters the paginator with `withQueryString()`. Route: direct inline. Check: `sail pest --filter=DEC-023`. [DEC-023]
+- [x] 6.18 GREEN — frontend: `resources/js/components/SegmentedTabs.vue` (links with `aria-current`, not a tablist), `types/users.ts` (`UserStatusFilter`, `UserStatusCounts`), `users/Index.vue` with "Activos", "Inactivos", "Todos" and counts plus an empty text per view, via the Wayfinder `index({ query })` helper. No JS test framework, so no RED (documented exception). Route: direct inline. Checks: `sail pnpm types:check`, `sail pnpm exec vp lint`, `sail pnpm build`, `rg 'dark:|\[#' resources/js`. [DEC-023]
+
+**PR 6c closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm exec vp lint`, `./vendor/bin/sail pnpm build`.
+
 **Phase 6 closing checks**: `./vendor/bin/sail artisan test`, `./vendor/bin/sail pint --test`, `./vendor/bin/sail composer types:check`, `./vendor/bin/sail pnpm types:check`, `./vendor/bin/sail pnpm build`.
 
-**Work-unit commits**: one commit per PR (6a, 6b).
+**Work-unit commits**: one commit per PR (6a, 6b, 6c).
 
 ---
 
@@ -357,14 +371,16 @@ Depends on Phase 1 (`audit_logs`) and Phase 3 (authorization stack). Independent
 | E-29 | 1.2–1.5 (b, c, d), 7.6 (a) |
 | E-30 | 3.1–3.7, 3.25, 7.7 |
 
-### Decisions (DEC-017..021)
+### Decisions (DEC-017..023)
 
 | ID | Covering task(s) |
 |---|---|
+| DEC-022 | 6.13–6.15 |
+| DEC-023 | 6.13, 6.16–6.18 |
 | DEC-017 | 3.10–3.11 |
 | DEC-018 | 3.10–3.12 |
 | DEC-019 | 7.1–7.4 |
 | DEC-020 | 4.11–4.12, 6.7 |
 | DEC-021 | 5.1–5.4 |
 
-All 26 FND requirements, all 30 E scenarios, and all 5 confirmed decisions (DEC-017..021) are covered by at least one task above.
+All 26 FND requirements, all 30 E scenarios, and all 7 confirmed decisions (DEC-017..023) are covered by at least one task above.

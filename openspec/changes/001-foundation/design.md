@@ -296,6 +296,16 @@ Editing one's own email changes the login identifier. The session is keyed by us
 
 **Rationale**: both actions have immediate effects on someone else's sessions or credentials and are not undoable from the UI; an explicit step avoids accidental clicks, especially on touch devices.
 
+### Decision 23: Permission coherence per role and users status filter (PR 6c, DEC-022 and DEC-023)
+
+**Choice** (both business behaviors confirmed by the user on 2026-09-29 and recorded in the spec v1.3; the technical choices below are ours):
+
+1. **DEC-022 validation lives in `SyncRolePermissions` (the Action), not in `SyncRolePermissionsRequest`.** Rules: `roles.manage` requires `roles.view`; each of `users.create`, `users.update`, `users.deactivate`, `users.reset_password`, `users.assign_roles` requires `users.view`. The Action checks the whole resolved set (`Permission` names, after the `exists` check) inside its transaction and before any write, and throws `Illuminate\Validation\ValidationException::withMessages(['permissions' => [...]])`, which Laravel renders as a redirect with errors (HTML) or 422 (JSON). The role does not change and no audit row is written. The check runs before the "nothing changed" early return, so an incoherent submission is always rejected. Why the Action: it is the single authority for changing a role's permissions (backend as authority, AGENTS.md §7.1), so any future caller (console command, other slice) gets the rule for free; a FormRequest only guards the HTTP path. Why not a `BusinessRuleViolation`: the fault is in the submitted `permissions` field, so the validation error keeps the message next to the field on `roles/Show`. `CreateRole` accepts no permissions (DEC-013), so it needs no check. No seeded data changes (Administrador already holds all 9).
+2. **DEC-023 filter contract**: `GET /users?status=active|inactive|all`. Default `active`; an unknown or non-string value is treated as `active` (technical choice: it avoids a 404/422 for a stale bookmark and keeps the list usable). The paginator keeps the query string (`withQueryString()`). Props: `status` (the effective view), `counts` (`active`, `inactive`, `all`, always computed by the backend and independent of the selected view) and the paginated `users`. Physical deletion stays forbidden (FND-010, BR-FND-005); deactivation is the only removal.
+3. **UI**: the views are links with `aria-current="page"` on the selected one, inside a `<nav>`, not an ARIA `tablist` (each view is a URL, not an in-page panel). New reusable component `SegmentedTabs.vue` (design-system §7.11): full-width segmented control below `md` with targets of at least 44 px; each empty view has its own empty text. Wayfinder helper `index({ query: { status } })` builds the URLs.
+
+**Rationale**: keeps a role's permission set from becoming unusable (a permission that manages without seeing), and gives the users list the standard active/inactive views without moving any logic to the frontend.
+
 ## Data Flow
 
 Request pipeline (web group, in order after Laravel's session and CSRF middleware):

@@ -10,18 +10,32 @@ use App\Http\Requests\Users\UpdateUserRequest;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class UserController extends Controller
 {
-    public function index(): Response
+    /**
+     * DEC-023: `?status=active|inactive|all`; the default and any unknown value is `active`.
+     */
+    public function index(Request $request): Response
     {
         Gate::authorize('viewAny', User::class);
 
+        $status = $request->query('status');
+        $status = is_string($status) && in_array($status, ['active', 'inactive', 'all'], true) ? $status : 'active';
+
         return Inertia::render('users/Index', [
+            'status' => $status,
+            'counts' => [
+                'active' => User::query()->where('is_active', true)->count(),
+                'inactive' => User::query()->where('is_active', false)->count(),
+                'all' => User::query()->count(),
+            ],
             'users' => User::query()
+                ->when($status !== 'all', fn ($query) => $query->where('is_active', $status === 'active'))
                 ->with('roles:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
