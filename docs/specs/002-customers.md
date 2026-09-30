@@ -148,19 +148,23 @@ El cliente puede tener un documento de identificación compuesto por tipo y núm
 - Tipos admitidos según el tipo de cliente:
   - Persona natural: cédula V, cédula E o pasaporte.
   - Empresa: RIF J, G, V, E o P.
-- El backend rechaza un tipo de documento que no corresponde al tipo de cliente y valida el formato del número según el tipo de documento.
+- El backend rechaza un tipo de documento que no corresponde al tipo de cliente y valida el formato del número según el tipo de documento (DEC-CLI-30):
+  - Cédula V/E: solo dígitos, de 6 a 9.
+  - RIF J/G/V/E/P: 8 dígitos más el dígito verificador, que el backend comprueba con el algoritmo del SENIAT.
+  - Pasaporte: letras y números, de 5 a 20 caracteres.
+- El usuario puede escribir el número con puntos, guiones o espacios; el backend los elimina y guarda el número en mayúsculas y sin separadores. La unicidad se compara sobre esa forma normalizada.
 - El documento es único por tipo + número (CLI-012, DEC-CLI-03).
 
 ### CLI-004 — Datos de contacto
 
-El cliente registra al menos un teléfono de contacto utilizable por WhatsApp. El teléfono se almacena normalizado en formato internacional (DT-01). El correo electrónico es opcional; si se informa, el backend valida su formato (DEC-CLI-04).
+El cliente registra al menos un teléfono de contacto utilizable por WhatsApp. El teléfono se almacena normalizado en formato internacional (DT-01). Solo se admiten números de Venezuela (+58); el backend rechaza números de otros países (DEC-CLI-25). El teléfono del cliente debe ser un celular (04xx); el backend rechaza números fijos en este campo (DEC-CLI-26). El correo electrónico es opcional; si se informa, el backend valida su formato (DEC-CLI-04).
 
 ### CLI-005 — Persona de contacto
 
 Un cliente de tipo empresa puede tener **una** persona de contacto, opcional, con nombre, cargo, teléfono y correo (DEC-CLI-05). Los clientes de tipo persona natural no tienen persona de contacto.
 
 - Cuando se registra, la persona de contacto requiere **nombre** y **teléfono**; cargo y correo son opcionales (DEC-CLI-16).
-- El teléfono se normaliza igual que el del cliente (DT-01) y el correo, si se informa, se valida en formato.
+- El teléfono se normaliza igual que el del cliente (DT-01) y admite celulares o fijos de Venezuela (DEC-CLI-25, DEC-CLI-26). El correo, si se informa, se valida en formato.
 
 ### CLI-006 — Dirección
 
@@ -185,6 +189,7 @@ Un usuario con `customers.deactivate` puede desactivar un cliente activo y react
 - Ninguna de las dos acciones borra datos ni relaciones.
 - Ambas quedan auditadas.
 - Un cliente inactivo no admite cotizaciones ni pedidos nuevos; las cotizaciones y pedidos que ya estén en curso siguen su flujo normal (DEC-CLI-09). Estas reglas las aplican `004` y `006` (§10).
+- Un cliente inactivo se puede editar (CLI-008) y reasignar (CLI-014) igual que uno activo (DEC-CLI-28).
 
 ### CLI-010 — Eliminación restringida
 
@@ -213,7 +218,7 @@ La fecha de la última compra y el orden por actividad reciente se añaden en `0
 Al registrar o editar, el backend comprueba si ya existe otro cliente, activo o inactivo, con el mismo documento o el mismo teléfono (DEC-CLI-03):
 
 - **Documento**: único por tipo de documento + número. Si ya existe, el backend rechaza el guardado con un error de validación. La base de datos garantiza la unicidad aunque falte la validación.
-- **Teléfono**: puede repetirse. Si ya existe, el backend no guarda en el primer intento: devuelve una advertencia que identifica el cliente o los clientes que coinciden. El usuario puede confirmar, y entonces se guarda.
+- **Teléfono**: puede repetirse. Si ya existe, el backend no guarda en el primer intento: devuelve una advertencia que identifica el cliente o los clientes que coinciden. El usuario puede confirmar, y entonces se guarda. La comparación es solo contra el teléfono principal de otros clientes (no contra personas de contacto) y solo se hace cuando el teléfono es nuevo o cambió; editar otros datos no repite la advertencia (DEC-CLI-27).
 
 ### CLI-013 — Ficha del cliente
 
@@ -229,6 +234,7 @@ El cliente puede tener **una** asesora asignada: un usuario interno responsable 
   - Al registrar un cliente, se asigna automáticamente a quien lo crea si tiene `customers.portfolio`. Si no lo tiene, el cliente nace sin asesora.
   - Asignar o reasignar después del alta requiere `customers.assign`. El backend rechaza una asesora que no cumpla la primera regla.
   - La asesora asignada es opcional: un usuario con `customers.assign` puede dejar al cliente sin asesora.
+  - Si la asesora asignada se desactiva o pierde `customers.portfolio`, sus clientes siguen asignados a ella; la ficha y el listado la marcan como "asesora no disponible" y un usuario con `customers.assign` los reasigna manualmente. No hay desasignación automática (DEC-CLI-29).
 - La asignación no restringe la visibilidad: todo usuario con `customers.view` ve todos los clientes (DEC-CLI-08). La cartera se usa como filtro del listado (CLI-011).
 
 La asignación **no** determina por sí sola la atribución de ventas ni comisiones (business rules §20); esa regla se define en `006` / `014`.
@@ -248,7 +254,7 @@ El cliente puede registrar fechas conmemorativas opcionales, expresadas solo com
 - **Cumpleaños del cliente**: disponible para cualquier tipo de cliente.
 - **Aniversario de la empresa**: disponible solo para clientes de tipo empresa. El backend rechaza este dato en otros tipos.
 
-El backend valida que el día y el mes formen una fecha válida. Las fechas se muestran en la ficha y se editan con `customers.update`.
+El backend valida que el día y el mes formen una fecha válida; el 29 de febrero se admite (DEC-CLI-31). Las fechas se muestran en la ficha y se editan con `customers.update`.
 
 Esta spec **no** genera avisos. Los avisos de cumpleaños a las asesoras de venta, a Gerencia y a Administración los define la spec de Notificaciones (§10).
 
@@ -495,6 +501,13 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 - **THEN** no se crea ningún cliente
 - **AND** el informe indica el motivo
 
+### E-33 — Asesora no disponible (CLI-014)
+
+- **GIVEN** un cliente asignado a una asesora que después se desactiva
+- **WHEN** un usuario con `customers.view` consulta la ficha o el listado
+- **THEN** el cliente sigue asignado a esa asesora
+- **AND** se indica que la asesora no está disponible
+
 ---
 
 ## 8. Interfaz (ERP)
@@ -543,6 +556,13 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 | DEC-CLI-22 | Teléfonos duplicados en la importación | A) Advertencia en el informe; se importan solo si se confirma con una opción explícita del comando · B) Error que bloquea · C) Se importan y solo se listan | **Confirmada** (2026-09-30): **A** | — Respeta la regla de advertir y confirmar de CLI-012 |
 | DEC-CLI-23 | Asesora de los clientes importados | A) Columna opcional con el correo de la asesora · B) Todos sin asesora; se asignan después | **Confirmada** (2026-09-30): **A** | — Las asesoras deben existir como usuarios antes de importar |
 | DEC-CLI-24 | Autor de los clientes importados | A) El comando exige indicar un usuario interno activo, que figura como creador y como autor en la auditoría · B) Un usuario técnico "Sistema" | **Confirmada** (2026-09-30): **A** | — Sin usuarios ficticios en el modelo de `001` |
+| DEC-CLI-25 | Alcance de los teléfonos | A) Solo Venezuela (+58) · B) Venezuela por defecto y cualquier país con +código | **Confirmada** (2026-09-30): **A** | — Sin dependencias nuevas; validación simple |
+| DEC-CLI-26 | Teléfonos fijos | A) Solo celulares en todos los campos · B) Cliente: solo celular; persona de contacto: celular o fijo · C) Fijos en todos los campos | **Confirmada** (2026-09-30): **B** | — El teléfono del cliente debe servir para WhatsApp (CLI-004) |
+| DEC-CLI-27 | Alcance del aviso de teléfono duplicado | A) Solo contra el teléfono principal de otros clientes, cuando el teléfono es nuevo o cambió · B) A + teléfonos de personas de contacto | **Confirmada** (2026-09-30): **A** | — |
+| DEC-CLI-28 | Edición de clientes inactivos | A) Se editan y reasignan igual que los activos · B) Solo lectura hasta reactivar | **Confirmada** (2026-09-30): **A** | — |
+| DEC-CLI-29 | Cartera de una asesora no disponible | A) Los clientes siguen asignados, marcados "asesora no disponible", reasignación manual · B) Desasignación automática | **Confirmada** (2026-09-30): **A** | — No modifica `001` |
+| DEC-CLI-30 | Validación del número de documento | A) Formato + dígito verificador del RIF · B) Solo formato | **Confirmada** (2026-09-30): **A**. Cédula 6–9 dígitos; RIF 8 dígitos + verificador; pasaporte 5–20 alfanuméricos; se guarda sin separadores y en mayúsculas | — |
+| DEC-CLI-31 | 29 de febrero en fechas conmemorativas | A) Válido · B) Rechazado | **Confirmada** (2026-09-30): **A** | — En años no bisiestos, la spec de Notificaciones decide el día del aviso |
 
 ### Decisiones técnicas
 
@@ -562,7 +582,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 | `004` / `006` | Rechazar cotizaciones y pedidos nuevos para clientes inactivos, sin afectar a los que están en curso (CLI-009, DEC-CLI-09) |
 | `006` / `011` | Definir si la dirección del cliente (CLI-006) se propone como dirección de entrega del pedido y si el pedido guarda su propia copia |
 | `006` | Mostrar la **fecha de la última compra** en el listado y la ficha del cliente, y permitir **ordenar por actividad reciente**. No se incluye un filtro de inactividad ("sin compras en X meses"): la fecha de la última compra es suficiente (decisión del usuario, 2026-09-30) |
-| Notificaciones | Avisar de los cumpleaños de los clientes (CLI-017) a las asesoras de venta, a Gerencia y a Administración. Esa spec define los destinatarios por permiso (AGENTS §7.3), el canal (constitución §14), la antelación, si el aniversario de empresa también genera aviso y la regla contra la saturación (DEC-CLI-14) |
+| Notificaciones | Avisar de los cumpleaños de los clientes (CLI-017) a las asesoras de venta, a Gerencia y a Administración. Esa spec define los destinatarios por permiso (AGENTS §7.3), el canal (constitución §14), la antelación, si el aniversario de empresa también genera aviso la regla contra la saturación (DEC-CLI-14) y qué día se avisa de un 29 de febrero en años no bisiestos (DEC-CLI-31) |
 
 ---
 
