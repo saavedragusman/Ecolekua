@@ -4,6 +4,8 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Roles\RoleController;
+use App\Http\Controllers\Roles\RolePermissionController;
 use App\Http\Controllers\Users\UserController;
 use App\Http\Controllers\Users\UserPasswordController;
 use App\Http\Controllers\Users\UserRoleController;
@@ -34,3 +36,12 @@ Route::post('/users/{user}/activate', [UserStatusController::class, 'activate'])
 Route::post('/users/{user}/deactivate', [UserStatusController::class, 'deactivate'])->name('users.deactivate');
 Route::put('/users/{user}/password', [UserPasswordController::class, 'update'])->name('users.password.reset');
 Route::put('/users/{user}/roles', [UserRoleController::class, 'update'])->name('users.roles.update');
+
+Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+Route::get('/roles/create', [RoleController::class, 'create'])->name('roles.create');
+Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
+Route::get('/roles/{role}', [RoleController::class, 'show'])->name('roles.show');
+Route::get('/roles/{role}/edit', [RoleController::class, 'edit'])->name('roles.edit');
+Route::put('/roles/{role}', [RoleController::class, 'update'])->name('roles.update');
+Route::delete('/roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+Route::put('/roles/{role}/permissions', [RolePermissionController::class, 'update'])->name('roles.permissions.update');

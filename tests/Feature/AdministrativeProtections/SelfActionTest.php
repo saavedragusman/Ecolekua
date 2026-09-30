@@ -3,18 +3,53 @@
 use App\Enums\AuditAction;
 use App\Enums\PermissionName;
 use App\Models\AuditLog;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
-// FND-021 / E-26 (self-deactivation and own-role changes) ship with tasks 6.7-6.8.
-// Until then these pending tests keep the temporary gap visible on every run.
+// FND-021 / E-26: the only two self restrictions (DEC-020): no self-deactivation, no own-role changes.
+// Another administrator exists in these tests, so the last-administrator rule (E-25) cannot be
+// what rejects the operation; the message identifies the self guard.
 
-it('E-26 rejects an administrator deactivating themselves')
-    ->todo(note: 'Tasks 6.7-6.8 (FND-021)');
+it('E-26 rejects an administrator deactivating themselves', function () {
+    administrator();
+    $actor = userWithPermissions(PermissionName::UsersDeactivate);
 
-it('E-26 rejects an administrator changing their own roles')
-    ->todo(note: 'Tasks 6.7-6.8 (FND-021)');
+    $this->actingAs($actor)->postJson("/users/{$actor->id}/deactivate")
+        ->assertStatus(422)->assertJson(['message' => 'No puede desactivarse a sí mismo.']);
+
+    expect($actor->fresh()->is_active)->toBeTrue()
+        ->and(AuditLog::query()->where('action', AuditAction::UserDeactivated->value)->count())->toBe(0);
+});
+
+it('E-26 rejects an administrator changing their own roles', function () {
+    administrator();
+    $actor = userWithPermissions(PermissionName::UsersAssignRoles);
+    $before = $actor->roles()->pluck('roles.id')->all();
+    $extra = Role::factory()->create();
+
+    $this->actingAs($actor)->putJson("/users/{$actor->id}/roles", ['roles' => [...$before, $extra->id]])
+        ->assertStatus(422)->assertJson(['message' => 'No puede modificar sus propios roles.']);
+
+    expect($actor->roles()->pluck('roles.id')->all())->toBe($before)
+        ->and(AuditLog::query()->where('action', 'like', 'users.roles_%')->count())->toBe(0);
+});
+
+it('E-26 keeps allowing the same administrator to deactivate and change the roles of another user', function () {
+    administrator();
+    $actor = userWithPermissions(PermissionName::UsersDeactivate, PermissionName::UsersAssignRoles);
+    $other = User::factory()->create();
+    $role = Role::factory()->create();
+    $other->roles()->attach($role);
+    $extra = Role::factory()->create();
+
+    $this->actingAs($actor)->put("/users/{$other->id}/roles", ['roles' => [$role->id, $extra->id]])->assertRedirect();
+    $this->actingAs($actor)->post("/users/{$other->id}/deactivate")->assertRedirect();
+
+    expect($other->fresh()->is_active)->toBeFalse()
+        ->and($other->roles()->count())->toBe(2);
+});
 
 it('DEC-020 lets an administrator edit their own first name and email', function () {
     $actor = userWithPermissions(PermissionName::UsersUpdate);

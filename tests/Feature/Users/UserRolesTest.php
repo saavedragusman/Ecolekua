@@ -8,6 +8,11 @@ use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 
+beforeEach(function () {
+    // FND-020: the world always keeps one administrator, so these tests never trip the last-administrator rule.
+    administrator();
+});
+
 it('FND-010 audits users.roles_assigned with the ids and names of the added roles only', function () {
     $actor = userWithPermissions(PermissionName::UsersAssignRoles);
     $kept = Role::factory()->create(['name' => 'Ventas de prueba']);

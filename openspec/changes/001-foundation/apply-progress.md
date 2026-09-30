@@ -3,7 +3,7 @@
 Mode: Strict TDD (openspec/config.yaml `strict_tdd: true`). Runner: `./vendor/bin/sail pest` / `./vendor/bin/sail artisan test`.
 Delivery: feature-branch-chain (PR #1 targets tracker `feat/001-foundation`). No commits made (project rule).
 
-## Completed tasks (97/117; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
+## Completed tasks (106/117; 6.1-6.9 in the PR 6a section; 5.1-5.4 in the PR 5 section; 4.16, 4.18 and 4.19 in the PR 4c section, 4.17 pending human; 1.1-1.26 below, 2.1-2.5 and 2.12 in the PR 2a section, 2.6-2.11 and 2.13 in the PR 2b section, 3.1-3.7 in the PR 3a section, 3.8-3.17 in the PR 3b section, 3.18-3.27 in the PR 3c section, 3.28-3.36 in the PR 3d section, 4.1-4.6 in the PR 4a section, 4.7-4.15 in the PR 4b section)
 
 - [x] 1.1 Sail MySQL trigger-privilege fix
 - [x] 1.2 RED E-29 (b)(c)(d) test
@@ -549,6 +549,47 @@ Mutation check of the log guard: a temporary `Log::info` with the password in th
 - Email is trimmed before validation; the User mutator lowercases on storage.
 - Spanish copy for messages chosen here (no spec text).
 - No design deviation. No DEC-PENDIENTE.
+
+## PR 6a — Roles CRUD, permission sync, last-administrator protection, self-action guards (tasks 6.1-6.9; branch feat/001-foundation-6a-roles-protections, child of PR 5)
+
+Backend only; no frontend, no dependency (types:check/build for the frontend not run). Vue pages are PR 6b (6.10-6.12).
+
+- [x] 6.1 RED `tests/Feature/Roles/RoleManagementTest.php` (16 tests: E-22 x2, E-23 x3, FND-016 x11). [x] 6.2 `RolePolicy` (`viewAny`/`view` -> `roles.view`; `create`/`update`/`delete` -> `roles.manage`), `StoreRoleRequest`, `UpdateRoleRequest`, `CreateRole`, `UpdateRole` (protected rename guard), `DeleteRole` (protected + users-assigned guards), `RoleController`, routes `roles.{index,create,store,show,edit,update,destroy}`.
+- [x] 6.3 RED `tests/Feature/Roles/PermissionCatalogTest.php` (9 tests: E-24 through HTTP sync, seed contents, no permission-mutating routes, grant/revoke audits). [x] 6.4 `SyncRolePermissions`, `SyncRolePermissionsRequest`, `RolePermissionController`, route `roles.permissions.update` (PUT, body `permissions` = list of permission ids).
+- [x] 6.5 RED `LastAdministratorTest.php` (3 `->todo()` replaced by 10 tests incl. action-level `assert()`/`lock()` checks). [x] 6.6 `app/Actions/Authorization/EnsureAdministrationIsPreserved.php`; `lock()` + `assert()` wired into `DeactivateUser`, `SyncUserRoles`, `SyncRolePermissions`, `DeleteRole`.
+- [x] 6.7 RED `SelfActionTest.php` (2 `->todo()` replaced by 3 tests; DEC-020 x4 kept). [x] 6.8 self guards `$actor?->is($user)` at the top of `DeactivateUser` and `SyncUserRoles` (before the transaction). [x] 6.9 pint, phpstan, full suite (regression of UserStatusTest and PermissionAuthorizationTest included).
+
+### TDD Cycle Evidence (PR 6a)
+
+| Task | Test File | Layer | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|-----|-------|-------------|----------|
+| 6.1-6.2 | tests/Feature/Roles/RoleManagementTest.php | Integration (HTTP) | 16 written, 0 passed: 14 failed with 404 on `/roles*`, 2 errored `Route [roles.index|roles.show] not defined` | 16/16, 92 assertions | users vs none; protected vs regular; rename vs description only; no-change; view vs manage; HTML vs JSON | pint, phpstan |
+| 6.3-6.4 | tests/Feature/Roles/PermissionCatalogTest.php | Integration (HTTP) | 9 written, 1 passed (seed regression), 8 failed (404 on `PUT /roles/{id}/permissions`) | 25/25 with 6.1 after one test bug fix (`values()` on route-name collection) | grant / revoke / swap / none / empty; invalid id; forbidden | pint, phpstan |
+| 6.5-6.6 | tests/Feature/AdministrativeProtections/LastAdministratorTest.php | Integration (HTTP + action) | 10 written; with 6.7: 18 tests, 8 passed, 10 failed/errored (422 expected, got 302; `Target class [App\Actions\Authorization\EnsureAdministrationIsPreserved] does not exist`) | passing after 6.6 | deactivate / replace roles / revoke each of the two permissions (dataset); second admin present; only other holder inactive; permissions split across two roles; single-permission holders; lock statement | pint, phpstan |
+| 6.7-6.8 | tests/Feature/AdministrativeProtections/SelfActionTest.php | Integration (HTTP) | 3 written, 3 failed (302 instead of 422) | 3/3 | self vs other user with the same actor | pint, phpstan |
+| 6.9 | full suite | Integration | 7 pre-existing tests failed after wiring `assert()` (world without administrator: `UserStatusTest` x3, `UserRolesTest` x4); fixed by `administrator()` in `beforeEach` | 181 passed, 954 assertions | n/a | pint, phpstan |
+
+### Observed evidence (PR 6a)
+- `./vendor/bin/sail artisan test` -> 181 passed, 0 skipped/todo, 954 assertions. `sail pint` then `sail pint --test` -> passed. `sail composer types:check` -> phpstan 0 errors (one initial error on a too-narrow `@param` in `CreateRole`, fixed).
+- `rg 'todo\(|->skip' tests` -> no matches (0 todo/skipped tests; the 5 E-25/E-26 placeholders are replaced).
+
+### Work Unit Evidence (PR 6a)
+
+| Evidence | Value |
+|---|---|
+| Focused test command and exact result | `./vendor/bin/sail pest tests/Feature/Roles tests/Feature/AdministrativeProtections` -> all green inside the 181-test suite |
+| Runtime harness | Feature tests over HTTP with the real middleware stack and MySQL; `lock()` observed as one `select ... for update` on `permissions` through `DB::listen` |
+| Rollback boundary | Delete `app/Actions/{Roles,Authorization}/`, `app/Http/Controllers/Roles/`, `app/Http/Requests/Roles/`, `app/Policies/RolePolicy.php`, `tests/Feature/Roles/`; revert the roles block in `routes/web.php`, the guards in `DeactivateUser`/`SyncUserRoles`, and the test edits |
+
+### PR 6a deviations / notes
+- Edits to earlier-PR files: `DeactivateUser`, `SyncUserRoles` (self guard + lock/assert, planned), `routes/web.php` (8 routes), `UserStatusTest.php` and `UserRolesTest.php` (`beforeEach` adds `administrator()`: with `assert()` inside the transaction, a world with zero administrators rejects every deactivation/role change, as design Decision 12 states).
+- Role deletion is physical: roles are not history-bearing entities (only role-less-of-users can be deleted, audit keeps name/description/permissions in `roles.deleted`); `permission_role` rows cascade. Not undefined in the spec, so no DEC-PENDIENTE; flagged for review.
+- `DeleteRole` calls `lock()`/`assert()` per design although a role without users cannot hold the last administrator (defensive, redundant).
+- Self-guard messages and flash copy are Spanish text chosen here; the E-25 message is "La operación dejaría al sistema sin un usuario activo con los permisos users.assign_roles y roles.manage."
+- `SyncUserRoles` rejects any self call (even an identical set), per the design's top-of-method guard clause.
+- `RoleController` renders `roles/{Index,Create,Show,Edit}`, which ship in PR 6b; tests set `inertia.testing.ensure_pages_exist=false` as PR 4a did. Props (proposal for 6b): `roles` (id, name, description, is_protected, users_count, permissions_count); `role` (+ `permissions` list) and `permissions` catalog (only for `roles.manage`) on Show.
+- Roles list is unpaginated (7 seeded roles; spec does not ask for pagination).
+- No DEC-PENDIENTE.
 
 ## Next
 

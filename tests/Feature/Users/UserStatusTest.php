@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 beforeEach(function () {
+    // FND-020: the world always keeps one administrator, so these tests never trip the last-administrator rule.
+    administrator();
     Route::middleware('web')->get('/_test/protected', fn () => 'ok');
 });
 
