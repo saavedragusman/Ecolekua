@@ -90,6 +90,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Name as shown to people and recorded in audit values (e.g. the advisor of a customer).
+     */
+    public function fullName(): string
+    {
+        return trim("{$this->first_name} {$this->last_name}");
+    }
+
+    /**
      * Whether the user can be the assigned advisor of customers: active and holding
      * `customers.portfolio` (CLI-014, DEC-CLI-18). Never cached, like hasPermission().
      */
