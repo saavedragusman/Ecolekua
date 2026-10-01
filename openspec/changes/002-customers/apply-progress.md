@@ -179,3 +179,50 @@ Branch: `feat/002-customers-4-update` (from `feat/002-customers-3-create` at c26
 - `customers.show` is still a fixed URL in the redirect (task 5.6 swaps it).
 - The Phase 3 rethrow tests mock `RecordAuditEvent` to throw a unique violation on a different index (no real second unique index is reachable from the Action).
 - Authored diff about 1,050 lines (new files 841 plus about 158 added and 55 removed in tracked files), roughly 65% tests: `size:exception` recommended for PR 4 (4a about 700, 4b about 350).
+
+## Phase 5 (PR 5): List and detail — COMPLETE (8/8 tasks, units 5a + 5b)
+
+Branch: `feat/002-customers-5-list` (from `feat/002-customers-4-update` at 5c0aed3). Changes left in the working tree; no commit made.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-------|-------------|----------|
+| 5.1/5.2 | `tests/Feature/Customers/CustomerListTest.php` | Feature (HTTP + Inertia) | Customers suite green before | 30 tests, 0 passed (405: no `GET /customers` route, "Not a valid Inertia response") | 30/30 (273 assertions) | E-04 x2 (403, guest), E-11 x(name, accent/case, document x4 forms, phone x4 forms, under 3 digits, `%`/`_` escaping, blank), E-12 x(default + unknown/array status x3, inactive, all, counts, counts with `q`), E-15 x3 (no filter, mine + status + q + counts, no portfolio treats mine as off), CLI-011 x5 (pagination + query string, order, row DTO, nulls, Inactivo label) | none needed |
+| 5.5/5.6 | `tests/Feature/Customers/CustomerDetailTest.php` (+ `E-33 (list)` added to `CustomerListTest`) | Feature (HTTP + Inertia) | 30/30 list | 17 failed of 47 (16 detail + E-33 list: 405 / no `available` key) | 47/47 (311 assertions); whole `tests/Feature/Customers` 206/206 | E-04 x2, 404, CLI-013 full DTO, CLI-013 nulls, inactive, `advisorOptions` absent, E-06 display, E-16, E-17, E-20 x3 dates, E-33 deactivation, E-33 revocation, E-33 eligible, E-33 list (3 advisors) | `route('customers.show')` swapped into store/update redirects; tests still assert the same URL and stay green |
+| 5.3/5.4/5.7 (frontend) | none (no frontend test runner in the project) | - | `pnpm types:check` clean before | - | `pnpm types:check` clean, `pnpm build` OK | - | `AppInput` additions are optional props with `undefined` defaults, existing callers unchanged (full suite + types green) |
+
+Not RED-captured: the two 5.5 tests that passed by construction once the route existed were still RED before it (all 405). The frontend has no automated tests (design Testing Strategy: E2E not available); it is verified by types, build and the pending human checklist.
+
+### Work Unit Evidence
+
+| Evidence | Unit 5a | Unit 5b |
+|---|---|---|
+| Focused test | `sail pest tests/Feature/Customers/CustomerListTest.php`: 31 passed | `sail pest tests/Feature/Customers/CustomerDetailTest.php`: 16 passed |
+| Runtime harness | `sail pnpm build` OK (`Index` chunk built); browser check of `/customers` at 375/768/1280 px both themes: **PENDING for the human, not claimed** | `sail pnpm build` OK (`Show` chunk built); browser check of a customer page: **PENDING for the human, not claimed** |
+| Rollback boundary | `index` action + `GET /customers`, `Customer::scopeSearch`, `CustomerPresenter::listRow`/`availableAdvisorIds`, `Index.vue`, `AppInput` props, navigation entry, list types, `CustomerListTest` | `show` action + `GET /customers/{customer}`, `CustomerPresenter::detail`, `Show.vue`, detail types, `CustomerDetailTest`, the `route('customers.show')` redirects, the `E-33 (list)` test |
+
+### Slice-close gate (observed)
+- `sail pest tests/Feature/Customers/CustomerListTest.php`: 31 passed
+- `sail pest tests/Feature/Customers/CustomerDetailTest.php`: 16 passed
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors (one `list<int>` error fixed with `array_values`)
+- `sail pnpm types:check`: vue-tsc clean (after `sail artisan wayfinder:generate`)
+- `sail pnpm build`: built OK
+- `sail artisan test`: 571 passed, 2785 assertions (baseline 524 + 47 new)
+- PENDING (human): 375/768/1280 px browser check, both themes, keyboard only, of `/customers` and a customer page (design-system section 11).
+
+### Deviations / decisions
+- Backend 5.1/5.2 and 5.5/5.6 were done before the frontend 5.3/5.7 (the task order interleaves them): the list row first carried `advisor {id, name}` and gained `available` with the 5.6 RED (`E-33 (list)`), so the frontend is written once against the final DTO. `Index.vue` and `Show.vue` existed as empty stubs between RED and GREEN only because `ensure_pages_exist = true` requires the file.
+- `CustomerPresenter` is a final class with static methods (`listRow`, `detail`, `availableAdvisorIds`); availability is one `User::eligibleAdvisors()->whereIn('users.id', …)->pluck()` query per page (Decision 12).
+- The detail DTO is the flat shape of the design's Inertia props summary (`contact` = contact person, `address`, `advisor`), plus `document_type_label`. The CLI-013 section order is therefore a property of `Show.vue` (general data, contact, contact person for companies only, address, notes, advisor), not of the prop key order; it is not assertable from the backend and was verified by reading the page. Anniversary is rendered in "Contacto" only for companies.
+- `customers/Index` also sends `mine` (bool, already normalized by the backend: false when the actor lacks `customers.portfolio`) and `q` (trimmed, 100 chars max). The `Mis clientes` checkbox shows only when `canFilterMine` (backend) and `can('customers.portfolio')`.
+- Search over document: a letter-prefixed term (`J-1234`) also matches by its digits; a term made only of separators is guarded so it does not become `%%`.
+- Show has no action buttons (Phases 6-8) and no "Editar" link, because `customers.edit` does not exist yet.
+- Phase 6 note: `GET /customers/create` must be declared BEFORE `GET /customers/{customer}` in `routes/web.php`.
+- No [DEC-PENDIENTE] gaps found.
+- Authored diff about 1,280 lines (164 added and 21 removed in tracked files, about 1,095 in new files; tests about 500, frontend about 500, production PHP about 220). Far above the 400 budget but cohesive: `size:exception` recommended for PR 5. Honest split: 5a list (about 740: list test 308, `Index.vue` 204, scope, controller, AppInput, navigation, types) and 5b detail (about 540: detail test 195, `Show.vue` 177, presenter detail, show action). The hunks share `CustomerController.php`, `CustomerPresenter.php`, `routes/web.php` and `types/customers.ts`, so a per-unit commit needs `git add -p`; a single phase commit is recommended.
+
+### Proposed commits (Spanish descriptions, no attribution lines)
+- `feat(002): listado de clientes con búsqueda, vistas por estado y filtro de cartera [CLI-011, CLI-015, E-04, E-11, E-12, E-15]`
+- `feat(002): ficha de cliente con disponibilidad de la asesora [CLI-013, CLI-014, E-04, E-06, E-16, E-17, E-20, E-33]`

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
 use App\Enums\DocumentType;
+use App\Support\Customers\PhoneNumber;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -107,10 +108,51 @@ class Customer extends Model
     }
 
     /**
+     * List search (design Decision 13): a customer matches when its name, its document or its phone
+     * contains the term. `%` and `_` are escaped so they match literally; a blank term filters nothing.
+     *
+     * @param  Builder<Customer>  $query
+     */
+    public function scopeSearch(Builder $query, string $term): void
+    {
+        $term = trim($term);
+
+        if ($term === '') {
+            return;
+        }
+
+        $query->where(function (Builder $query) use ($term): void {
+            $query->where('name', 'like', self::contains($term));
+
+            // Documents are stored canonical (`J123456784`): compare without spaces, dots and hyphens.
+            $document = strtoupper(str_replace([' ', '.', '-'], '', $term));
+            if ($document !== '') {
+                $query->orWhere('document_number', 'like', self::contains($document));
+            }
+
+            // `J-1234` also matches by its digits, so `1234` and `J-1234` find the same documents.
+            if (preg_match('/^[A-Z](\d+)$/', $document, $matches) === 1) {
+                $query->orWhere('document_number', 'like', self::contains($matches[1]));
+            }
+
+            $fragment = PhoneNumber::searchFragment($term);
+
+            if ($fragment !== null) {
+                $query->orWhere('phone', 'like', self::contains($fragment));
+            }
+        });
+    }
+
+    /**
      * @param  Builder<Customer>  $query
      */
     public function scopeAssignedTo(Builder $query, User $advisor): void
     {
         $query->where('advisor_id', $advisor->getKey());
+    }
+
+    private static function contains(string $value): string
+    {
+        return '%'.addcslashes($value, '\\%_').'%';
     }
 }
