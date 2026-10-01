@@ -122,23 +122,23 @@ class Customer extends Model
         }
 
         $query->where(function (Builder $query) use ($term): void {
-            $query->where('name', 'like', self::contains($term));
+            self::whereContains($query, 'name', $term, 'and');
 
             // Documents are stored canonical (`J123456784`): compare without spaces, dots and hyphens.
             $document = strtoupper(str_replace([' ', '.', '-'], '', $term));
             if ($document !== '') {
-                $query->orWhere('document_number', 'like', self::contains($document));
+                self::whereContains($query, 'document_number', $document, 'or');
             }
 
             // `J-1234` also matches by its digits, so `1234` and `J-1234` find the same documents.
             if (preg_match('/^[A-Z](\d+)$/', $document, $matches) === 1) {
-                $query->orWhere('document_number', 'like', self::contains($matches[1]));
+                self::whereContains($query, 'document_number', $matches[1], 'or');
             }
 
             $fragment = PhoneNumber::searchFragment($term);
 
             if ($fragment !== null) {
-                $query->orWhere('phone', 'like', self::contains($fragment));
+                self::whereContains($query, 'phone', $fragment, 'or');
             }
         });
     }
@@ -151,8 +151,23 @@ class Customer extends Model
         $query->where('advisor_id', $advisor->getKey());
     }
 
-    private static function contains(string $value): string
+    /**
+     * `column LIKE '%value%' ESCAPE '\\'`: the escape character is declared explicitly so that the
+     * escaped `%` and `_` stay literal whatever the database default is. The SQL is a closed set of
+     * literals (the project runs on MySQL only); the value is always a binding.
+     *
+     * @param  Builder<Customer>  $query
+     * @param  'name'|'document_number'|'phone'  $column
+     * @param  'and'|'or'  $boolean
+     */
+    private static function whereContains(Builder $query, string $column, string $value, string $boolean): void
     {
-        return '%'.addcslashes($value, '\\%_').'%';
+        $sql = match ($column) {
+            'name' => "`name` like ? escape '\\\\'",
+            'document_number' => "`document_number` like ? escape '\\\\'",
+            'phone' => "`phone` like ? escape '\\\\'",
+        };
+
+        $query->whereRaw($sql, ['%'.addcslashes($value, '\\%_').'%'], $boolean);
     }
 }

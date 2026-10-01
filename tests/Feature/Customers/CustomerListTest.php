@@ -109,6 +109,36 @@ it('E-11 returns every active customer when the search is blank', function () {
     });
 });
 
+it('E-11 cuts the search term to 100 characters, after trimming it', function () {
+    Customer::factory()->create(['name' => 'Cliente cualquiera']);
+
+    $this->actingAs($this->viewer)->get('/customers?'.http_build_query(['q' => '  '.str_repeat('a', 150).'  ']))->assertInertia(function (Assert $page) {
+        expect(listProps($page)['q'])->toBe(str_repeat('a', 100))
+            ->and(listedCustomerNames($page))->toBe([]);
+    });
+
+    // A term of exactly 100 characters is kept whole.
+    $this->actingAs($this->viewer)->get('/customers?'.http_build_query(['q' => str_repeat('b', 100)]))->assertInertia(function (Assert $page) {
+        expect(listProps($page)['q'])->toBe(str_repeat('b', 100));
+    });
+});
+
+it('E-11 treats a non-string search term as an empty term', function (string $query) {
+    Customer::factory()->count(3)->create();
+
+    $this->actingAs($this->viewer)->get('/customers?'.$query)->assertInertia(function (Assert $page) {
+        expect(listProps($page)['q'])->toBe('')
+            ->and(listedCustomerNames($page))->toHaveCount(3);
+    });
+})->with(['q[]=x', 'q[a]=x&q[b]=y']);
+
+it('E-11 declares an explicit LIKE escape character on every LIKE so % and _ stay literal on any database default', function (string $term) {
+    $sql = strtolower(Customer::query()->search($term)->toRawSql());
+
+    expect($sql)->toContain("escape '\\\\'")
+        ->and(substr_count($sql, ' escape '))->toBe(substr_count($sql, ' like '));
+})->with(['100%', '1234567', 'j1234567', '0414 123']);
+
 it('E-12 lists only active customers by default and falls back to active on an unknown status', function (string $query) {
     Customer::factory()->create(['name' => 'Activo uno']);
     Customer::factory()->inactive()->create(['name' => 'Inactivo uno']);
