@@ -41,6 +41,7 @@ Route::put('/users/{user}/roles', [UserRoleController::class, 'update'])->name('
 
 // Customers (spec 002, CLI-001). Authorization lives in CustomerPolicy.
 Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
