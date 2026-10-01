@@ -25,6 +25,7 @@ return [
         'array' => 'El campo :attribute debe tener al menos :min elementos.',
         'string' => 'El campo :attribute debe tener al menos :min caracteres.',
     ],
+    'not_empty_array' => 'El campo :attribute no puede estar vacío; envíe null para quitarlo.',
     'not_current_password' => 'La nueva contraseña debe ser distinta de la actual.',
     'prohibited_unless' => 'El campo :attribute solo se admite cuando :other es :values.',
     'required' => 'El campo :attribute es obligatorio.',

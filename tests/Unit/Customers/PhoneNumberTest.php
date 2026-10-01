@@ -85,6 +85,24 @@ it('E-37 reports the original input back through the exception reason only', fun
         ->and($exception?->getMessage())->not->toContain('415');
 });
 
+it('DT-01 drops a trunk 0 typed right after the +58 or 0058 country code', function (string $raw, string $e164) {
+    expect(PhoneNumber::parse($raw)->e164())->toBe($e164);
+})->with([
+    'plus 58 mobile' => ['+58 0414-123-4567', '+584141234567'],
+    'plus 58 landline' => ['+58 0212 555 1234', '+582125551234'],
+    '0058 mobile' => ['0058 0414 1234567', '+584141234567'],
+]);
+
+it('DEC-CLI-25 still rejects non-Venezuelan numbers and a second trunk 0 after the country code', function () {
+    expect(phoneFailureReason('+1 0415 555 0123'))->toBe('foreign')
+        ->and(phoneFailureReason('+58 00414 123 4567'))->toBe('format');
+});
+
+it('DEC-CLI-08 ignores a trunk 0 after the country code in the search fragment', function () {
+    expect(PhoneNumber::searchFragment('+58 0414 123'))->toBe('414123')
+        ->and(PhoneNumber::searchFragment('0058 0414 123'))->toBe('414123');
+});
+
 it('DEC-CLI-08 builds a digits-only search fragment from partial phone input', function (string $term, string $fragment) {
     expect(PhoneNumber::searchFragment($term))->toBe($fragment);
 })->with([

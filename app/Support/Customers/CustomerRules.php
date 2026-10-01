@@ -29,6 +29,11 @@ final class CustomerRules
     /**
      * Rules for every customer field, including `contact.*` and `address.*`.
      *
+     * `contact` and `address` follow the full-replace semantics: `null` (or absent) means "none"
+     * and an object upserts. An empty array is neither, and `required_with` does not fire for it,
+     * so it is rejected (422) through `notEmptyArray()` instead of being normalized to null:
+     * the caller must say `null` to delete, which keeps an accidental `[]` from silently removing data.
+     *
      * @return array<string, list<mixed>>
      */
     public static function customer(?Customer $ignoring = null): array
@@ -52,12 +57,12 @@ final class CustomerRules
             'anniversary_day' => ['nullable', 'integer', 'between:1,31', 'required_with:anniversary_month', 'prohibited_unless:type,company'],
             'anniversary_month' => ['nullable', 'integer', 'between:1,12', 'required_with:anniversary_day', 'prohibited_unless:type,company'],
             'notes' => ['nullable', 'string', 'max:'.self::NOTES_MAX_LENGTH],
-            'contact' => ['nullable', 'array', 'prohibited_unless:type,company'],
+            'contact' => ['nullable', 'array', self::notEmptyArray(), 'prohibited_unless:type,company'],
             'contact.name' => ['required_with:contact', 'string', 'max:150'],
             'contact.position' => ['nullable', 'string', 'max:100'],
             'contact.phone' => ['required_with:contact', 'string', 'max:30', new VenezuelanPhone(allowLandline: true)],
             'contact.email' => ['nullable', 'email', 'max:255'],
-            'address' => ['nullable', 'array'],
+            'address' => ['nullable', 'array', self::notEmptyArray()],
             'address.line' => ['required_with:address', 'string', 'max:255'],
             'address.city' => ['required_with:address', 'string', 'max:100'],
             'address.state' => ['required_with:address', Rule::enum(VenezuelanState::class)],
@@ -80,6 +85,18 @@ final class CustomerRules
             fn (Validator $validator) => self::validateDate($validator, 'anniversary_day', 'anniversary_month'),
             self::validateDocumentTypeFitsCustomerType(...),
         ];
+    }
+
+    /**
+     * Rejects `[]` for an optional nested object; `null` and absence stay valid ("none").
+     */
+    private static function notEmptyArray(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            if ($value === []) {
+                $fail('validation.not_empty_array')->translate();
+            }
+        };
     }
 
     private static function validateDate(Validator $validator, string $dayField, string $monthField): void

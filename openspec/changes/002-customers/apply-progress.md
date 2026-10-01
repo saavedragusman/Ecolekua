@@ -87,3 +87,15 @@ Branch: `feat/002-customers-2-domain` (from `feat/002-customers-1-permissions` a
 - `VenezuelanState` values are snake_case ASCII slugs (e.g. `distrito_capital`, `la_guaira`); "La Guaira" is the current official name of the former Vargas state.
 - Confirmed the technical follow-up: Laravel v13.33.0 on MySQL 8.4 throws `Illuminate\Database\UniqueConstraintViolationException` for the unique-index violation (asserted in `CustomerSchemaTest`).
 - Real authored diff about 2,050 lines (68 tracked + 1,981 new files; tests about 855, production about 1,126), mostly tests and dataset-heavy: far above the ~450 threshold. `size:exception` recommended for PR 2; units 2a (about 950) and 2b (about 1,100) are the honest split.
+
+## Review follow-up Phase 2 (R3-empty-nested-array, R3-plus58-trunk-zero, R3-revocation-untested)
+
+Scoped fixes after the native review of 6b3e460 + fd69109.
+
+| Finding | RED | GREEN | Change |
+|---|---|---|---|
+| R3-empty-nested-array | 4 failures (`contact: []` / `address: []` passed validation for company and natural) | 92/92 in the 3 touched files | Decision: an empty array is REJECTED (422 on `contact` / `address`), not normalized to null. `null`/absent still means "none" and an object upserts, so deleting stays explicit and an accidental `[]` cannot silently remove data. Implemented as `CustomerRules::notEmptyArray()` plus `validation.not_empty_array` message. (`required_array_keys` and `filled` were tried and discarded: duplicate parent+child errors, and `filled` rejects `null`.) |
+| R3-plus58-trunk-zero | 3 errors (`+58 0414…`, `+58 0212…`, `0058 0414…` rejected as format) + 1 fragment failure (`0414123`) | green | `PhoneNumber::withoutTrunkZero()` drops a single `0` after `+58`/`0058` in `parse` and `searchFragment`. Foreign numbers still `foreign`; `+58 00414…` still `format`; customer landline rule untouched. |
+| R3-revocation-untested | n/a | passed immediately (no production change) | New test detaches `customers.portfolio` from the role; `isEligibleAdvisor()` false and the user leaves `eligibleAdvisors()`. |
+
+Verification: touched tests 92/92; `sail artisan test` 404 passed (1838 assertions); `sail pint --test` passed; `composer types:check` phpstan 0 errors. Authored diff about 88 lines (83 added, 5 removed).

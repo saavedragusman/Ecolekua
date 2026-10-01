@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\PermissionName;
+use App\Models\Permission;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -49,6 +50,21 @@ it('DEC-CLI-18 lists a user once even when several roles grant customers.portfol
 
     expect($advisor->roles()->count())->toBe(2)
         ->and(User::eligibleAdvisors()->where('users.id', $advisor->id)->count())->toBe(1);
+});
+
+it('DEC-CLI-29 revoking customers.portfolio from the role makes the user ineligible on the next check', function () {
+    $advisor = userWithPermissions(PermissionName::CustomersPortfolio, PermissionName::CustomersView);
+    $other = userWithPermissions(PermissionName::CustomersPortfolio);
+
+    expect($advisor->isEligibleAdvisor())->toBeTrue()
+        ->and(User::eligibleAdvisors()->whereKey($advisor->id)->exists())->toBeTrue();
+
+    $permission = Permission::query()->where('name', PermissionName::CustomersPortfolio->value)->firstOrFail();
+    $advisor->roles()->firstOrFail()->permissions()->detach($permission->id);
+
+    expect($advisor->refresh()->isEligibleAdvisor())->toBeFalse()
+        ->and(User::eligibleAdvisors()->whereKey($advisor->id)->exists())->toBeFalse()
+        ->and(User::eligibleAdvisors()->pluck('id')->all())->toBe([$other->id]);
 });
 
 it('DEC-CLI-29 eligibleAdvisors follows revocations and deactivation on the next query', function () {

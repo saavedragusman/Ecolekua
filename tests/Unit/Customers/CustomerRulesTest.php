@@ -111,6 +111,23 @@ it('CLI-005 requires name and phone when a contact person is sent', function () 
     expect($validator->errors()->keys())->toEqualCanonicalizing(['contact.name', 'contact.phone']);
 });
 
+it('CLI-005 and CLI-006 reject an empty contact or address array instead of letting it through', function (string $type, string $field) {
+    $validator = customerValidator(minimalCustomerData(['type' => $type, $field => []]));
+
+    expect($validator->passes())->toBeFalse()
+        ->and($validator->errors()->has($field))->toBeTrue();
+})->with([
+    'company with empty contact' => ['company', 'contact'],
+    'company with empty address' => ['company', 'address'],
+    'natural with empty address' => ['natural', 'address'],
+    'natural with empty contact' => ['natural', 'contact'],
+]);
+
+it('CLI-005 and CLI-006 still accept an absent or null contact and address', function () {
+    expect(customerValidator(minimalCustomerData(['type' => 'company', 'contact' => null, 'address' => null]))->passes())->toBeTrue()
+        ->and(customerValidator(minimalCustomerData(['type' => 'company']))->passes())->toBeTrue();
+});
+
 it('E-16 prohibits the contact person unless the customer is a company', function () {
     $contact = ['name' => 'Contacto', 'phone' => '0414-123-4567'];
 

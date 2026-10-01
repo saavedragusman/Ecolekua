@@ -78,8 +78,8 @@ final readonly class PhoneNumber
         }
 
         $digits = match (true) {
-            str_starts_with($cleaned, '+58') => substr($cleaned, 3),
-            str_starts_with($cleaned, '0058') => substr($cleaned, 4),
+            str_starts_with($cleaned, '+58') => self::withoutTrunkZero(substr($cleaned, 3)),
+            str_starts_with($cleaned, '0058') => self::withoutTrunkZero(substr($cleaned, 4)),
             str_starts_with($cleaned, '0') => substr($cleaned, 1),
             default => ltrim($cleaned, '+'),
         };
@@ -102,7 +102,16 @@ final readonly class PhoneNumber
             throw InvalidPhoneNumber::foreign();
         }
 
-        return substr($rest, strlen(self::COUNTRY_CODE));
+        return self::withoutTrunkZero(substr($rest, strlen(self::COUNTRY_CODE)));
+    }
+
+    /**
+     * People often type the local trunk `0` right after the country code (`+58 0414…`); it is
+     * not part of the national significant number, so a single one is dropped.
+     */
+    private static function withoutTrunkZero(string $digits): string
+    {
+        return str_starts_with($digits, '0') ? substr($digits, 1) : $digits;
     }
 
     /**
