@@ -81,6 +81,7 @@ class CustomerController extends Controller
 
         return Inertia::render('customers/Show', [
             'customer' => CustomerPresenter::detail($customer, CustomerPresenter::availableAdvisorIds(collect([$customer]))),
+            ...(Gate::allows('assign', $customer) ? ['advisorOptions' => CustomerPresenter::advisorOptions()] : []),
         ]);
     }
 

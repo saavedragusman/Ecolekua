@@ -326,3 +326,46 @@ Branch: `feat/002-customers-7-lifecycle` (from `feat/002-customers-6-forms` at 6
 
 ### Proposed commit (Spanish description, no attribution lines)
 - `feat(002): desactivar, reactivar y eliminar clientes sin historial, y botón "Nuevo cliente" en el listado [CLI-009, CLI-010, CLI-015, CLI-016, DEC-CLI-09, DEC-CLI-28, E-07, E-08, E-09, E-10, E-18, E-40]`
+
+## Phase 8 (PR 8): Advisor assignment - COMPLETE (5/5 tasks)
+
+Branch: `feat/002-customers-8-advisor` (from `feat/002-customers-7-lifecycle` at 049007e). Changes left in the working tree; no commit made. All files written with Edit/Write only.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-----------|-------------|----------|
+| 8.1/8.2 | `tests/Feature/Customers/AdvisorAssignmentTest.php` (18 tests incl. 3 dataset cases) | Feature (HTTP) | 596 passed + 1 todo before | 16 of 17 failed (404 no route; 2 Show props missing `advisorOptions`); only the "no advisorOptions without customers.assign" test passed | 18/18 (112 assertions) | reassign, assign from none (null previous), unassign, unassign none (no-op), same advisor (no-op), same unavailable advisor (no-op, no error), E-27 forbidden + guest, E-28 inactive / no portfolio / browser redirect with session error, missing / unknown / non-integer `advisor_id`, inactive customer, E-33 after deactivation with options | `phpstan` fix: `whereKey()->firstOrFail()` and `array_values()` |
+| 8.3 (frontend) | none (no frontend test runner) | - | `pnpm types:check` clean | - | `pnpm types:check` clean, `pnpm build` OK | - | - |
+| 8.4 | search below | - | - | - | - | - | no automatic unassignment found |
+
+Audit payloads asserted in full (`advisor_id` and `advisor_name`, previous and new), success flash asserted, guest redirect tested.
+
+### 8.4 search result: every write to `advisor_id`
+Search over `app`, `routes`, `database/seeders`, `database/factories` (PHP):
+- `app/Actions/Customers/CreateCustomer.php:69` - creation-time auto-assignment (creator if eligible advisor).
+- `app/Actions/Customers/AssignCustomerAdvisor.php:42` - the only reassign/unassign path (explicit, requires `customers.assign`).
+- `database/factories/CustomerFactory.php:79` - test factory state `assignedTo()`.
+- Reads only: `Customer` relation/scope, `CustomerPresenter`, `DeleteCustomer` audit copy, audit values. `UpdateCustomer` ignores `advisor_id` (not in rules). User deactivation and permission revocation never touch customers. The import (task 9) does not exist yet: it must be re-checked in Phase 9.
+
+### Slice-close gate (observed)
+- `sail pest tests/Feature/Customers/AdvisorAssignmentTest.php`: 18 passed (112 assertions)
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors (after fixing 2 type findings)
+- `sail pnpm types:check`: vue-tsc clean (after `wayfinder:generate`)
+- `sail pnpm build`: built OK
+- `sail artisan test`: 613 passed + 1 todo (E-19), 3105 assertions (596 + 18 new - 1 obsolete test removed)
+- PENDING (human): browser checks (assign control visible only with `customers.assign`, "Sin asesora" option, unavailable advisor shown as "Nombre (no disponible)", success flash, error under the select for an ineligible advisor, 375/1280 px, both themes, keyboard only).
+
+### Deviations / decisions
+- The no-op check (same advisor) runs before the eligibility check, so resubmitting the current advisor that is no longer eligible is a no-op instead of a validation error (DEC-CLI-29: the stored assignment is never touched). Design Decision 12 lists the eligibility check first; the visible behavior for any different advisor is unchanged (E-28).
+- Removed `CLI-013 advisorOptions is not sent until the assignment control exists` from `CustomerDetailTest.php` (placeholder from Phase 5, now false by design); replaced by the two `advisorOptions` tests in `AdvisorAssignmentTest.php`.
+- Options ordered by first name, last name, id. Show.vue appends the current advisor as "Nombre (no disponible)" when not eligible, so the select never shows "Sin asesora" for an assigned customer.
+- Flash message "La asesora del cliente fue actualizada." (also on no-op) is a UI text choice, not a business rule.
+- Review size: about 460 authored lines (new files about 366: tests 255, production PHP 111; tracked about 96: frontend about 67). Over the 400 budget but cohesive: `size:exception` recommended for PR 8.
+
+### Gaps for the orchestrator
+- No [DEC-PENDIENTE] gaps found.
+
+### Proposed commit (Spanish description, no attribution lines)
+- `feat(002): asignar, reasignar y quitar la asesora de un cliente desde su ficha [CLI-014, CLI-015, CLI-016, DEC-CLI-18, DEC-CLI-28, DEC-CLI-29, E-26, E-27, E-28, E-33]`
