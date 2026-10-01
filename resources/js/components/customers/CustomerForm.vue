@@ -142,8 +142,18 @@ const removedByTypeChange = computed<string[]>(() => {
     ];
 });
 
+// The stored document is never removed (DEC-CLI-15): when it no longer fits, the warning still
+// shows even if nothing else is removed.
+const documentKeptButUnfit = computed(
+    () =>
+        originalType === 'company' &&
+        form.type === 'natural' &&
+        !documentFitsType.value,
+);
+
 const showTypeChangeWarning = computed(
-    () => removedByTypeChange.value.length > 0,
+    () =>
+        removedByTypeChange.value.length > 0 || documentKeptButUnfit.value,
 );
 
 // Duplicate-phone warning (E-14): the backend asks for confirmation through an error on
@@ -215,15 +225,17 @@ function submitAnyway(): void {
                 role="alert"
                 class="flex flex-col gap-space-xs rounded-lg bg-warning-container p-space-sm font-body-md text-body-md text-on-warning-container"
             >
-                <p class="font-label-md text-label-md">
-                    Al guardar este cambio a persona natural se eliminará:
-                </p>
-                <ul class="list-disc pl-space-lg">
-                    <li v-for="item in removedByTypeChange" :key="item">
-                        {{ item }}
-                    </li>
-                </ul>
-                <p v-if="!documentFitsType">
+                <template v-if="removedByTypeChange.length > 0">
+                    <p class="font-label-md text-label-md">
+                        Al guardar este cambio a persona natural se eliminará:
+                    </p>
+                    <ul class="list-disc pl-space-lg">
+                        <li v-for="item in removedByTypeChange" :key="item">
+                            {{ item }}
+                        </li>
+                    </ul>
+                </template>
+                <p v-if="documentKeptButUnfit">
                     El documento no se elimina: cámbielo o vacíelo antes de
                     guardar.
                 </p>
