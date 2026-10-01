@@ -1,9 +1,13 @@
 <?php
 
-// Only the rules used by the 001-foundation change.
+// Only the rules used by the 001-foundation and 002-customers changes.
 return [
     'after_or_equal' => 'El campo :attribute debe ser una fecha posterior o igual a :date.',
     'array' => 'El campo :attribute debe ser una lista.',
+    'between' => [
+        'numeric' => 'El campo :attribute debe estar entre :min y :max.',
+    ],
+    'boolean' => 'El campo :attribute debe ser verdadero o falso.',
     'confirmed' => 'La confirmación de :attribute no coincide.',
     'current_password' => 'La contraseña actual es incorrecta.',
     'date' => 'El campo :attribute no es una fecha válida.',
@@ -22,9 +26,21 @@ return [
         'string' => 'El campo :attribute debe tener al menos :min caracteres.',
     ],
     'not_current_password' => 'La nueva contraseña debe ser distinta de la actual.',
+    'prohibited_unless' => 'El campo :attribute solo se admite cuando :other es :values.',
     'required' => 'El campo :attribute es obligatorio.',
+    'required_with' => 'El campo :attribute es obligatorio cuando se indica :values.',
     'string' => 'El campo :attribute debe ser texto.',
     'unique' => 'El valor de :attribute ya está en uso.',
+
+    // Customers (spec 002).
+    'venezuelan_phone' => [
+        'foreign' => 'Solo se admiten números de Venezuela (+58).',
+        'format' => 'El teléfono no es un número venezolano válido.',
+        'mobile_only' => 'El teléfono del cliente debe ser un celular (04xx).',
+    ],
+    'document_number_format' => 'El número de documento no es válido para el tipo de documento elegido.',
+    'document_type_mismatch' => 'El tipo de documento no corresponde al tipo de cliente.',
+    'customer_document_unique' => 'Ya existe un cliente con ese documento.',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
@@ -51,5 +67,25 @@ return [
         'action' => 'acción',
         'from' => 'fecha inicial',
         'to' => 'fecha final',
+        'type' => 'tipo',
+        'document_type' => 'tipo de documento',
+        'document_number' => 'número de documento',
+        'phone' => 'teléfono',
+        'birthday_day' => 'día del cumpleaños',
+        'birthday_month' => 'mes del cumpleaños',
+        'anniversary_day' => 'día del aniversario',
+        'anniversary_month' => 'mes del aniversario',
+        'notes' => 'observaciones',
+        'contact' => 'persona de contacto',
+        'contact.name' => 'nombre de la persona de contacto',
+        'contact.position' => 'cargo de la persona de contacto',
+        'contact.phone' => 'teléfono de la persona de contacto',
+        'contact.email' => 'correo de la persona de contacto',
+        'address' => 'dirección',
+        'address.line' => 'dirección',
+        'address.city' => 'ciudad',
+        'address.state' => 'estado',
+        'address.reference' => 'referencia',
+        'confirm_duplicate_phone' => 'confirmación de teléfono repetido',
     ],
 ];
