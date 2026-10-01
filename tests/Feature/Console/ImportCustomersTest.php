@@ -14,6 +14,7 @@ use App\Support\Audit\AuditOrigin;
 use App\Support\Customers\CustomerCsvReader;
 use App\Support\Customers\InvalidCustomerCsv;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -759,6 +760,96 @@ it('CLI-018 creates nothing when the advisor stops being eligible between valida
 
     expect(Customer::query()->count())->toBe(0)
         ->and(AuditLog::query()->count())->toBe(0);
+});
+
+it('R3-stale-advisor-recheck CreateCustomer re-reads the advisor from the database, not the instance it was given', function () {
+    $author = importAuthor();
+    $advisor = importAdvisor();
+    $stale = User::query()->findOrFail($advisor->id);
+
+    User::query()->whereKey($advisor->id)->update(['is_active' => false]);
+
+    expect($stale->is_active)->toBeTrue();
+
+    try {
+        app(CreateCustomer::class)->handle(importRowInput(), $author, true, AuditOrigin::console('customers:import'), false, $stale);
+        $errors = [];
+    } catch (ValidationException $exception) {
+        $errors = $exception->errors();
+    }
+
+    expect($errors)->toBe(['advisor_id' => [IMPORT_ADVISOR_REASON]])
+        ->and(Customer::query()->count())->toBe(0)
+        ->and(AuditLog::query()->count())->toBe(0);
+});
+
+it('R3-stale-advisor-recheck CreateCustomer rejects an advisor whose row no longer exists', function () {
+    $author = importAuthor();
+    $advisor = importAdvisor();
+    $stale = User::query()->findOrFail($advisor->id);
+
+    DB::table('role_user')->where('user_id', $advisor->id)->delete();
+    DB::table('users')->where('id', $advisor->id)->delete();
+
+    try {
+        app(CreateCustomer::class)->handle(importRowInput(), $author, true, null, false, $stale);
+        $errors = [];
+    } catch (ValidationException $exception) {
+        $errors = $exception->errors();
+    }
+
+    expect($errors)->toBe(['advisor_id' => [IMPORT_ADVISOR_REASON]])
+        ->and(Customer::query()->count())->toBe(0)
+        ->and(AuditLog::query()->count())->toBe(0);
+});
+
+it('R3-phase2-error-loses-row E-30 reports row and column of a document taken by another process during creation, rolling everything back', function () {
+    $author = importAuthor();
+    $tag = IMPORT_SENTINEL;
+    Customer::creating(function (Customer $customer) use ($tag) {
+        if ($customer->name === "Conflicto-{$tag}") {
+            Customer::factory()->create(['document_type' => 'cedula_v', 'document_number' => 'V12345678', 'name' => 'Otro proceso']);
+        }
+    });
+    $csv = importCsv([
+        importRow(['nombre' => "Primera-{$tag}"]),
+        importRow(['nombre' => "Conflicto-{$tag}", 'tipo_documento' => 'cedula_v', 'numero_documento' => '12345678', 'observaciones' => "Obs-{$tag}"]),
+        importRow(['nombre' => "Tercera-{$tag}"]),
+    ]);
+
+    [$exit, $output] = runImport(importFile($csv), $author->email);
+
+    expect($exit)->toBe(1)
+        ->and(importTable($output, IMPORT_REPORT_HEADER))->toBe([['3', 'numero_documento', 'Ya existe un cliente con ese documento.']])
+        ->and($output)->not->toContain($tag)
+        ->and($output)->not->toContain('12345678')
+        ->and($output)->not->toContain('ValidationException')
+        ->and(Customer::query()->count())->toBe(0)
+        ->and(AuditLog::query()->where('action', AuditAction::CustomerCreated->value)->count())->toBe(0);
+});
+
+it('R3-phase2-error-loses-row E-32 reports the advisor column of a row whose advisor was deactivated during creation, rolling everything back', function () {
+    $author = importAuthor();
+    $advisor = importAdvisor('asesora@ecolekua.test');
+    $tag = IMPORT_SENTINEL;
+    Customer::creating(function (Customer $customer) use ($advisor, $tag) {
+        if ($customer->name === "Primera-{$tag}") {
+            User::query()->whereKey($advisor->id)->update(['is_active' => false]);
+        }
+    });
+    $csv = importCsv([
+        importRow(['nombre' => "Primera-{$tag}"]),
+        importRow(['nombre' => "Segunda-{$tag}", 'correo_asesora' => 'asesora@ecolekua.test']),
+    ]);
+
+    [$exit, $output] = runImport(importFile($csv), $author->email);
+
+    expect($exit)->toBe(1)
+        ->and(importTable($output, IMPORT_REPORT_HEADER))->toBe([['3', 'correo_asesora', IMPORT_ADVISOR_REASON]])
+        ->and($output)->not->toContain($tag)
+        ->and($output)->not->toContain('asesora@ecolekua.test')
+        ->and(Customer::query()->count())->toBe(0)
+        ->and(AuditLog::query()->where('action', AuditAction::CustomerCreated->value)->count())->toBe(0);
 });
 
 it('CLI-018 CreateCustomer assigns only the given advisor when auto assignment is off, even for an eligible creator', function () {

@@ -17,6 +17,7 @@ use App\Support\Customers\PhoneNumber;
 use App\Support\Users\UserRules;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 /**
  * One-time, all-or-nothing import of the existing customers (CLI-018, design Decision 14).
@@ -52,6 +53,7 @@ class ImportCustomers
         'address.city' => 'direccion_ciudad',
         'address.state' => 'direccion_estado',
         'address.reference' => 'direccion_referencia',
+        'advisor_id' => 'correo_asesora',
     ];
 
     /** Columns that make up the optional nested objects. */
@@ -99,7 +101,7 @@ class ImportCustomers
                 $phones[$phone][] = $row['line'];
             }
 
-            $prepared[] = ['line' => $row['line'], 'input' => $input, 'advisor' => $advisor];
+            $prepared[] = ['line' => $row['line'], 'cells' => $row['cells'], 'input' => $input, 'advisor' => $advisor];
         }
 
         $warnings = $this->phoneWarnings($phones);
@@ -108,7 +110,7 @@ class ImportCustomers
             return new ImportReport(errors: $errors, warnings: $warnings);
         }
 
-        return new ImportReport(warnings: $warnings, imported: $this->create($prepared, $author));
+        return $this->create($prepared, $author, $warnings);
     }
 
     private function activeUser(?string $email): ?User
@@ -333,26 +335,59 @@ class ImportCustomers
      * were already reviewed (or confirmed) in phase 1. Only the row's own advisor is assigned
      * (DEC-CLI-23) and each audit row carries the console origin and the import marker (DEC-CLI-24).
      *
-     * @param  list<array{line: int, input: array<string, mixed>, advisor: ?User}>  $prepared
+     * A row rejected by a validation error (a document taken by another process, an advisor
+     * deactivated since phase 1) rolls the whole import back and is reported like a phase 1
+     * error: line, CSV column and reason, never the cell values.
+     *
+     * @param  list<array{line: int, cells: array<string, string>, input: array<string, mixed>, advisor: ?User}>  $prepared
+     * @param  list<array{row: int, reason: string}>  $warnings
      */
-    private function create(array $prepared, User $author): int
+    private function create(array $prepared, User $author, array $warnings): ImportReport
     {
         $origin = AuditOrigin::console(self::COMMAND);
+        $errors = [];
 
-        DB::transaction(function () use ($prepared, $author, $origin): void {
-            foreach ($prepared as $row) {
-                $this->createCustomer->handle(
-                    $row['input'],
-                    $author,
-                    confirmDuplicatePhone: true,
-                    origin: $origin,
-                    autoAssign: false,
-                    advisor: $row['advisor'],
-                    auditContext: ['import' => true, 'import_row' => $row['line']],
-                );
+        try {
+            DB::transaction(function () use ($prepared, $author, $origin, &$errors): void {
+                foreach ($prepared as $row) {
+                    try {
+                        $this->createCustomer->handle(
+                            $row['input'],
+                            $author,
+                            confirmDuplicatePhone: true,
+                            origin: $origin,
+                            autoAssign: false,
+                            advisor: $row['advisor'],
+                            auditContext: ['import' => true, 'import_row' => $row['line']],
+                        );
+                    } catch (ValidationException $rejected) {
+                        $errors = $this->rejectionErrors($row['line'], $row['cells'], $rejected);
+
+                        throw $rejected;
+                    }
+                }
+            });
+        } catch (ValidationException) {
+            return new ImportReport(errors: $errors, warnings: $warnings);
+        }
+
+        return new ImportReport(warnings: $warnings, imported: count($prepared));
+    }
+
+    /**
+     * @param  array<string, string>  $cells
+     * @return list<array{row: int, column: string, reason: string}>
+     */
+    private function rejectionErrors(int $line, array $cells, ValidationException $rejected): array
+    {
+        $errors = [];
+
+        foreach ($rejected->errors() as $attribute => $reasons) {
+            foreach ($reasons as $reason) {
+                $errors[] = ['row' => $line, 'column' => $this->column($attribute, $cells), 'reason' => $reason];
             }
-        });
+        }
 
-        return count($prepared);
+        return $errors;
     }
 }

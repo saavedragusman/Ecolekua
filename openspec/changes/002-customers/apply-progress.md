@@ -440,3 +440,16 @@ Audit payload asserted in full for the company row (all scalar fields, `advisor_
 ### Proposed commit (Spanish description, no attribution lines)
 - Single commit: `feat(002): importar clientes desde CSV con todo o nada, informe por fila y marca de importación en la auditoría [CLI-018, CLI-012, CLI-016, DEC-CLI-20, DEC-CLI-21, DEC-CLI-22, DEC-CLI-23, DEC-CLI-24, DEC-CLI-33, E-29, E-30, E-31, E-32, E-39]`
 - If split: `feat(002): lector de CSV y comprobaciones de archivo para customers:import [CLI-018, DEC-CLI-20, E-39]` then `feat(002): importar clientes todo o nada con informe y marca de importación en la auditoría [CLI-018, CLI-012, CLI-016, DEC-CLI-21, DEC-CLI-22, DEC-CLI-23, DEC-CLI-24, DEC-CLI-33, E-29, E-30, E-31, E-32]`
+
+## Review follow-up Phase 9 (R3-stale-advisor-recheck, R3-phase2-error-loses-row)
+
+Scoped fixes after the native review of 13bb8f6.
+
+| Finding | RED | GREEN | Change |
+|---|---|---|---|
+| R3-stale-advisor-recheck | Test deactivating the advisor through the DB while passing the stale instance: no exception (customer created) | green | `CreateCustomer::eligibleOrFail()` re-reads the advisor inside the transaction (`User::query()->whereKey()->lockForUpdate()->first()`) and checks eligibility on that fresh record; a missing user is ineligible. Same `ValidationException` on `advisor_id`. The fresh record is the one used for `advisor_id` and the audit values. |
+| R3-phase2-error-loses-row | Command tests: output showed no `Fila / Columna / Motivo` table (generic failure line with the class name, or exit 0 for the advisor case before finding 1 was fixed) | 61/61 in `ImportCustomersTest.php` | `ImportCustomers::create()` catches a row's `ValidationException`, keeps the whole-import rollback by rethrowing inside the transaction, and returns an `ImportReport` with line, CSV column and reason. The column reuses `column()` and `COLUMN_BY_ATTRIBUTE`, which gained `advisor_id => correo_asesora` (no second mapping). Other Throwables keep the generic handling. |
+
+Decision: the phase 2 report is the same `ImportReport` errors and the same console table as phase 1 (exit 1), so no command change was needed; the header line "el archivo tiene N error(es)" is reused as is. Prepared rows now carry their `cells` so nested-object keys can map to a column. No cell values are printed (reasons come from the lang files).
+
+Tests added: 2 at Action level (stale instance; deleted user) and 2 through the command (document inserted by "another process" via a `creating` hook; advisor deactivated between rows), both asserting exit 1, zero customers and audit rows, the row line, the column and the reason, and no cell value in the output.

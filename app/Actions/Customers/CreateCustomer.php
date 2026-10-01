@@ -124,17 +124,25 @@ class CreateCustomer
 
     /**
      * An advisor chosen by the caller (the import) must hold the same eligibility as in E-28;
-     * checked here too so no caller can store an ineligible assignment.
+     * checked here too so no caller can store an ineligible assignment. The advisor is re-read
+     * (and locked) inside the transaction: the instance the caller holds may predate a
+     * deactivation made by another process. A user that no longer exists is ineligible.
      *
      * @throws ValidationException
      */
     private function eligibleOrFail(?User $advisor): ?User
     {
-        if ($advisor !== null && ! $advisor->isEligibleAdvisor()) {
+        if ($advisor === null) {
+            return null;
+        }
+
+        $current = User::query()->whereKey($advisor->getKey())->lockForUpdate()->first();
+
+        if ($current === null || ! $current->isEligibleAdvisor()) {
             throw ValidationException::withMessages(['advisor_id' => __('validation.customer_advisor_ineligible')]);
         }
 
-        return $advisor;
+        return $current;
     }
 
     /**
