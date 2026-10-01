@@ -7,6 +7,7 @@ use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
 use App\Enums\DocumentType;
 use App\Enums\PermissionName;
+use App\Enums\VenezuelanState;
 use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
@@ -14,6 +15,7 @@ use App\Models\CustomerContact;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function customerCreator(PermissionName ...$extra): User
 {
@@ -465,4 +467,51 @@ it('CLI-001 sends a failed browser submission back with errors and a valid one t
     $response = $this->actingAs($actor)->post('/customers', createCustomerPayload());
 
     $response->assertRedirect('/customers/'.Customer::query()->sole()->id);
+});
+
+it('E-03 (form) forbids the create form to a user without customers.create', function () {
+    $this->actingAs(userWithPermissions(PermissionName::CustomersView, PermissionName::CustomersUpdate))
+        ->get('/customers/create')
+        ->assertForbidden();
+});
+
+it('E-03 (form) redirects a guest to the login', function () {
+    $this->get('/customers/create')->assertRedirect('/login');
+});
+
+it('E-03 (form) renders the create form with the document types grouped by customer type, the customer types and the states', function () {
+    $this->actingAs(customerCreator())
+        ->get('/customers/create')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('customers/Create')
+            ->where('customerTypes', [
+                ['value' => 'natural', 'label' => 'Persona natural'],
+                ['value' => 'company', 'label' => 'Empresa'],
+            ])
+            ->where('documentTypes', [
+                'natural' => [
+                    ['value' => 'cedula_v', 'label' => 'Cédula V'],
+                    ['value' => 'cedula_e', 'label' => 'Cédula E'],
+                    ['value' => 'passport', 'label' => 'Pasaporte'],
+                ],
+                'company' => [
+                    ['value' => 'rif_j', 'label' => 'RIF J'],
+                    ['value' => 'rif_g', 'label' => 'RIF G'],
+                    ['value' => 'rif_v', 'label' => 'RIF V'],
+                    ['value' => 'rif_e', 'label' => 'RIF E'],
+                    ['value' => 'rif_p', 'label' => 'RIF P'],
+                ],
+            ])
+            ->has('states', count(VenezuelanState::cases()))
+            ->where('states.0', ['value' => 'amazonas', 'label' => 'Amazonas'])
+        );
+});
+
+it('E-04 (form) keeps the create and edit forms forbidden to a user with customers.view only', function () {
+    $customer = Customer::factory()->create();
+    $viewer = userWithPermissions(PermissionName::CustomersView);
+
+    $this->actingAs($viewer)->get('/customers/create')->assertForbidden();
+    $this->actingAs($viewer)->get("/customers/{$customer->id}/edit")->assertForbidden();
 });

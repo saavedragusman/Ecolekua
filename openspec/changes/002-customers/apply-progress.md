@@ -226,3 +226,59 @@ Not RED-captured: the two 5.5 tests that passed by construction once the route e
 ### Proposed commits (Spanish descriptions, no attribution lines)
 - `feat(002): listado de clientes con búsqueda, vistas por estado y filtro de cartera [CLI-011, CLI-015, E-04, E-11, E-12, E-15]`
 - `feat(002): ficha de cliente con disponibilidad de la asesora [CLI-013, CLI-014, E-04, E-06, E-16, E-17, E-20, E-33]`
+
+## Phase 6 (PR 6): Forms UI — COMPLETE (6/6 tasks, units 6a + 6b)
+
+Branch: `feat/002-customers-6-forms` (from `feat/002-customers-5-list` at ffc551b). Changes left in the working tree; no commit made.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-------|-------------|----------|
+| 6.1/6.2 | `tests/Feature/Customers/CreateCustomerTest.php` (4 new tests) | Feature (HTTP + Inertia) | Customers suite green (571 full suite) | 3 of 3 form tests failed with 404 (no `GET /customers/create`; `create` read as an id) | create form tests 3/3 after the create action; the `E-04 (form)` test stays red until the edit route of 6.5, then 4/4; whole file 51/51 (217 assertions) | E-03 forbidden (view + update only), guest redirect, full props (types, grouped document types, 24 states, first state), E-04 create AND edit forbidden to a viewer | none needed |
+| 6.4/6.5 | `tests/Feature/Customers/UpdateCustomerTest.php` (8 new tests) | Feature (HTTP + Inertia) | 23/23 before | 5 failed (404 on `GET /customers/{id}/edit`): E-03 edit x2, editable DTO, bare DTO, DEC-CLI-28 inactive | 31/31 (174 assertions) | forbidden, guest, full company DTO with contact and address, bare customer with `null` everywhere, inactive editable, 404 unknown id | none needed |
+| 6.4 backfill | same file | Feature (HTTP) | - | PASSED IMMEDIATELY by construction (coverage backfill of Phase 4 behavior, as the task states): `PUT` omitting `address` deletes the stored address; companion test: sending the address keeps it | 2/2 | omitted vs sent | none |
+| 6.2/6.5 (frontend) | none (no frontend test runner) | - | `pnpm types:check` clean before | - | `pnpm types:check` clean, `pnpm build` OK | - | 6.3: `CustomerForm.vue` reviewed, see below |
+
+Not RED-captured: the 404 test for an unknown customer id in the edit form passed before the route existed (404 either way); it is a regression guard and became meaningful once the route resolved models. One test bug found and fixed during GREEN (not production): the guest assertion ran in the same test as `actingAs` (moved to its own test), and the "bare customer" DTO test needed `email`/`notes` explicitly null because the factory fills them.
+
+### Work Unit Evidence
+
+| Evidence | Unit 6a | Unit 6b |
+|---|---|---|
+| Focused test | `sail pest tests/Feature/Customers/CreateCustomerTest.php`: 51 passed | `sail pest tests/Feature/Customers/UpdateCustomerTest.php`: 31 passed |
+| Runtime harness | `sail pnpm types:check` clean and `sail pnpm build` OK (`CustomerForm`, `Create` chunks built). Manual create and duplicate-phone flow at 375/1280 px, both themes, keyboard only: **PENDING for the human, not claimed** | same commands (`Edit` chunk built). Manual edit and type-change flow: **PENDING for the human, not claimed** |
+| Rollback boundary | `create` action + `GET /customers/create`, `CustomerPresenter::formOptions`, `AppTextarea.vue`, `CustomerForm.vue`, `Create.vue`, form types in `customers.ts`, `DuplicatePhoneMatch` key in `global.d.ts`, the 4 create-form tests | `edit` action + `GET /customers/{customer}/edit`, `CustomerPresenter::editable`, `Edit.vue`, `CustomerEditable` type, the 8 edit-form tests; the type-change warning block lives inside `CustomerForm.vue` (shared file) |
+
+### Slice-close gate (observed)
+- `sail pest tests/Feature/Customers/CreateCustomerTest.php`: 51 passed (217 assertions)
+- `sail pest tests/Feature/Customers/UpdateCustomerTest.php`: 31 passed (174 assertions)
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors
+- `sail pnpm types:check`: vue-tsc clean (after `sail artisan wayfinder:generate`)
+- `sail pnpm build`: built OK
+- `sail artisan test`: 583 passed, 2873 assertions (baseline 571 + 12 new)
+- PENDING (human): 375/1280 px browser check, both themes, keyboard only, of create, duplicate-phone confirmation, edit and type-change flows (design-system section 11).
+
+### R3-appinput-icon-padding-unverified (task 6.6)
+Inspected the generated CSS of `sail pnpm build`: `.px-space-md{padding-inline:var(--spacing-space-md)}` is emitted at byte offset 28225 and `.pl-11{padding-left:calc(var(--spacing) * 11)}` at 29139 of the same stylesheet, in the same cascade layer and with equal specificity. The later rule wins for the left side, so `pl-11` overrides the left half of `padding-inline` in LTR and the leading icon does not overlap the text. No real conflict in the generated output; no change made to `AppInput.vue`. Caveat: the order is Tailwind's deterministic utility sort (`px-*` before `pl-*`), not something this repository controls, and a browser check is still PENDING for the human (the `/customers` search box with the icon).
+
+### Deviations / decisions
+- Create/Edit props carry a third list, `states` (id/label of the 24 `VenezuelanState` cases), beyond the design's `documentTypes` and `customerTypes`: task 6.2 requires the state select and the backend is the only source of the labels. Built by `CustomerPresenter::formOptions()` (shared by both pages).
+- The edit DTO is `CustomerPresenter::editable()`: raw editable values, phones as display strings, document canonical, `contact` and `address` as objects or `null` (always present as keys).
+- `CustomerForm.vue` owns the Inertia form (props: `action` Wayfinder definition, `options`, optional `customer`), so `Create.vue` and `Edit.vue` are thin wrappers and no page mutates a prop. Shaping done in the browser is presentation only: day/month selects, hiding company-only sections for natural, sending an all-blank contact or address group as `null` (the backend's "none" representation), and not sending anniversary/contact for a natural customer (DEC-CLI-15 payload clearing). It computes no phone format, document validity, duplicate detection or availability.
+- Type-change warning (DEC-CLI-15): shown in `CustomerForm` only when a stored company is switched to natural and anniversary or contact person hold data; it lists those items and, when the stored document type no longer fits the new type (from the backend's `documentTypes` groups), says the document is NOT removed and must be changed or emptied. The stored document type stays visible in the select (appended option) so the backend can reject it on `document_type` (E-24).
+- Duplicate-phone panel (E-14, Decision 10): driven by `form.errors.confirm_duplicate_phone` plus `page.flash.duplicatePhoneMatches`; matches link to `customers.show` in a new tab so the form is not lost; "Guardar de todos modos" sets `confirm_duplicate_phone = true` and resubmits; any change to the phone resets the flag and clears that error.
+- The customer type has no default (`''` with a "Seleccione el tipo" placeholder): choosing a default would be an unrequested business choice.
+- `AppInput.vue` unchanged (see the padding finding above). `AppTextarea.vue` mirrors the `AppInput` tokens, with `hint`, `error`, `rows`, `maxlength`.
+- No "Editar" link on `Show.vue` and no "Nuevo cliente" button on `Index.vue` were added (see gap below); `GET /customers/create` is declared before `GET /customers/{customer}`.
+- Process note: the two new tests of `CreateCustomerTest.php` were first appended with a shell heredoc by mistake (contrary to the edit-tools-only preference); content was reviewed and every later edit used Edit/Write.
+- Authored diff about 950 lines (372 added in tracked files, about 581 in new files; tests about 185, frontend about 670, production PHP about 95). Over the 400 budget but cohesive: `size:exception` recommended for PR 6. Honest split: 6a create form (about 700: `CustomerForm.vue` 454, `AppTextarea` 70, `Create.vue` 23, types, presenter `formOptions`, create action, route, 4 tests) and 6b edit form (about 250: 8 tests 135, `Edit.vue` 34, presenter `editable`, edit action, route, `CustomerEditable`). The shared hunks (`CustomerController.php`, `CustomerPresenter.php`, `routes/web.php`, `customers.ts`) mean a per-unit commit needs `git add -p`; a single phase commit is recommended.
+
+### Gaps for the orchestrator (not DEC-PENDIENTE)
+- No task owns the entry points to the forms: `Index.vue` has no "Nuevo cliente" button (`customers.create`) and `Show.vue` has no "Editar" link (`customers.update`; task 7.5 owns it). Until then the forms are reachable only by URL, which limits the manual flow of 6.6. Suggest adding the "Nuevo cliente" button to `Index.vue` in 7.5 (or a small follow-up).
+- No [DEC-PENDIENTE] gaps found.
+
+### Proposed commits (Spanish descriptions, no attribution lines)
+- `feat(002): formulario de alta de cliente con aviso de teléfono repetido y confirmación [CLI-001, E-03, E-04, E-14]`
+- `feat(002): formulario de edición de cliente con advertencia de cambio de tipo [CLI-002, CLI-008, DEC-CLI-15, DEC-CLI-28, E-23]`

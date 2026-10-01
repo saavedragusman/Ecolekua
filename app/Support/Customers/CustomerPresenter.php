@@ -2,6 +2,9 @@
 
 namespace App\Support\Customers;
 
+use App\Enums\CustomerType;
+use App\Enums\DocumentType;
+use App\Enums\VenezuelanState;
 use App\Models\Customer;
 use App\Models\User;
 use App\Support\Time\OperatingTime;
@@ -99,6 +102,78 @@ final class CustomerPresenter
             ],
             'notes' => $customer->notes,
             'advisor' => self::advisor($customer, $availableAdvisorIds),
+        ];
+    }
+
+    /**
+     * The stored customer as the edit form needs it: raw editable values (document canonical, phones
+     * as display strings, which the backend accepts back), `contact` and `address` as objects or
+     * `null` so the form always sends them. Expects `contact` and `address` to be loaded.
+     *
+     * @return array<string, mixed>
+     */
+    public static function editable(Customer $customer): array
+    {
+        return [
+            'id' => $customer->id,
+            'type' => $customer->type->value,
+            'name' => $customer->name,
+            'document_type' => $customer->document_type?->value,
+            'document_number' => $customer->document_number,
+            'phone' => PhoneNumber::parse($customer->phone)->display(),
+            'email' => $customer->email,
+            'birthday_day' => $customer->birthday_day,
+            'birthday_month' => $customer->birthday_month,
+            'anniversary_day' => $customer->anniversary_day,
+            'anniversary_month' => $customer->anniversary_month,
+            'notes' => $customer->notes,
+            'contact' => $customer->contact === null ? null : [
+                'name' => $customer->contact->name,
+                'position' => $customer->contact->position,
+                'phone' => PhoneNumber::parse($customer->contact->phone)->display(),
+                'email' => $customer->contact->email,
+            ],
+            'address' => $customer->address === null ? null : [
+                'line' => $customer->address->line,
+                'city' => $customer->address->city,
+                'state' => $customer->address->state->value,
+                'reference' => $customer->address->reference,
+            ],
+        ];
+    }
+
+    /**
+     * Option lists of the create and edit forms: customer types, document types grouped by customer
+     * type (CLI-003, from `DocumentType::allowedFor()`) and the address states (DEC-CLI-33). The form
+     * only offers them; the backend validates every submitted value.
+     *
+     * @return array{
+     *     customerTypes: list<array{value: string, label: string}>,
+     *     documentTypes: array<string, list<array{value: string, label: string}>>,
+     *     states: list<array{value: string, label: string}>,
+     * }
+     */
+    public static function formOptions(): array
+    {
+        $documentTypes = [];
+
+        foreach (CustomerType::cases() as $type) {
+            $documentTypes[$type->value] = array_map(
+                fn (DocumentType $documentType): array => ['value' => $documentType->value, 'label' => $documentType->label()],
+                DocumentType::allowedFor($type),
+            );
+        }
+
+        return [
+            'customerTypes' => array_map(
+                fn (CustomerType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                CustomerType::cases(),
+            ),
+            'documentTypes' => $documentTypes,
+            'states' => array_map(
+                fn (VenezuelanState $state): array => ['value' => $state->value, 'label' => $state->label()],
+                VenezuelanState::cases(),
+            ),
         ];
     }
 

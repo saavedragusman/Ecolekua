@@ -1,5 +1,6 @@
 import type { Directive } from 'vue';
 import type { Auth } from '@/types/auth';
+import type { DuplicatePhoneMatch } from '@/types/customers';
 
 // Extend ImportMeta interface for Vite...
 declare module 'vite/client' {
@@ -20,6 +21,8 @@ declare module '@inertiajs/core' {
         flashDataType: {
             type?: 'success' | 'error';
             message?: string;
+            // Customers with the same phone, flashed with the duplicate-phone warning (CLI-012, E-14).
+            duplicatePhoneMatches?: DuplicatePhoneMatch[];
         };
         sharedPageProps: {
             name: string;
