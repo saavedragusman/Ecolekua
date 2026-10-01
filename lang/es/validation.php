@@ -42,6 +42,7 @@ return [
     'document_number_format' => 'El número de documento no es válido para el tipo de documento elegido.',
     'document_type_mismatch' => 'El tipo de documento no corresponde al tipo de cliente.',
     'customer_document_unique' => 'Ya existe un cliente con ese documento.',
+    'customer_advisor_ineligible' => 'La asesora debe ser un usuario activo con permiso para tener cartera.',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
