@@ -1,19 +1,52 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { usePermissions } from '@/composables/usePermissions';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index } from '@/routes/customers';
+import {
+    activate,
+    deactivate,
+    destroy,
+    edit,
+    index,
+} from '@/routes/customers';
 import type { CustomerDetail } from '@/types/customers';
 
 defineOptions({ layout: AppLayout });
 
-// Read-only page (CLI-013). Every value arrives formatted by the backend. The action buttons
-// (edit, deactivate, delete, assign advisor) arrive in later phases.
-defineProps<{
+// Every value arrives formatted by the backend (CLI-013). The buttons only reflect the shared
+// permissions; the backend authorizes every operation (the advisor control arrives in a later
+// phase).
+const props = defineProps<{
     customer: CustomerDetail;
 }>();
+
+const { can } = usePermissions();
+
+const statusForm = useForm({});
+const deleteForm = useForm({});
+
+// Destructive actions submit only after the confirmation dialog (design-system §7.10).
+const confirmingDeactivate = ref(false);
+const confirmingDelete = ref(false);
+
+function deactivateCustomer(): void {
+    statusForm.submit(deactivate(props.customer.id));
+}
+
+function reactivateCustomer(): void {
+    // Reactivating is reversible and has no side effects: no confirmation.
+    statusForm.submit(activate(props.customer.id));
+}
+
+// A rejection for history comes back as an error flash on this page, where "Desactivar" is offered.
+function deleteCustomer(): void {
+    deleteForm.submit(destroy(props.customer.id));
+}
 
 const LABEL = 'font-label-md text-label-md text-on-surface-variant';
 const VALUE = 'font-body-md text-body-md text-on-surface';
@@ -169,9 +202,59 @@ const EMPTY = 'No registrado';
         <!-- Quotation (004) and order (006) history sections are added here by those specs. -->
 
         <div class="flex flex-col gap-space-sm md:flex-row">
+            <AppButton
+                v-if="can('customers.update')"
+                :href="edit(customer.id).url"
+            >
+                Editar
+            </AppButton>
+            <AppButton
+                v-if="can('customers.deactivate') && customer.status === 'active'"
+                variant="outlined"
+                :disabled="statusForm.processing"
+                @click="confirmingDeactivate = true"
+            >
+                Desactivar
+            </AppButton>
+            <AppButton
+                v-if="
+                    can('customers.deactivate') && customer.status === 'inactive'
+                "
+                variant="outlined"
+                :disabled="statusForm.processing"
+                @click="reactivateCustomer"
+            >
+                Reactivar
+            </AppButton>
+            <AppButton
+                v-if="can('customers.delete')"
+                variant="danger"
+                :disabled="deleteForm.processing"
+                @click="confirmingDelete = true"
+            >
+                Eliminar
+            </AppButton>
             <AppButton variant="outlined" :href="index().url">
                 Volver a clientes
             </AppButton>
         </div>
+
+        <ConfirmDialog
+            v-model:open="confirmingDeactivate"
+            title="Desactivar cliente"
+            message="El cliente no podrá recibir cotizaciones ni pedidos nuevos. Lo que esté en curso continúa su flujo normal."
+            confirm-label="Desactivar"
+            :processing="statusForm.processing"
+            @confirm="deactivateCustomer"
+        />
+        <ConfirmDialog
+            v-model:open="confirmingDelete"
+            title="Eliminar cliente"
+            message="Se eliminarán el cliente, su persona de contacto y su dirección. Esta acción es irreversible. Si el cliente tiene historial no se puede eliminar y deberá desactivarlo."
+            confirm-label="Eliminar"
+            :processing="deleteForm.processing"
+            @confirm="deleteCustomer"
+        />
+
     </div>
 </template>
