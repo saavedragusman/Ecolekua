@@ -8,7 +8,11 @@ use Illuminate\Database\Seeder;
 /**
  * Creates the initial roles of spec 001, section 7, only when missing. It grants no
  * permissions: the initial grants live in InitialRolePermissions and are applied by
- * FoundationSeeder. Re-running never changes the permissions of an existing role (they are
+ * FoundationSeeder.
+ *
+ * Run it ONLY through FoundationSeeder. Standalone use (or from another seeder) leaves
+ * Administrador without permissions because the initial grants are skipped; a test enforces
+ * that no other seeder references it. Re-running never changes the permissions of an existing role (they are
  * managed from the application afterwards).
  */
 class RoleSeeder extends Seeder

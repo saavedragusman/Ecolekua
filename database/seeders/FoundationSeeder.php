@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 use function Laravel\Prompts\warning;
 
@@ -18,23 +19,28 @@ class FoundationSeeder extends Seeder
 {
     public function run(): void
     {
-        $existingPermissions = Permission::query()->pluck('name')->all();
-        $protectedRoleExisted = Role::query()->where('is_protected', true)->exists();
+        // Atomic: the "created in this run" detection relies on a before/after snapshot, so a
+        // partial run must roll back entirely; otherwise a retry would see the half-inserted
+        // permissions/roles as pre-existing and never grant the initial matrix.
+        DB::transaction(function (): void {
+            $existingPermissions = Permission::query()->pluck('name')->all();
+            $protectedRoleExisted = Role::query()->where('is_protected', true)->exists();
 
-        $this->call([
-            PermissionCatalogSeeder::class,
-            RoleSeeder::class,
-        ]);
+            $this->call([
+                PermissionCatalogSeeder::class,
+                RoleSeeder::class,
+            ]);
 
-        $createdPermissions = array_values(array_diff(
-            Permission::query()->pluck('name')->all(),
-            $existingPermissions,
-        ));
+            $createdPermissions = array_values(array_diff(
+                Permission::query()->pluck('name')->all(),
+                $existingPermissions,
+            ));
 
-        InitialRolePermissions::apply(
-            $createdPermissions,
-            ! $protectedRoleExisted,
-            fn (string $message) => warning($message),
-        );
+            InitialRolePermissions::apply(
+                $createdPermissions,
+                ! $protectedRoleExisted,
+                fn (string $message) => warning($message),
+            );
+        });
     }
 }

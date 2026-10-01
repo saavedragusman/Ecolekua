@@ -37,3 +37,9 @@ Branch: `feat/002-customers-1-permissions`. Changes left in the working tree.
 - Design Decision 16 missed two literals: `tests/Feature/Roles/RoleManagementTest.php:151,:173` (`has(..., 9)`). Fixed and added to the Decision 16 table in `design.md`.
 - `InitialRolePermissions::apply()` is static and takes a third optional `?Closure $warn`; `FoundationSeeder` passes `Laravel\Prompts\warning` (using `$this->command` fails PHPStan: non-nullable in Laravel's docblock).
 - Real authored diff about 536 lines (201 tracked changes + 335 new files), mostly tests: over the ~450 threshold, `size:exception` recommended for PR 1.
+
+### Review follow-up (R3-001, R3-002)
+
+- R3-001: `FoundationSeeder::run()` now wraps snapshot + `PermissionCatalogSeeder` + `RoleSeeder` + `InitialRolePermissions::apply()` in one `DB::transaction`. RED: new test (failure injected via `Role::retrieved` inside `apply()`) failed with "16 is identical to 0" (permissions not rolled back). GREEN: nothing persists after the failure and the retry grants the full matrix (Administrador 15).
+- R3-002: `RoleSeeder` docblock states it must run only through `FoundationSeeder`; new test scans `database/seeders/` and fails if any seeder other than `FoundationSeeder`/`RoleSeeder` references `RoleSeeder`. No runtime change.
+- Gate: `sail artisan test` 240 passed (1407 assertions); pint, pint --test, `composer types:check` clean.

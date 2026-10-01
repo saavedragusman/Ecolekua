@@ -6,6 +6,8 @@ use App\Models\Role;
 use Database\Seeders\FoundationSeeder;
 use Database\Seeders\InitialRolePermissions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\File;
 
 /**
  * The initial customers.* grants of spec 002 section 4, written out independently of the seeder.
@@ -121,6 +123,58 @@ it('DEC-CLI-11 skips a matrix role renamed from the UI without failing the seede
         ->and(customersPermissionNames($recreated))->toEqualCanonicalizing(expectedCustomersMatrix()['Gerente'])
         ->and(customersPermissionNames($advisor))->toEqualCanonicalizing(expectedCustomersMatrix()['Asesora de Ventas'])
         ->and(customersPermissionNames($administrator))->toEqualCanonicalizing(expectedCustomersMatrix()['Administrador']);
+});
+
+it('DEC-CLI-11 R3-001 rolls back the whole seeding when the initial grants fail and grants the matrix on retry', function () {
+    // Empty database: no permissions, no roles, no grants (a truly first run).
+    DB::table('permission_role')->delete();
+    DB::table('role_user')->delete();
+    Role::query()->delete();
+    Permission::query()->delete();
+
+    $fail = true;
+    Role::retrieved(function () use (&$fail): void {
+        if ($fail) {
+            throw new RuntimeException('simulated failure while granting');
+        }
+    });
+
+    try {
+        expect(fn () => $this->seed(FoundationSeeder::class))->toThrow(RuntimeException::class);
+
+        // Catalog and roles were inserted before the failure: they must have been rolled back.
+        expect(Permission::query()->count())->toBe(0)
+            ->and(Role::query()->count())->toBe(0)
+            ->and(DB::table('permission_role')->count())->toBe(0);
+
+        $fail = false;
+        $this->seed(FoundationSeeder::class);
+    } finally {
+        $fail = false;
+        Event::forget('eloquent.retrieved: '.Role::class);
+    }
+
+    foreach (expectedCustomersMatrix() as $roleName => $expected) {
+        $role = Role::query()->where('name', $roleName)->firstOrFail();
+
+        expect(customersPermissionNames($role))->toEqualCanonicalizing($expected, $roleName);
+    }
+
+    expect(Role::query()->where('name', 'Administrador')->firstOrFail()->permissions()->count())->toBe(15);
+});
+
+it('DEC-CLI-11 R3-002 only FoundationSeeder invokes RoleSeeder, so the initial grants are never skipped', function () {
+    // RoleSeeder grants no permissions; standalone use would leave Administrador empty. A source
+    // scan is the simplest robust check: any other seeder referencing the class is a violation.
+    $offenders = collect(File::files(database_path('seeders')))
+        ->reject(fn (SplFileInfo $file) => in_array($file->getFilename(), ['FoundationSeeder.php', 'RoleSeeder.php'], true))
+        ->filter(fn (SplFileInfo $file) => str_contains(file_get_contents($file->getPathname()), 'RoleSeeder'))
+        ->map(fn (SplFileInfo $file) => $file->getFilename())
+        ->values()
+        ->all();
+
+    expect($offenders)->toBe([])
+        ->and(file_get_contents(database_path('seeders/FoundationSeeder.php')))->toContain('RoleSeeder::class');
 });
 
 it('DEC-CLI-11 warns and continues when a non-protected matrix role does not exist', function () {
