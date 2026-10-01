@@ -6,10 +6,16 @@ use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\CustomerContact;
+use App\Models\User;
 
 it('E-10 deletes a company with its contact and address and audits the full copy', function () {
     $actor = userWithPermissions(PermissionName::CustomersDelete);
-    $customer = Customer::factory()->company()->withDocument()->withContact()->withAddress()->create();
+    $advisor = User::factory()->create();
+    $customer = Customer::factory()->company()->withDocument()->withContact()->withAddress()->assignedTo($advisor)->create([
+        'anniversary_day' => 15,
+        'anniversary_month' => 3,
+        'notes' => 'Cliente de prueba con notas.',
+    ]);
     $customer->load(['contact', 'address']);
 
     $this->actingAs($actor)
@@ -35,7 +41,14 @@ it('E-10 deletes a company with its contact and address and audits the full copy
             'document_number' => $customer->document_number,
             'phone' => $customer->phone,
             'email' => $customer->email,
+            'birthday_day' => null,
+            'birthday_month' => null,
+            'anniversary_day' => 15,
+            'anniversary_month' => 3,
+            'notes' => 'Cliente de prueba con notas.',
             'status' => 'active',
+            'advisor_id' => $advisor->id,
+            'advisor_name' => $advisor->fullName(),
         ])
         ->and($audit->old_values['contact'])->toEqual($customer->contact->only(['name', 'position', 'phone', 'email']))
         ->and($audit->old_values['address'])->toEqual([
@@ -47,7 +60,11 @@ it('E-10 deletes a company with its contact and address and audits the full copy
 });
 
 it('E-10 deletes a bare customer without contact or address', function () {
-    $customer = Customer::factory()->create();
+    $customer = Customer::factory()->create([
+        'birthday_day' => 29,
+        'birthday_month' => 2,
+        'notes' => null,
+    ]);
 
     $this->actingAs(userWithPermissions(PermissionName::CustomersDelete))
         ->delete("/customers/{$customer->id}")
@@ -56,6 +73,16 @@ it('E-10 deletes a bare customer without contact or address', function () {
     $audit = AuditLog::query()->where('action', AuditAction::CustomerDeleted->value)->sole();
 
     expect(Customer::query()->whereKey($customer->id)->exists())->toBeFalse()
+        ->and($audit->old_values)->toMatchArray([
+            'type' => 'natural',
+            'birthday_day' => 29,
+            'birthday_month' => 2,
+            'anniversary_day' => null,
+            'anniversary_month' => null,
+            'notes' => null,
+            'advisor_id' => null,
+            'advisor_name' => null,
+        ])
         ->and($audit->old_values['contact'])->toBeNull()
         ->and($audit->old_values['address'])->toBeNull();
 });

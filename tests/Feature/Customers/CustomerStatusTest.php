@@ -24,7 +24,8 @@ it('E-07 deactivates a customer keeping its data and relations and audits the st
 
     $this->actingAs($actor)
         ->post("/customers/{$customer->id}/deactivate")
-        ->assertRedirect("/customers/{$customer->id}");
+        ->assertRedirect("/customers/{$customer->id}")
+        ->assertInertiaFlash('message', 'El cliente fue desactivado.');
 
     $fresh = $customer->fresh();
 
@@ -50,7 +51,8 @@ it('E-08 reactivates an inactive customer and audits the status change', functio
 
     $this->actingAs($actor)
         ->post("/customers/{$customer->id}/activate")
-        ->assertRedirect("/customers/{$customer->id}");
+        ->assertRedirect("/customers/{$customer->id}")
+        ->assertInertiaFlash('message', 'El cliente fue reactivado.');
 
     expect($customer->fresh()->status)->toBe(CustomerStatus::Active);
 
@@ -82,10 +84,22 @@ it('E-09 forbids activating without customers.deactivate even with customers.upd
         ->and(customerStatusAuditRows())->toHaveCount(0);
 });
 
-it('E-09 redirects a guest to the login page', function () {
+it('E-09 redirects a guest to the login page on deactivate', function () {
     $customer = Customer::factory()->create();
 
     $this->post("/customers/{$customer->id}/deactivate")->assertRedirect('/login');
+
+    expect($customer->fresh()->status)->toBe(CustomerStatus::Active)
+        ->and(customerStatusAuditRows())->toHaveCount(0);
+});
+
+it('E-09 redirects a guest to the login page on activate', function () {
+    $customer = Customer::factory()->inactive()->create();
+
+    $this->post("/customers/{$customer->id}/activate")->assertRedirect('/login');
+
+    expect($customer->fresh()->status)->toBe(CustomerStatus::Inactive)
+        ->and(customerStatusAuditRows())->toHaveCount(0);
 });
 
 it('E-40 leaves an already inactive customer untouched when it is deactivated again', function () {
