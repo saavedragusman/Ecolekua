@@ -53,6 +53,7 @@ return [
     'attribute_fabric_not_color' => 'El atributo de tela no puede tener presentación de color.',
     'value_name_unique' => 'Ya existe un valor con ese nombre en este atributo.',
     'value_layer_reserved' => 'Esa capa está reservada para la vista previa de la plantilla.',
+    'location_name_unique' => 'Ya existe una ubicación de detalle con ese nombre.',
     'offered_colors_not_fabric' => 'Solo los valores del atributo de tela tienen colores ofrecidos.',
     'offered_colors_invalid' => 'Solo se pueden elegir valores del atributo de color.',
     'offered_colors_inactive' => 'No se puede ofrecer un color inactivo.',

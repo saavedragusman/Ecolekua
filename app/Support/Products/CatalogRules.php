@@ -6,6 +6,7 @@ use App\Enums\AttributePresentation;
 use App\Enums\AttributeSpecialUse;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
+use App\Models\DetailLocation;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\Rule;
@@ -95,8 +96,33 @@ final class CatalogRules
             'name' => ['required', 'string', 'max:100', Rule::unique('attribute_values', 'name')->where('catalog_attribute_id', $attribute->id)->ignore($value?->id)],
             'description' => [...$optional, 'nullable', 'string', 'max:255'],
             'tone' => $tone,
-            'svg_layer' => [...$optional, 'nullable', 'string', 'max:'.self::LAYER_MAX_LENGTH, 'regex:'.self::LAYER_PATTERN, Rule::notIn(self::RESERVED_LAYERS)],
+            'svg_layer' => self::layerRules($optional),
         ];
+    }
+
+    /**
+     * Rules of a detail location (PRD-007): a unique name and an optional SVG layer. `$location` is
+     * the row being edited (null on creation); on edit the layer is only validated when sent.
+     *
+     * @return array<string, list<mixed>>
+     */
+    public static function locationRules(?DetailLocation $location): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:100', Rule::unique('detail_locations', 'name')->ignore($location?->id)],
+            'svg_layer' => self::layerRules($location === null ? [] : ['sometimes']),
+        ];
+    }
+
+    /**
+     * Optional SVG layer (DEC-PRD-29): lowercase words joined by hyphens, never a reserved name.
+     *
+     * @param  list<string>  $prefix  leading rules (`sometimes` on edit)
+     * @return list<mixed>
+     */
+    private static function layerRules(array $prefix): array
+    {
+        return [...$prefix, 'nullable', 'string', 'max:'.self::LAYER_MAX_LENGTH, 'regex:'.self::LAYER_PATTERN, Rule::notIn(self::RESERVED_LAYERS)];
     }
 
     /**
