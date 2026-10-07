@@ -6,9 +6,11 @@ use App\Enums\PermissionName;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -85,6 +87,42 @@ class User extends Authenticatable
             ->where('role_user.user_id', $this->getKey())
             ->where('permissions.name', $name)
             ->exists();
+    }
+
+    /**
+     * Name as shown to people and recorded in audit values (e.g. the advisor of a customer).
+     */
+    public function fullName(): string
+    {
+        return trim("{$this->first_name} {$this->last_name}");
+    }
+
+    /**
+     * Whether the user can be the assigned advisor of customers: active and holding
+     * `customers.portfolio` (CLI-014, DEC-CLI-18). Never cached, like hasPermission().
+     */
+    public function isEligibleAdvisor(): bool
+    {
+        return $this->is_active && $this->hasPermission(PermissionName::CustomersPortfolio);
+    }
+
+    /**
+     * The same set as isEligibleAdvisor(), as a query: active users with `customers.portfolio`
+     * through any of their roles, each listed once.
+     *
+     * @param  Builder<User>  $query
+     */
+    public function scopeEligibleAdvisors(Builder $query): void
+    {
+        $query->where('users.is_active', true)->whereExists(
+            fn (QueryBuilder $subquery) => $subquery
+                ->select(DB::raw(1))
+                ->from('role_user')
+                ->join('permission_role', 'permission_role.role_id', '=', 'role_user.role_id')
+                ->join('permissions', 'permissions.id', '=', 'permission_role.permission_id')
+                ->whereColumn('role_user.user_id', 'users.id')
+                ->where('permissions.name', PermissionName::CustomersPortfolio->value),
+        );
     }
 
     /**

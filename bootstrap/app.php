@@ -1,8 +1,10 @@
 <?php
 
 use App\Exceptions\BusinessRuleViolation;
+use App\Exceptions\DuplicatePhoneWarning;
 use App\Exceptions\RenderAccessDenied;
 use App\Exceptions\RenderBusinessRuleViolation;
+use App\Exceptions\RenderDuplicatePhoneWarning;
 use App\Http\Middleware\EnsurePasswordIsChanged;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -38,4 +40,5 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(fn (AccessDeniedHttpException $e, Request $request) => app(RenderAccessDenied::class)($e, $request));
         $exceptions->render(fn (BusinessRuleViolation $e, Request $request) => app(RenderBusinessRuleViolation::class)($e, $request));
+        $exceptions->render(fn (DuplicatePhoneWarning $e, Request $request) => app(RenderDuplicatePhoneWarning::class)($e, $request));
     })->create();
