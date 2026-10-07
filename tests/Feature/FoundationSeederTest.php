@@ -31,7 +31,7 @@ function foundationPermissionNames(): array
 {
     return array_values(array_filter(
         array_map(fn (PermissionName $p) => $p->value, PermissionName::cases()),
-        fn (string $name) => ! str_starts_with($name, 'customers.'),
+        fn (string $name) => ! str_starts_with($name, 'customers.') && ! str_starts_with($name, 'products.'),
     ));
 }
 
@@ -56,7 +56,7 @@ it('FND-017 attaches the 001 permissions only to the protected Administrador rol
         ->and($protected->first()->name)->toBe('Administrador')
         ->and($protected->first()->permissions()->whereIn('permissions.name', $foundation)->count())->toBe(9);
 
-    // The customers.* grants of the other roles are covered by the DEC-CLI-11 tests.
+    // The customers.* and products.* grants of the other roles are covered by the DEC-CLI-11 and DEC-PRD-22 tests.
     Role::query()->where('is_protected', false)->get()->each(
         fn (Role $role) => expect($role->permissions()->whereIn('permissions.name', $foundation)->count())->toBe(0),
     );
