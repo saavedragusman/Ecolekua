@@ -148,7 +148,7 @@ it('FND-016 lets roles.view list and show roles with their permissions but not m
 
     $this->actingAs($viewer)->get('/roles')->assertOk()->assertInertia(fn ($page) => $page->component('roles/Index'));
     $this->actingAs($viewer)->get("/roles/{$role->id}")->assertOk()->assertInertia(
-        fn ($page) => $page->component('roles/Show')->where('role.name', 'Administrador')->has('role.permissions', 9),
+        fn ($page) => $page->component('roles/Show')->where('role.name', 'Administrador')->has('role.permissions', $role->permissions()->count()),
     );
     $this->actingAs($viewer)->get('/roles/create')->assertForbidden();
 });
@@ -170,7 +170,7 @@ it('FND-016 sends the permission catalog on the role detail only to who can mana
         ->assertInertia(fn ($page) => $page->where('permissions', []));
 
     $this->actingAs(userWithPermissions(PermissionName::RolesView, PermissionName::RolesManage))->get("/roles/{$role->id}")
-        ->assertInertia(fn ($page) => $page->has('permissions', 9));
+        ->assertInertia(fn ($page) => $page->has('permissions', count(PermissionName::cases())));
 });
 
 it('FND-016 answers 403 to every role write without roles.manage and changes nothing', function () {

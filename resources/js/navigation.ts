@@ -1,12 +1,13 @@
 import { home } from '@/routes';
 import { index as auditIndex } from '@/routes/audit';
+import { index as customersIndex } from '@/routes/customers';
 import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
 
 // Display order of the navigation groups. Groups without a visible entry are
-// omitted. The type already admits Comercial, Producción and Inventario, but no
-// entries are declared for them until their specs and routes exist
-// (AGENTS.md §0; design Decision 20).
+// omitted. The type already admits Comercial, Producción and Inventario; entries
+// are declared for a group only once its specs and routes exist (AGENTS.md §0;
+// design Decision 20). Comercial has Clientes (spec 002).
 export const NAV_GROUPS = [
     'Comercial',
     'Producción',
@@ -47,6 +48,15 @@ export const NAV_ENTRIES: NavEntry[] = [
         group: null,
         priority: 0,
         exact: true,
+    },
+    {
+        key: 'customers',
+        label: 'Clientes',
+        icon: 'groups',
+        href: customersIndex.url(),
+        permission: 'customers.view',
+        group: 'Comercial',
+        priority: 10,
     },
     {
         key: 'users',

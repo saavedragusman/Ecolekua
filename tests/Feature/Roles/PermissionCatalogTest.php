@@ -40,16 +40,29 @@ it('E-24 rejects an operation protected by a new permission until it is assigned
     $this->actingAs($admin)->get('/_test/e24')->assertOk();
 });
 
-it('FND-017 seeds 7 roles and the 9 catalog permissions, all of them only on the protected role', function () {
+it('FND-017 seeds 7 roles and the catalog; 001 permissions only on the protected role, customers.* per the DEC-CLI-11 matrix', function () {
     $protected = Role::query()->where('is_protected', true)->sole();
+    $all = array_map(fn (PermissionName $p) => $p->value, PermissionName::cases());
+    $foundation = array_values(array_filter($all, fn (string $name) => ! str_starts_with($name, 'customers.')));
+
+    $administratorSet = array_merge($foundation, [
+        'customers.view', 'customers.create', 'customers.update',
+        'customers.deactivate', 'customers.delete', 'customers.assign',
+    ]);
+    $expectedOthers = [
+        'Gerente' => ['customers.view', 'customers.create', 'customers.update', 'customers.deactivate', 'customers.assign'],
+        'Asesora de Ventas' => ['customers.view', 'customers.create', 'customers.update', 'customers.portfolio'],
+        'Finanzas' => ['customers.view'],
+    ];
 
     expect(Role::count())->toBe(7)
-        ->and(Permission::count())->toBe(9)
+        ->and(Permission::count())->toBe(count(PermissionName::cases()))
         ->and($protected->name)->toBe('Administrador')
-        ->and($protected->permissions()->pluck('name')->all())->toEqualCanonicalizing(array_map(fn (PermissionName $p) => $p->value, PermissionName::cases()));
+        ->and($protected->permissions()->pluck('name')->all())->toEqualCanonicalizing($administratorSet);
 
     Role::query()->where('is_protected', false)->get()->each(
-        fn (Role $role) => expect($role->permissions()->count())->toBe(0),
+        fn (Role $role) => expect($role->permissions()->pluck('name')->all())
+            ->toEqualCanonicalizing($expectedOthers[$role->name] ?? []),
     );
 });
 

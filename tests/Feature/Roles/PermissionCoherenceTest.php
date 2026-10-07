@@ -107,13 +107,14 @@ it('DEC-022 does not require anything from users.view, roles.view or audit.view 
 it('DEC-022 rejects removing roles.view from the Administrador role while it keeps roles.manage', function () {
     $protected = Role::query()->where('is_protected', true)->firstOrFail();
     $remaining = Permission::query()->where('name', '!=', 'roles.view')->pluck('id')->all();
+    $before = $protected->permissions()->count();
 
     $this->actingAs(administrator())
         ->putJson("/roles/{$protected->id}/permissions", ['permissions' => $remaining])
         ->assertStatus(422)
         ->assertJsonValidationErrors('permissions');
 
-    expect($protected->permissions()->count())->toBe(9)
+    expect($protected->permissions()->count())->toBe($before)
         ->and(coherenceAuditCount())->toBe(0);
 });
 

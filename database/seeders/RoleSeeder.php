@@ -2,14 +2,20 @@
 
 namespace Database\Seeders;
 
-use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
 
 /**
- * Creates the initial roles of spec 001, section 7, only when missing. The protected
- * Administrador role receives every permission at creation time; re-running never changes
- * the permissions of an existing role (they are managed from the application afterwards).
+ * Creates the initial roles of spec 001, section 7, only when missing. It grants no
+ * permissions: the initial grants live in InitialRolePermissions and are applied by
+ * FoundationSeeder.
+ *
+ * Run it ONLY through FoundationSeeder. Standalone use (or from another seeder) leaves
+ * Administrador without permissions because the initial grants are skipped. A test scans the
+ * seeder files (subdirectories included) and fails if any seeder other than FoundationSeeder
+ * references `RoleSeeder::class`; it does not cover `db:seed --class=RoleSeeder` typed by hand.
+ * Re-running never changes the permissions of an existing role (they are managed from the
+ * application afterwards).
  */
 class RoleSeeder extends Seeder
 {
@@ -38,10 +44,6 @@ class RoleSeeder extends Seeder
             $role = new Role(['name' => $name, 'description' => $description]);
             $role->is_protected = $name === self::ADMINISTRATOR;
             $role->save();
-
-            if ($role->is_protected) {
-                $role->permissions()->attach(Permission::query()->pluck('id')->all());
-            }
         }
     }
 }
