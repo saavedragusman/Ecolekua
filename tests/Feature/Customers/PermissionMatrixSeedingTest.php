@@ -140,7 +140,21 @@ it('DEC-CLI-11 R3-001 rolls back the whole seeding when the initial grants fail 
     });
 
     try {
-        expect(fn () => $this->seed(FoundationSeeder::class))->toThrow(RuntimeException::class);
+        $failure = null;
+
+        try {
+            $this->seed(FoundationSeeder::class);
+        } catch (RuntimeException $exception) {
+            $failure = $exception;
+        }
+
+        // The failure must come from the grants phase (InitialRolePermissions::apply), after the
+        // catalog and the roles were inserted; a failure anywhere else would not prove the rollback.
+        expect($failure)->toBeInstanceOf(RuntimeException::class)
+            ->and($failure->getMessage())->toBe('simulated failure while granting')
+            ->and(collect($failure->getTrace())->contains(
+                fn (array $frame) => ($frame['class'] ?? null) === InitialRolePermissions::class && $frame['function'] === 'apply',
+            ))->toBeTrue();
 
         // Catalog and roles were inserted before the failure: they must have been rolled back.
         expect(Permission::query()->count())->toBe(0)
@@ -160,21 +174,37 @@ it('DEC-CLI-11 R3-001 rolls back the whole seeding when the initial grants fail 
         expect(customersPermissionNames($role))->toEqualCanonicalizing($expected, $roleName);
     }
 
-    expect(Role::query()->where('name', 'Administrador')->firstOrFail()->permissions()->count())->toBe(15);
+    // Administrador holds every permission of the catalog except customers.portfolio (a matrix
+    // decision, spec 002 section 4); the total follows the catalog instead of a literal.
+    $administratorTotal = count(array_filter(
+        PermissionName::cases(),
+        fn (PermissionName $permission) => $permission !== PermissionName::CustomersPortfolio,
+    ));
+
+    expect(Role::query()->where('name', 'Administrador')->firstOrFail()->permissions()->count())->toBe($administratorTotal);
 });
 
 it('DEC-CLI-11 R3-002 only FoundationSeeder invokes RoleSeeder, so the initial grants are never skipped', function () {
-    // RoleSeeder grants no permissions; standalone use would leave Administrador empty. A source
-    // scan is the simplest robust check: any other seeder referencing the class is a violation.
-    $offenders = collect(File::files(database_path('seeders')))
-        ->reject(fn (SplFileInfo $file) => in_array($file->getFilename(), ['FoundationSeeder.php', 'RoleSeeder.php'], true))
-        ->filter(fn (SplFileInfo $file) => str_contains(file_get_contents($file->getPathname()), 'RoleSeeder'))
-        ->map(fn (SplFileInfo $file) => $file->getFilename())
+    // RoleSeeder grants no permissions; standalone use would leave Administrador empty. The guard
+    // proves two things: no seeder file under database/seeders (subdirectories included) other
+    // than FoundationSeeder and RoleSeeder itself references `RoleSeeder::class` (or the class
+    // name as a string passed to a seeder call), and FoundationSeeder passes it to `$this->call([...])`.
+    // It cannot see a runtime call built dynamically or an artisan `db:seed --class=RoleSeeder`.
+    $reference = '/\bRoleSeeder::class\b|[\'"](?:[\w\\\\]*\\\\)?RoleSeeder[\'"]/';
+
+    $offenders = collect(File::allFiles(database_path('seeders')))
+        ->filter(fn (SplFileInfo $file) => $file->getExtension() === 'php')
+        ->reject(fn (SplFileInfo $file) => in_array($file->getRelativePathname(), ['FoundationSeeder.php', 'RoleSeeder.php'], true))
+        ->filter(fn (SplFileInfo $file) => preg_match($reference, file_get_contents($file->getPathname())) === 1)
+        ->map(fn (SplFileInfo $file) => $file->getRelativePathname())
         ->values()
         ->all();
 
     expect($offenders)->toBe([])
-        ->and(file_get_contents(database_path('seeders/FoundationSeeder.php')))->toContain('RoleSeeder::class');
+        ->and(preg_match(
+            '/\$this->call\(\s*\[[^\]]*\bRoleSeeder::class\b/s',
+            file_get_contents(database_path('seeders/FoundationSeeder.php')),
+        ))->toBe(1);
 });
 
 it('DEC-CLI-11 warns and continues when a non-protected matrix role does not exist', function () {

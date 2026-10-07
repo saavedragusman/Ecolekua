@@ -453,3 +453,108 @@ Scoped fixes after the native review of 13bb8f6.
 Decision: the phase 2 report is the same `ImportReport` errors and the same console table as phase 1 (exit 1), so no command change was needed; the header line "el archivo tiene N error(es)" is reused as is. Prepared rows now carry their `cells` so nested-object keys can map to a column. No cell values are printed (reasons come from the lang files).
 
 Tests added: 2 at Action level (stale instance; deleted user) and 2 through the command (document inserted by "another process" via a `creating` hook; advisor deactivated between rows), both asserting exit 1, zero customers and audit rows, the row line, the column and the reason, and no cell value in the output.
+
+## Phase 10: Close-out - 10.1, 10.2, 10.3 COMPLETE; 10.4 PARTIAL ((a)-(e) done, (f) open)
+
+Branch: `feat/002-customers-10-closeout` (from `feat/002-customers-9-import` at 673811f). Changes left in the working tree; no commit made. All files written with Edit/Write only. Mode: Strict TDD.
+
+### 10.1 Coverage audit (observed)
+
+Method: `sail pest <path> --filter='E-<nn>\b'` for each ID, restricted to the spec 002 locations (`tests/Feature/Customers`, `tests/Unit/Customers`, `tests/Feature/Console/ImportCustomersTest.php`) and summed. The restriction is needed because spec 001 reuses the same `E-nn` IDs in its own tests (for example `E-19` also names five authorization tests in `tests/Feature/Authorization/PermissionAuthorizationTest.php`, which are 001 scenarios and are not counted). The word boundary isolates the ID: `E-1\b` finds no tests, so `E-1` never matches `E-10`..`E-19`. Counts include dataset cases and tests whose name mentions the ID after other text (for example `E-35 and E-24 ...` counts under both). Every ID also has at least one test whose name starts with it (checked in the sources).
+
+| ID | tests | passed | failed | todo | ID | tests | passed | failed | todo |
+|---|---|---|---|---|---|---|---|---|---|
+| E-01 | 2 | 2 | 0 | 0 | E-22 | 6 | 6 | 0 | 0 |
+| E-02 | 5 | 5 | 0 | 0 | E-23 | 2 | 2 | 0 | 0 |
+| E-03 | 8 | 8 | 0 | 0 | E-24 | 5 | 5 | 0 | 0 |
+| E-04 | 5 | 5 | 0 | 0 | E-25 | 3 | 3 | 0 | 0 |
+| E-05 | 3 | 3 | 0 | 0 | E-26 | 2 | 2 | 0 | 0 |
+| E-06 | 15 | 15 | 0 | 0 | E-27 | 3 | 3 | 0 | 0 |
+| E-07 | 1 | 1 | 0 | 0 | E-28 | 3 | 3 | 0 | 0 |
+| E-08 | 1 | 1 | 0 | 0 | E-29 | 4 | 4 | 0 | 0 |
+| E-09 | 4 | 4 | 0 | 0 | E-30 | 25 | 25 | 0 | 0 |
+| E-10 | 2 | 2 | 0 | 0 | E-31 | 4 | 4 | 0 | 0 |
+| E-11 | 17 | 17 | 0 | 0 | E-32 | 8 | 8 | 0 | 0 |
+| E-12 | 7 | 7 | 0 | 0 | E-33 | 6 | 6 | 0 | 0 |
+| E-13 | 11 | 11 | 0 | 0 | E-34 | 37 | 37 | 0 | 0 |
+| E-14 | 11 | 11 | 0 | 0 | E-35 | 5 | 5 | 0 | 0 |
+| E-15 | 3 | 3 | 0 | 0 | E-36 | 9 | 9 | 0 | 0 |
+| E-16 | 5 | 5 | 0 | 0 | E-37 | 5 | 5 | 0 | 0 |
+| E-17 | 3 | 3 | 0 | 0 | E-38 | 3 | 3 | 0 | 0 |
+| E-18 | 2 | 2 | 0 | 0 | E-39 | 14 | 14 | 0 | 0 |
+| **E-19** | 1 | 0 | 0 | **1 (todo)** | E-40 | 2 | 2 | 0 | 0 |
+| E-20 | 6 | 6 | 0 | 0 | E-41 | 8 | 8 | 0 | 0 |
+| E-21 | 5 | 5 | 0 | 0 | | | | | |
+
+Result: 40 of 40 scenarios (every ID except E-19) have at least one passing test and 0 failures; E-19 is the single `todo` (`DeleteCustomerTest.php`, "se prueba en 004 y 006"). Requirement-named tests: `CLI-007` 4 passed (`CreateCustomerTest` x2, `UpdateCustomerTest`, `CustomerRulesTest`), `CLI-013` 4 passed (`CustomerDetailTest`). No scenario without a test: no gap.
+
+### 10.4 follow-ups
+
+| Item | Change | TDD |
+|---|---|---|
+| (a) R3-guard-scope | `PermissionMatrixSeedingTest`: the R3-002 guard scans `database/seeders` recursively (`File::allFiles`, `.php` only), matches `RoleSeeder::class` or the class name as a quoted string with a regex instead of a substring, and checks that `FoundationSeeder` passes it to `$this->call([...])`. `RoleSeeder` docblock rewritten to state exactly what the guard proves and that `db:seed --class=RoleSeeder` typed by hand is not covered. | Test hardening; passes immediately (regression guard, 7/7) |
+| (b) R3-injection-site | The rollback test now catches the `RuntimeException`, asserts its message and that its trace contains `InitialRolePermissions::apply`, so the test is pinned to the grants phase. | Passes immediately |
+| (c) R3-hardcoded-count | Administrador total derived from `PermissionName::cases()` minus `CustomersPortfolio` instead of the literal 15. | Passes immediately |
+| (d) R3-q-normalization-untested | `CustomerListTest`: `q` is trimmed and cut to 100 characters (150-character term padded with spaces; exactly 100 kept whole), and a non-string `q` (`q[]=x`, `q[a]=x&q[b]=y`) is an empty term listing everything. | Passes immediately (the controller already behaved so) |
+| (e) R3-like-escape-portability | `Customer::contains()` replaced by `whereContains()`: `whereRaw("`col` like ? escape '\\\\'", [...])` over a closed set of literal column SQL (`name`, `document_number`, `phone`); value stays a binding. A test asserts the generated SQL carries `escape '\\'` on every LIKE. | RED: SQL had no `escape` clause (1 failed); GREEN after the change, existing `E-11 escapes % and _` test still green. A behavior-level failing test is not feasible on MySQL (backslash is already the default escape), so the new test guards the SQL text; the change is portability-only. |
+| (f) R3-form-payload-shaping-unproved | **OPEN, not checked off.** No frontend test runner exists and adding one (e.g. Vitest) is a new dependency that needs the user's approval (AGENTS section 2). It stays covered only by the manual checks below (section "Manual browser checklist"). | none |
+
+Note on (e): Larastan rejects a dynamic `whereRaw` string (`argument.type`), so the SQL is a `match` over three literal strings instead of wrapping the column with the grammar; backticks make it MySQL-specific, which is the only supported database (AGENTS section 2).
+
+Task 10.4 stays `[ ]` because (f) is open.
+
+### 10.2 Documentation
+
+- `docs/specs/002-customers.md`: untouched (no status change requested).
+- `design.md` "Migration / Rollout" runbook: Phase 9 did not change it (command `customers:import {file} {--author=} {--confirm-duplicate-phones}`, location `storage/app/private/imports/`, all-or-nothing, report `Fila | Columna | Motivo` all match), so the runbook text is unchanged. Only the two "Technical follow-ups" checkboxes already satisfied in the apply phase were ticked (`storage/app/private` ignore rule, confirmed in 9.5; `UniqueConstraintViolationException`, confirmed in 2.x). The third follow-up (`openspec/config.yaml` says PHP 8.3, `composer.json` requires ^8.4) is left open: it is a documentation mismatch outside this task, `composer.json` governs.
+- `AGENTS.md`: unchanged (no command or convention changed).
+- No real file, names or prices added anywhere.
+
+### 10.3 Final gates (observed on the whole branch)
+
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors (after replacing the dynamic `whereRaw` string, see note on (e))
+- `sail pnpm types:check`: vue-tsc clean
+- `sail pnpm build`: built OK
+- `sail artisan test`: 678 passed + 1 todo (E-19), 3463 assertions (baseline 674 + 4 new tests)
+- `git status --short`: only `app/Models/Customer.php`, `database/seeders/RoleSeeder.php`, `design.md`, `tasks.md`, `apply-progress.md`, `CustomerListTest.php`, `PermissionMatrixSeedingTest.php`; no `.env`, CSV or dump
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest tests/Feature/Customers/CustomerListTest.php`: 35 passed (326 assertions); `sail pest tests/Feature/Customers/PermissionMatrixSeedingTest.php`: 7 passed (52 assertions) |
+| Runtime harness | N/A for the code change: `whereContains()` is exercised against the real MySQL `testing` database by the E-11 search tests (escaping included); no new runtime boundary |
+| Rollback boundary | `Customer::whereContains()` / `scopeSearch()`; the added tests in `CustomerListTest.php`; `PermissionMatrixSeedingTest.php` edits and the `RoleSeeder` docblock; independent of each other |
+
+### Manual browser checklist for the human (consolidates every PENDING check of Phases 5-9)
+
+Dev server up (`sail up -d`, `sail pnpm dev`), a user with the needed permissions per case (Administrador, and an "Asesora de Ventas" for portfolio checks). Use fictitious data only. Viewports: 375, 768 and 1280 px unless stated. Each flow in light and dark theme and with keyboard only (Tab, Shift+Tab, Enter, Space, Esc: visible focus, logical order, dialogs trap focus and Esc closes them).
+
+1. `/customers` (list), 375/768/1280, both themes: default "Activos" tab with the counts; "Inactivos" and "Todos" tabs; the counts follow the search term; empty state.
+2. `/customers` search box: the magnifier icon never overlaps the typed text (AppInput `px-space-md` + `pl-11`, R3-appinput-icon-padding-unverified); search submits with Enter and with the button; term in the URL.
+3. `/customers` "Mis clientes" toggle: visible only with `customers.portfolio`; filters to the actor's customers.
+4. `/customers` "Nuevo cliente" button: visible only with `customers.create`, goes to the create form (375/1280).
+5. `/customers/{id}` (detail), 375/768/1280: sections in order (general data, contact with birthday, contact person for companies only, address with state, notes, advisor); an inactive customer shows "Inactivo"; unavailable advisor shows the "Asesora no disponible" badge.
+6. `/customers/create`, 375/1280: type selector; document type options change with the type; phone, email, birthday and anniversary (day/month selects, anniversary only for companies), notes, company-only contact section, address with the state select; labels always visible; errors announced under each field; text at least 16 px on mobile (no zoom on focus).
+7. Duplicate phone on create: save a customer with a phone already registered; the panel lists the matches; "Guardar de todos modos" saves; editing the phone afterwards resets the confirmation (the panel appears again if it is still duplicated).
+8. `/customers/{id}/edit`, 375/1280: editable form with phone as display string; an inactive customer is editable; saving keeps the address (it is always sent).
+9. Type-change warning (DEC-CLI-15): switching a company with an anniversary and a contact person to "Persona natural" lists what will be removed before saving; saving removes them. Also the document-only case: a company with an unfit document and no anniversary or contact, switched to natural, shows only the note "El documento no se elimina".
+10. Detail, "Desactivar": button opens the danger `ConfirmDialog` with the DEC-CLI-09 consequence text, verb "Desactivar"; Esc and Cancel close it without changes; confirming shows the success flash and the "Inactivo" label. "Reactivar" (needs `customers.deactivate`) works without confirmation.
+11. Detail, "Eliminar": visible only with `customers.delete`; danger `ConfirmDialog` with the irreversible text, verb "Eliminar"; confirming redirects to the list with the success flash. If a history blocks the delete (not reachable until 004/006) the reason is shown and "Desactivar" is offered.
+12. Detail, assign advisor: the control appears only with `customers.assign`; options are the eligible advisors plus "Sin asesora" (selectable and saves as unassigned); an assigned advisor who is no longer eligible appears as "Nombre (no disponible)"; success flash after saving; an error shows under the select for an ineligible advisor.
+13. Visibility by permission on the detail: log in as a user with only `customers.view` (no Editar, Desactivar, Eliminar, assign control) and as one with `customers.update` only (Editar yes, the rest no).
+14. Navigation: the "Clientes" entry (group Comercial) appears only with `customers.view` and highlights on `/customers` and its sub-pages.
+
+Result of the manual run (2026-10-06, by the human): items 6 to 9 passed, so task 10.4 (f) is closed. Requested adjustment: the detail page `resources/js/pages/customers/Show.vue` gets an `arrow_back` icon link to the list at the top left of the header card, because the "Volver a clientes" button at the bottom went unnoticed; the bottom button stays. Checked with `sail pnpm types:check` and `sail pnpm build`. Items 1 to 5 and 10 to 14 were not reported.
+
+### Deviations / decisions
+- 10.1 counts are restricted to the spec 002 test locations because spec 001 reuses `E-nn` IDs in its own tests; the unrestricted filter gives larger numbers (for example E-19: 6 tests, 5 passed + 1 todo) that mix both specs.
+- (e) uses a closed `match` of literal SQL instead of grammar-wrapped column names (Larastan constraint); MySQL-only by design.
+- No production behavior changed other than the explicit `ESCAPE` clause (results are identical on MySQL).
+
+### Gaps for the orchestrator
+- No [DEC-PENDIENTE] found. Open items: 10.4 (f); Definition of Done items that need the human (manual browser checks, `/sdd-verify`, archive); the `openspec/config.yaml` PHP 8.3 vs `composer.json` ^8.4 mismatch.
+
+### Proposed commit (Spanish description, no attribution lines)
+- `chore(002): cierre del change con auditoría de cobertura, seguimientos de revisión y cláusula ESCAPE explícita en la búsqueda [CLI-011, CLI-018, DEC-CLI-11, E-11]`

@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
+import AppIcon from '@/components/AppIcon.vue';
 import AppSelect from '@/components/AppSelect.vue';
 import type { SelectOption } from '@/components/AppSelect.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { usePermissions } from '@/composables/usePermissions';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { FOCUS_RING } from '@/lib/ui';
 import { activate, deactivate, destroy, edit, index } from '@/routes/customers';
 import { update as updateAdvisor } from '@/routes/customers/advisor';
 import type { AdvisorOption, CustomerDetail } from '@/types/customers';
@@ -90,9 +92,22 @@ const EMPTY = 'No registrado';
             <div
                 class="flex flex-col gap-space-sm md:flex-row md:items-center md:justify-between"
             >
-                <h1 class="font-headline-md text-headline-md text-primary">
-                    {{ customer.name }}
-                </h1>
+                <div class="flex items-center gap-space-sm">
+                    <Link
+                        :href="index().url"
+                        aria-label="Volver a clientes"
+                        title="Volver a clientes"
+                        :class="[
+                            'inline-flex size-11 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-surface-container-low',
+                            FOCUS_RING,
+                        ]"
+                    >
+                        <AppIcon name="arrow_back" />
+                    </Link>
+                    <h1 class="font-headline-md text-headline-md text-primary">
+                        {{ customer.name }}
+                    </h1>
+                </div>
                 <StatusBadge
                     :category="
                         customer.status === 'active' ? 'done' : 'neutral'

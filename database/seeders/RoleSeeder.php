@@ -11,9 +11,11 @@ use Illuminate\Database\Seeder;
  * FoundationSeeder.
  *
  * Run it ONLY through FoundationSeeder. Standalone use (or from another seeder) leaves
- * Administrador without permissions because the initial grants are skipped; a test enforces
- * that no other seeder references it. Re-running never changes the permissions of an existing role (they are
- * managed from the application afterwards).
+ * Administrador without permissions because the initial grants are skipped. A test scans the
+ * seeder files (subdirectories included) and fails if any seeder other than FoundationSeeder
+ * references `RoleSeeder::class`; it does not cover `db:seed --class=RoleSeeder` typed by hand.
+ * Re-running never changes the permissions of an existing role (they are managed from the
+ * application afterwards).
  */
 class RoleSeeder extends Seeder
 {

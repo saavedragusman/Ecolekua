@@ -624,6 +624,6 @@ Non-blocking, for the user (the design implements the literal spec meanwhile):
 - [x] **Address "estado" (CLI-006, DEC-CLI-17)**: resolved by DEC-CLI-33 (2026-09-30): closed list of the 24 Venezuelan federal entities. Implemented as a string-backed `VenezuelanState` enum (Spanish labels) validated with `Rule::enum`; `customer_addresses.state` stores the enum value; the import command maps the `direccion_estado` column to the enum by case- and accent-insensitive label match and reports a row error otherwise. City stays free text.
 
 Technical follow-ups (apply phase):
-- [ ] Confirm that `storage/app/private/.gitignore` ignores everything (`*`) in this repository before documenting it as the import location.
-- [ ] Confirm the Laravel 13 `UniqueConstraintViolationException` class is thrown for the document index race on MySQL 8.4 (used by Decision 5).
+- [x] Confirm that `storage/app/private/.gitignore` ignores everything (`*`) in this repository before documenting it as the import location. (Confirmed in task 9.5: `git check-ignore` reports the rule.)
+- [x] Confirm the Laravel 13 `UniqueConstraintViolationException` class is thrown for the document index race on MySQL 8.4 (used by Decision 5). (Confirmed in the apply phase and asserted in `CustomerSchemaTest`.)
 - [ ] `openspec/config.yaml` says PHP 8.3 while `composer.json` requires ^8.4 (documentation mismatch noted by the proposal; `composer.json` governs).
