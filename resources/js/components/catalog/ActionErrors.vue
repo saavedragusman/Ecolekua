@@ -21,6 +21,8 @@ const messages = computed(() =>
         role="alert"
         class="flex flex-col gap-space-xs rounded-lg bg-error-container p-space-md font-body-md text-body-md text-on-error-container"
     >
-        <p v-for="message in messages" :key="message">{{ message }}</p>
+        <p v-for="(message, index) in messages" :key="index">
+            {{ message }}
+        </p>
     </div>
 </template>
