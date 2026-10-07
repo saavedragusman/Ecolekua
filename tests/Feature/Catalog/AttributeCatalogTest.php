@@ -3,6 +3,7 @@
 use App\Actions\Products\CreateAttributeValue;
 use App\Actions\Products\CreateCatalogAttribute;
 use App\Actions\Products\MoveCatalogItem;
+use App\Actions\Products\UpdateCatalogAttribute;
 use App\Enums\AttributePresentation;
 use App\Enums\AttributeSpecialUse;
 use App\Enums\AuditAction;
@@ -201,6 +202,23 @@ it('PRD-002 requires every value to have a tone before an attribute becomes colo
         ->assertRedirect();
 
     expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Color);
+});
+
+it('R3-003 re-checks the tones inside the Action when the request is bypassed', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Acabado']);
+    AttributeValue::factory()->for($attribute)->create(['tone' => '#112233']);
+    AttributeValue::factory()->for($attribute)->create(['tone' => null]);
+
+    try {
+        app(UpdateCatalogAttribute::class)->handle($attribute, ['name' => 'Otro', 'presentation' => 'color', 'special_use' => null], attributeManager());
+        $this->fail('Expected a ValidationException.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors())->toHaveKey('presentation');
+    }
+
+    expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Text)
+        ->and($attribute->fresh()->name)->toBe('Acabado')
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
 });
 
 it('PRD-002 audits an attribute edit with the changed fields only and nothing when no field changes', function () {
@@ -512,7 +530,14 @@ it('R3-001 resolves ties on sort order inside the attribute of the moved value',
         ->assertRedirect();
 
     expect(valueIdsInOrder($sleeves))->toBe([$b->id, $a->id, $c->id])
-        ->and($foreign->fresh()->sort_order)->toBe(5);
+        ->and($foreign->fresh()->sort_order)->toBe(5)
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated)->pluck('entity_id')->all())
+        ->toEqualCanonicalizing([$a->id, $b->id, $c->id]);
+
+    $silent = attributeAuditRows(AuditAction::CatalogUpdated)->firstWhere('entity_id', $c->id);
+
+    expect($silent->old_values)->toEqual(['sort_order' => 9])
+        ->and($silent->new_values)->toEqual(['sort_order' => 3]);
 });
 
 it('R3-002 locks only the rows of the attribute scope in one query ordered by id', function () {

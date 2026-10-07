@@ -34,6 +34,7 @@ class UpdateCatalogAttribute
                 $attribute = CatalogAttribute::query()->lockForUpdate()->findOrFail($attribute->id);
                 $before = $this->snapshot($attribute);
 
+                $this->ensureTonesForColor($attribute, $data);
                 $this->ensureNotDeclaredByProducts($attribute, $data);
 
                 $attribute->fill([
@@ -72,6 +73,28 @@ class UpdateCatalogAttribute
             'presentation' => $attribute->presentation->value,
             'special_use' => $attribute->special_use?->value,
         ];
+    }
+
+    /**
+     * Switching to color presentation requires every value to have a tone (E-36). The request
+     * checks it too, but only this check runs under the attribute lock, so a concurrent value
+     * edit cannot slip a tone-less value past it. The values are locked so none changes meanwhile.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException
+     */
+    private function ensureTonesForColor(CatalogAttribute $attribute, array $data): void
+    {
+        if ($data['presentation'] !== AttributePresentation::Color->value || $attribute->presentation === AttributePresentation::Color) {
+            return;
+        }
+
+        $withoutTone = $attribute->values()->lockForUpdate()->whereNull('tone')->exists();
+
+        if ($withoutTone) {
+            throw ValidationException::withMessages(['presentation' => __('validation.attribute_color_requires_tones')]);
+        }
     }
 
     /**

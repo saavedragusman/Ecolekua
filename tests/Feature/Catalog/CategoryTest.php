@@ -256,8 +256,38 @@ it('R3-001 moves a category up past a neighbor that shares its sort order', func
         ->postJson("/catalog/categories/{$second->id}/move", ['direction' => 'up'])
         ->assertRedirect();
 
-    expect(categoryIdsInOrder())->toBe([$second->id, $first->id, $third->id])
-        ->and(catalogAuditRows(AuditAction::CatalogUpdated))->toHaveCount(2);
+    expect(categoryIdsInOrder())->toBe([$second->id, $first->id, $third->id]);
+
+    // The tie renumbers the whole scope 1..n: one audit row per row whose sort_order changed,
+    // including the third row that was renumbered without being moved.
+    $audits = catalogAuditRows(AuditAction::CatalogUpdated);
+
+    expect($audits)->toHaveCount(3)
+        ->and($audits->pluck('entity_id')->all())->toEqualCanonicalizing([$first->id, $second->id, $third->id]);
+
+    foreach ([[$second, 5, 1], [$first, 5, 2], [$third, 9, 3]] as [$category, $old, $new]) {
+        $audit = $audits->firstWhere('entity_id', $category->id);
+
+        expect($audit->old_values)->toEqual(['sort_order' => $old])
+            ->and($audit->new_values)->toEqual(['sort_order' => $new]);
+    }
+});
+
+it('R3-001 audits no row whose sort order does not change when renumbering a tie', function () {
+    $first = ProductCategory::factory()->create(['sort_order' => 1]);
+    $second = ProductCategory::factory()->create(['sort_order' => 2]);
+    $third = ProductCategory::factory()->create(['sort_order' => 2]);
+
+    $this->actingAs(catalogManager())
+        ->postJson("/catalog/categories/{$third->id}/move", ['direction' => 'up'])
+        ->assertRedirect();
+
+    expect(categoryIdsInOrder())->toBe([$first->id, $third->id, $second->id]);
+
+    $audits = catalogAuditRows(AuditAction::CatalogUpdated);
+
+    // Only the second row changes (2 -> 3); the first (1) and the third (2) keep their value.
+    expect($audits->pluck('entity_id')->all())->toBe([$second->id]);
 });
 
 it('R3-001 moves a category down past a neighbor that shares its sort order', function () {
