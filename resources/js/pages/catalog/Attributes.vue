@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
+import AppSelect from '@/components/AppSelect.vue';
 import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import CatalogSections from '@/components/catalog/CatalogSections.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
@@ -16,30 +17,40 @@ import {
     activate,
     deactivate,
     move,
+    show,
     store,
     update,
-} from '@/routes/catalog/categories';
-import type { CatalogCan, CatalogCategory } from '@/types/products';
+} from '@/routes/catalog/attributes';
+import type {
+    CatalogAttribute,
+    CatalogAttributeOptions,
+    CatalogCan,
+} from '@/types/products';
 
 defineOptions({ layout: AppLayout });
 
-// Rows arrive in display order with their labels resolved (PRD-001). The controls only reflect
-// `can`; the backend authorizes every write.
+// Rows arrive in display order with their labels resolved (PRD-002). The controls only reflect
+// `can`; the backend authorizes every write and enforces the presentation and special-use rules.
 const props = defineProps<{
-    categories: CatalogCategory[];
+    attributes: CatalogAttribute[];
+    options: CatalogAttributeOptions;
     can: CatalogCan;
 }>();
 
 const columns = computed<DataTableColumn[]>(() => [
     { key: 'name', label: 'Nombre' },
+    { key: 'presentation', label: 'Presentación' },
+    { key: 'special_use', label: 'Uso especial' },
+    { key: 'values_count', label: 'Valores' },
     { key: 'status', label: 'Estado' },
     ...(props.can.manage ? [{ key: 'actions', label: 'Acciones' }] : []),
 ]);
 
-// One form serves creation and editing; `editing` is the category being edited, null when creating.
+// One form serves creation and editing; `editing` is the attribute being edited, null when creating.
+// The edit sends the whole attribute: an empty special use clears it.
 const formOpen = ref(false);
-const editing = ref<CatalogCategory | null>(null);
-const form = useForm({ name: '' });
+const editing = ref<CatalogAttribute | null>(null);
+const form = useForm({ name: '', presentation: 'text', special_use: '' });
 
 const moveForm = useForm<{ direction: 'up' | 'down' }>({ direction: 'up' });
 const statusForm = useForm({});
@@ -51,9 +62,11 @@ function openCreate(): void {
     formOpen.value = true;
 }
 
-function openEdit(category: CatalogCategory): void {
-    editing.value = category;
-    form.name = category.name;
+function openEdit(attribute: CatalogAttribute): void {
+    editing.value = attribute;
+    form.name = attribute.name;
+    form.presentation = attribute.presentation;
+    form.special_use = attribute.special_use ?? '';
     form.clearErrors();
     formOpen.value = true;
 }
@@ -74,22 +87,22 @@ function submit(): void {
     });
 }
 
-function position(category: CatalogCategory): number {
-    return props.categories.findIndex((row) => row.id === category.id);
+function position(attribute: CatalogAttribute): number {
+    return props.attributes.findIndex((row) => row.id === attribute.id);
 }
 
-function moveCategory(
-    category: CatalogCategory,
+function moveAttribute(
+    attribute: CatalogAttribute,
     direction: 'up' | 'down',
 ): void {
     moveForm.direction = direction;
     moveForm.clearErrors();
-    moveForm.submit(move(category.id), { preserveScroll: true });
+    moveForm.submit(move(attribute.id), { preserveScroll: true });
 }
 
 // Deactivating asks for confirmation (design-system §7.10); reactivating is reversible and does not.
 // A rejection closes the dialog so the backend message shows on the page.
-const deactivating = ref<CatalogCategory | null>(null);
+const deactivating = ref<CatalogAttribute | null>(null);
 const confirmingDeactivate = computed({
     get: () => deactivating.value !== null,
     set: (open: boolean) => {
@@ -99,7 +112,7 @@ const confirmingDeactivate = computed({
     },
 });
 
-function deactivateCategory(): void {
+function deactivateAttribute(): void {
     const target = deactivating.value;
 
     if (target === null) {
@@ -115,45 +128,57 @@ function deactivateCategory(): void {
     });
 }
 
-function reactivateCategory(category: CatalogCategory): void {
+function reactivateAttribute(attribute: CatalogAttribute): void {
     statusForm.clearErrors();
-    statusForm.submit(activate(category.id), { preserveScroll: true });
+    statusForm.submit(activate(attribute.id), { preserveScroll: true });
 }
 </script>
 
 <template>
-    <Head title="Categorías" />
+    <Head title="Atributos" />
 
     <div class="flex flex-col gap-space-md">
         <div
             class="flex flex-col gap-space-sm md:flex-row md:items-center md:justify-between"
         >
             <h1 class="font-headline-md text-headline-md text-primary">
-                Categorías
+                Atributos
             </h1>
             <AppButton v-if="can.manage && !formOpen" @click="openCreate">
-                Nueva categoría
+                Nuevo atributo
             </AppButton>
         </div>
 
-        <CatalogSections current="categories" />
+        <CatalogSections current="attributes" />
 
         <form v-if="can.manage && formOpen" novalidate @submit.prevent="submit">
             <AppCard>
                 <h2 class="font-headline-sm text-headline-sm text-primary">
                     {{
-                        editing === null
-                            ? 'Nueva categoría'
-                            : 'Editar categoría'
+                        editing === null ? 'Nuevo atributo' : 'Editar atributo'
                     }}
                 </h2>
                 <AppInput
                     v-model="form.name"
                     label="Nombre"
                     autocomplete="off"
-                    :maxlength="100"
+                    :maxlength="60"
                     required
                     :error="form.errors.name"
+                />
+                <AppSelect
+                    v-model="form.presentation"
+                    label="Presentación"
+                    :options="options.presentations"
+                    required
+                    :error="form.errors.presentation"
+                />
+                <AppSelect
+                    v-model="form.special_use"
+                    label="Uso especial (opcional)"
+                    placeholder="Sin uso especial"
+                    :options="options.special_uses"
+                    :error="form.errors.special_use"
                 />
                 <div class="flex flex-col gap-space-sm md:flex-row">
                     <AppButton type="submit" :disabled="form.processing">
@@ -169,16 +194,30 @@ function reactivateCategory(category: CatalogCategory): void {
         <ActionErrors :errors="{ ...moveForm.errors, ...statusForm.errors }" />
 
         <p class="font-body-md text-body-md text-on-surface-variant">
-            Cambie el orden con las flechas. Las categorías no se eliminan: se
+            Cambie el orden con las flechas. Los atributos no se eliminan: se
             desactivan.
         </p>
 
         <DataTable
             :columns="columns"
-            :rows="categories"
+            :rows="attributes"
             row-key="id"
-            empty-text="No hay categorías registradas."
+            empty-text="No hay atributos registrados."
         >
+            <template #cell-name="{ row }">
+                <Link
+                    :href="show(row.id).url"
+                    class="font-label-lg text-label-lg text-primary underline"
+                >
+                    {{ row.name }}
+                </Link>
+            </template>
+            <template #cell-presentation="{ row }">
+                {{ row.presentation_label }}
+            </template>
+            <template #cell-special_use="{ row }">
+                {{ row.special_use_label ?? 'Ninguno' }}
+            </template>
             <template #cell-status="{ row }">
                 <StatusBadge
                     :category="row.status === 'active' ? 'done' : 'neutral'"
@@ -192,17 +231,17 @@ function reactivateCategory(category: CatalogCategory): void {
                         variant="tool"
                         :label="`Subir ${row.name}`"
                         :disabled="position(row) === 0 || moveForm.processing"
-                        @click="moveCategory(row, 'up')"
+                        @click="moveAttribute(row, 'up')"
                     />
                     <IconButton
                         icon="arrow_downward"
                         variant="tool"
                         :label="`Bajar ${row.name}`"
                         :disabled="
-                            position(row) === categories.length - 1 ||
+                            position(row) === attributes.length - 1 ||
                             moveForm.processing
                         "
-                        @click="moveCategory(row, 'down')"
+                        @click="moveAttribute(row, 'down')"
                     />
                     <AppButton variant="outlined" @click="openEdit(row)">
                         Editar
@@ -219,7 +258,7 @@ function reactivateCategory(category: CatalogCategory): void {
                         v-else
                         variant="outlined"
                         :disabled="statusForm.processing"
-                        @click="reactivateCategory(row)"
+                        @click="reactivateAttribute(row)"
                     >
                         Reactivar
                     </AppButton>
@@ -229,11 +268,11 @@ function reactivateCategory(category: CatalogCategory): void {
 
         <ConfirmDialog
             v-model:open="confirmingDeactivate"
-            title="Desactivar categoría"
-            message="La categoría no se mostrará en el portal. Puede reactivarla cuando quiera."
+            title="Desactivar atributo"
+            message="El atributo se desactivará y no podrá declararse en productos nuevos. Puede reactivarlo cuando quiera."
             confirm-label="Desactivar"
             :processing="statusForm.processing"
-            @confirm="deactivateCategory"
+            @confirm="deactivateAttribute"
         />
     </div>
 </template>

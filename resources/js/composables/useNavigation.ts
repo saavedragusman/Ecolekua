@@ -35,9 +35,12 @@ export function useNavigation() {
     function isActive(entry: NavEntry): boolean {
         const path = page.url.split('?')[0];
 
+        const matches = (href: string) =>
+            path === href || path.startsWith(`${href}/`);
+
         return entry.exact
             ? path === entry.href
-            : path === entry.href || path.startsWith(`${entry.href}/`);
+            : [entry.href, ...(entry.alsoActiveOn ?? [])].some(matches);
     }
 
     // Visual filtering only: the backend authorizes every operation (FND-019).

@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
+import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import CatalogSections from '@/components/catalog/CatalogSections.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DataTable from '@/components/DataTable.vue';
@@ -73,6 +74,7 @@ function submit(): void {
 }
 
 // Deactivating asks for confirmation (design-system §7.10); reactivating is reversible and does not.
+// A rejection closes the dialog so the backend message shows on the page.
 const deactivating = ref<CatalogDetailLocation | null>(null);
 const confirmingDeactivate = computed({
     get: () => deactivating.value !== null,
@@ -90,15 +92,17 @@ function deactivateLocation(): void {
         return;
     }
 
+    statusForm.clearErrors();
     statusForm.submit(deactivate(target.id), {
         preserveScroll: true,
-        onSuccess: () => {
+        onFinish: () => {
             deactivating.value = null;
         },
     });
 }
 
 function reactivateLocation(location: CatalogDetailLocation): void {
+    statusForm.clearErrors();
     statusForm.submit(activate(location.id), { preserveScroll: true });
 }
 </script>
@@ -155,6 +159,8 @@ function reactivateLocation(location: CatalogDetailLocation): void {
                 </div>
             </AppCard>
         </form>
+
+        <ActionErrors :errors="statusForm.errors" />
 
         <p class="font-body-md text-body-md text-on-surface-variant">
             Las ubicaciones se listan por nombre y no se eliminan: se

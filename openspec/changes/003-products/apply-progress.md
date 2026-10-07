@@ -195,3 +195,42 @@ RED run: `sail pest tests/Feature/Catalog/CategoryTest.php tests/Feature/Catalog
 - Deactivating asks for `ConfirmDialog`; reactivating does not (design-system §7.10). Messages state only spec facts (inactive category not shown in the portal).
 - `ColorPicker` text field emits what is typed (invalid tones reach the backend, E-36); the native picker emits `#RRGGBB` uppercase. Tone is an inline style on the swatch only.
 - Not covered: DT-03 image upload on locations (Phase 21).
+
+## Phase 7: Catalog UI 2 — attributes, values and offered colors (COMPLETE, tasks 7.1-7.5)
+
+Chain: PR 7, branch `feat/003-products-7-catalog-ui-2`, targets `feat/003-products-6-catalog-ui-1`. No commit made (orchestrator commits).
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 7.1/7.2 | `tests/Feature/Catalog/AttributeCatalogTest.php` | Feature (HTTP + Inertia props) | 877 tests green at Phase 6 close | 11 new tests, 0 passed (405: GET routes missing; "Not a valid Inertia response") | 11 passed (the Vue pages had to exist first: Inertia asserts the component file, so the GREEN run was after 7.3) | list in sort order with inactive row and value counts, enum option labels, empty list, color attribute values (tone, description, layer, status, `offered_colors` null, empty palette), fabric attribute (offered colors in color order incl. an inactive offered one, active-only palette in order, plain fabric value with `[]`, no color attribute -> empty palette), 4 denied cases (index/show x `products.view` alone / all product permissions but catalog) audited with route names, guest redirect for both, unknown attribute 404 | `phpstan` generics: `array_values()` in `ProductPresenter::palette()` |
+| 7.3 | no frontend test runner | n/a | n/a | n/a | `pnpm types:check` and `pnpm build` pass | n/a | `pnpm check:fix` formatting only |
+| 7.4 | n/a | n/a | n/a | n/a | forms hold no rule: tone input shown by presentation only, no tone/layer validation in JS | n/a | n/a |
+| Follow-up (b) | `tests/Feature/Catalog/DetailLocationTest.php` | Feature | page test green with old fixtures | n/a (fixture fix; test was green but could not detect a binary order) | green with `abertura`/`Bolsillo`/`Manga`/`pechera` (lowercase 'abertura' sorts first only with a case-insensitive order) | 4 rows | n/a |
+| Follow-up (a), (c) | no frontend test runner | n/a | n/a | n/a | `pnpm types:check`, `pnpm build` pass | n/a | n/a |
+
+RED run: `sail pest tests/Feature/Catalog/AttributeCatalogTest.php --filter="page|pages"`: 11 tests, 0 passed, 11 failed (405 / not a valid Inertia response). GREEN run: `sail pest tests/Feature/Catalog`: 161 passed, 965 assertions.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Catalog`: 161 passed, 965 assertions |
+| Runtime harness | `sail artisan wayfinder:generate` produced `catalog.attributes.index/show`; `sail pnpm build`: built (`AttributeShow` and `Attributes` chunks). Browser check at 375/768/1280 px: PENDING (human) |
+| Rollback boundary | `ProductPresenter`, `index`/`show` in `AttributeController`, 2 GET routes, `Attributes.vue`, `AttributeShow.vue`, `ValueForm.vue`, `OfferedColorsEditor.vue`, `ActionErrors.vue`, the "Atributos" tab in `CatalogSections.vue`, the attribute types in `products.ts`, the 8 new page tests; follow-ups: `ActionErrors` wiring in `Categories.vue`/`DetailLocations.vue`, `alsoActiveOn` in `navigation.ts`/`useNavigation.ts`, the `DetailLocationTest` fixture |
+
+### Slice-close gate
+
+- `sail pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (72 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 888 tests, 887 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Authored lines: about 892 new (presenter 114, 2 pages 574, 3 components 204) + about 326 in tracked files (tests 185, types 49, controller 49, other pages/nav/routes ~43) = about 1,220. Over the 400 advisory: two full pages, three components and a presenter; production backend is about 165 lines.
+- Props. Index: `attributes[]` `{id, name, presentation, presentation_label, special_use, special_use_label, status, status_label, sort_order, values_count}`, `options {presentations[], special_uses[]}` (enum labels), `can`. Show: `attribute` (same shape), `values[]` `{id, name, description, tone, svg_layer, status, status_label, sort_order, offered_colors}` (`offered_colors` is an array on fabric values, `null` otherwise), `palette[]` of active colors `{id, name, tone, status}` (empty unless the attribute is the fabric), `can`.
+- Offered colors editor lists the active palette plus colors already offered that were deactivated since (labelled "(inactivo)"), so saving does not drop them silently; the backend accepts resubmitting an already offered inactive color (Phase 4 rule).
+- `ValueForm` drops `tone` from the payload for non-color attributes (the backend prohibits it) via `form.transform`; empty description/layer travel as `''` and become null through Laravel's middleware. The image slot is reserved (`<slot name="image" />`) for Phase 21.
+- Follow-up (a): new `ActionErrors.vue` renders move/status validation messages (role=alert) on Categories, DetailLocations, Attributes and AttributeShow; the deactivate dialog now closes in `onFinish` (not only on success) so a rejection is visible. No backend path raises such errors yet (hooks of tasks 9.6 and 22.7 will), so this is covered by types and build only.
+- Follow-up (b): fixed the `DetailLocationTest` ordering fixture (lowercase `abertura` first, `Bolsillo`, `Manga`, `pechera`).
+- Follow-up (c): done minimally. `NavEntry.alsoActiveOn` (list of Wayfinder URLs matched by prefix) keeps "Catálogo" highlighted on `/catalog/attributes[/id]` and `/catalog/detail-locations`; `/catalog/categories` is its own href. No frontend runner, covered by `pnpm types:check`.
+- Manual checks PENDING for the human at 375/768/1280 px: tabs wrap, DataTable card view of attributes/values, color swatch, ColorPicker in the value form, checkbox group filter in the offered colors editor, dialog close on a rejected deactivation, "Catálogo" highlight on every section.
