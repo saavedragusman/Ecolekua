@@ -4,6 +4,7 @@ use App\Http\Controllers\Audit\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
@@ -53,6 +54,13 @@ Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->
 Route::post('/customers/{customer}/activate', [CustomerStatusController::class, 'activate'])->name('customers.activate');
 Route::post('/customers/{customer}/deactivate', [CustomerStatusController::class, 'deactivate'])->name('customers.deactivate');
 Route::put('/customers/{customer}/advisor', [CustomerAdvisorController::class, 'update'])->name('customers.advisor.update');
+
+// Catalog (spec 003, PRD-001). Authorization lives in CatalogPolicy; categories are never deleted.
+Route::post('/catalog/categories', [CategoryController::class, 'store'])->name('catalog.categories.store');
+Route::put('/catalog/categories/{category}', [CategoryController::class, 'update'])->name('catalog.categories.update');
+Route::post('/catalog/categories/{category}/move', [CategoryController::class, 'move'])->name('catalog.categories.move');
+Route::post('/catalog/categories/{category}/activate', [CategoryController::class, 'activate'])->name('catalog.categories.activate');
+Route::post('/catalog/categories/{category}/deactivate', [CategoryController::class, 'deactivate'])->name('catalog.categories.deactivate');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
