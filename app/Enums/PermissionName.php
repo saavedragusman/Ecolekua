@@ -3,7 +3,7 @@
 namespace App\Enums;
 
 /**
- * Permission catalog of spec 001 (section 9) and spec 002 (section 4). Copied into the `permissions` table by
+ * Permission catalog of spec 001 (section 9) and spec 002 (section 4) and spec 003 (section 4). Copied into the `permissions` table by
  * PermissionCatalogSeeder; code asks for permissions, never for role names.
  */
 enum PermissionName: string
@@ -24,6 +24,12 @@ enum PermissionName: string
     case CustomersDelete = 'customers.delete';
     case CustomersAssign = 'customers.assign';
     case CustomersPortfolio = 'customers.portfolio';
+    case ProductsView = 'products.view';
+    case ProductsCreate = 'products.create';
+    case ProductsUpdate = 'products.update';
+    case ProductsDeactivate = 'products.deactivate';
+    case ProductsDelete = 'products.delete';
+    case ProductsCatalog = 'products.catalog';
 
     /**
      * Spanish description stored in `permissions.description`.
@@ -47,6 +53,12 @@ enum PermissionName: string
             self::CustomersDelete => 'Eliminar clientes sin historial',
             self::CustomersAssign => 'Asignar y reasignar la asesora de un cliente',
             self::CustomersPortfolio => 'Poder tener cartera: ser asesora asignada de clientes',
+            self::ProductsView => 'Ver categorías, atributos, productos, combinaciones y combos',
+            self::ProductsCreate => 'Registrar productos, combinaciones y combos',
+            self::ProductsUpdate => 'Editar productos, combinaciones, combos, detalles, personalizaciones, parámetros de stock, imagen y plantillas del producto',
+            self::ProductsDeactivate => 'Desactivar y reactivar productos, combinaciones y combos',
+            self::ProductsDelete => 'Eliminar productos, combinaciones y combos sin historial',
+            self::ProductsCatalog => 'Gestionar categorías, atributos y sus valores, y ubicaciones de detalle, incluidos sus tonos, imágenes y capas',
         };
     }
 }
