@@ -1,13 +1,21 @@
 <?php
 
+use App\Actions\Products\CreateCategory;
+use App\Actions\Products\MoveCatalogItem;
+use App\Actions\Products\UpdateCategory;
 use App\Enums\AuditAction;
 use App\Enums\CatalogStatus;
 use App\Enums\PermissionName;
+use App\Models\AttributeValue;
 use App\Models\AuditLog;
+use App\Models\CatalogAttribute;
+use App\Models\DetailLocation;
 use App\Models\ProductCategory;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Validation\ValidationException;
 
 function catalogManager(): User
 {
@@ -92,6 +100,62 @@ it('PRD-001 renames a category and audits only the changed fields', function () 
         ->and($audit->new_values)->toEqual(['name' => 'Camisas y blusas']);
 });
 
+it('R3-004 requires a name of at most 100 characters when renaming', function (mixed $name) {
+    $category = ProductCategory::factory()->create(['name' => 'Camisas']);
+
+    $this->actingAs(catalogManager())
+        ->putJson("/catalog/categories/{$category->id}", ['name' => $name])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['name']);
+
+    expect($category->fresh()->name)->toBe('Camisas')
+        ->and(catalogAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+})->with(['missing' => [null], 'blank' => ['   '], 'too long' => [str_repeat('a', 101)]]);
+
+it('R3-003 CreateCategory turns a unique-index violation into a name validation error', function () {
+    ProductCategory::factory()->create(['name' => 'Camisas']);
+
+    try {
+        app(CreateCategory::class)->handle(['name' => 'camisas'], catalogManager());
+        $this->fail('Expected a ValidationException.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors())->toHaveKey('name');
+    }
+
+    expect(ProductCategory::query()->count())->toBe(1)
+        ->and(catalogAuditRows(AuditAction::CatalogCreated))->toHaveCount(0);
+});
+
+it('R3-003 UpdateCategory turns a unique-index violation into a name validation error', function () {
+    ProductCategory::factory()->create(['name' => 'Camisas']);
+    $other = ProductCategory::factory()->create(['name' => 'Pantalones']);
+
+    try {
+        app(UpdateCategory::class)->handle($other, ['name' => 'CAMISAS'], catalogManager());
+        $this->fail('Expected a ValidationException.');
+    } catch (ValidationException $exception) {
+        expect($exception->errors())->toHaveKey('name');
+    }
+
+    expect($other->fresh()->name)->toBe('Pantalones')
+        ->and(catalogAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
+it('scopeSearch treats % and _ literally in every catalog model', function (string $model) {
+    $model::factory()->create(['name' => '100% algodón']);
+    $model::factory()->create(['name' => '100 X algodón']);
+    $model::factory()->create(['name' => 'tela_azul']);
+    $model::factory()->create(['name' => 'tela azul']);
+
+    expect($model::query()->search('100%')->pluck('name')->all())->toBe(['100% algodón'])
+        ->and($model::query()->search('tela_a')->pluck('name')->all())->toBe(['tela_azul']);
+})->with([
+    'categories' => ProductCategory::class,
+    'attributes' => CatalogAttribute::class,
+    'values' => AttributeValue::class,
+    'detail locations' => DetailLocation::class,
+]);
+
 it('PRD-001 writes no audit when an edit changes nothing', function () {
     $category = ProductCategory::factory()->create(['name' => 'Camisas']);
 
@@ -173,6 +237,68 @@ it('PRD-001 treats moving the first row up or the last row down as a no-op witho
     expect($first->fresh()->sort_order)->toBe(1)
         ->and($last->fresh()->sort_order)->toBe(2)
         ->and(catalogAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
+/**
+ * @return list<int>
+ */
+function categoryIdsInOrder(): array
+{
+    return ProductCategory::query()->orderBy('sort_order')->orderBy('id')->pluck('id')->all();
+}
+
+it('R3-001 moves a category up past a neighbor that shares its sort order', function () {
+    $first = ProductCategory::factory()->create(['sort_order' => 5]);
+    $second = ProductCategory::factory()->create(['sort_order' => 5]);
+    $third = ProductCategory::factory()->create(['sort_order' => 9]);
+
+    $this->actingAs(catalogManager())
+        ->postJson("/catalog/categories/{$second->id}/move", ['direction' => 'up'])
+        ->assertRedirect();
+
+    expect(categoryIdsInOrder())->toBe([$second->id, $first->id, $third->id])
+        ->and(catalogAuditRows(AuditAction::CatalogUpdated))->toHaveCount(2);
+});
+
+it('R3-001 moves a category down past a neighbor that shares its sort order', function () {
+    $first = ProductCategory::factory()->create(['sort_order' => 2]);
+    $second = ProductCategory::factory()->create(['sort_order' => 5]);
+    $third = ProductCategory::factory()->create(['sort_order' => 5]);
+
+    $this->actingAs(catalogManager())
+        ->postJson("/catalog/categories/{$second->id}/move", ['direction' => 'down'])
+        ->assertRedirect();
+
+    expect(categoryIdsInOrder())->toBe([$first->id, $third->id, $second->id]);
+});
+
+it('R3-001 keeps the first and last rows as no-ops when every row ties', function () {
+    $first = ProductCategory::factory()->create(['sort_order' => 3]);
+    $last = ProductCategory::factory()->create(['sort_order' => 3]);
+    $actor = catalogManager();
+
+    $this->actingAs($actor)->postJson("/catalog/categories/{$first->id}/move", ['direction' => 'up'])->assertRedirect();
+    $this->actingAs($actor)->postJson("/catalog/categories/{$last->id}/move", ['direction' => 'down'])->assertRedirect();
+
+    expect(categoryIdsInOrder())->toBe([$first->id, $last->id])
+        ->and(catalogAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
+it('R3-002 locks every row of the scope in one query ordered by id', function () {
+    $first = ProductCategory::factory()->create(['sort_order' => 1]);
+    ProductCategory::factory()->create(['sort_order' => 2]);
+
+    $locks = [];
+    DB::listen(function ($query) use (&$locks): void {
+        if (str_contains(strtolower($query->sql), 'for update')) {
+            $locks[] = strtolower($query->sql);
+        }
+    });
+
+    app(MoveCatalogItem::class)->handle($first, MoveCatalogItem::DOWN, catalogManager());
+
+    expect($locks)->toHaveCount(1)
+        ->and($locks[0])->toContain('order by `id`');
 });
 
 it('PRD-001 rejects a move direction other than up or down', function () {
