@@ -139,3 +139,43 @@ RED evidence was captured for all three test files in this run. Not captured: a 
 - The unique-index race is caught outside the transaction and only converted when the message names `customers_document_unique`.
 - Duplicate-phone finder lives as a private method of `CreateCustomer`; extraction for `UpdateCustomer` is a 4.3 decision.
 - Authored diff about 1,075 lines (3a about 790, 3b about 285), mostly tests: `size:exception` recommended for PR 3.
+
+## Phase 4 (PR 4): Update backend — COMPLETE (6/6 tasks, units 4a + 4b)
+
+Branch: `feat/002-customers-4-update` (from `feat/002-customers-3-create` at c26a695). Changes left in the working tree; no commit made.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-----|-----|-----|
+| 4.1 (a) create-side rethrow | `CreateCustomerTest` | Feature | `tests/Feature/Customers` 117/117 | PASSED IMMEDIATELY by construction (backfill of Phase 3 behavior, as the task states) | 1/1 | mocked audit throws a unique violation on another index | none |
+| 4.1/4.2 | `tests/Feature/Customers/UpdateCustomerTest.php` | Feature (HTTP + Action) | 117/117 | 23 tests, 0 passed (21 x 404, 2 errors: `UpdateCustomer` missing; the update-side rethrow test failed with `BindingResolutionException`) | 23/23 (111 assertions) | E-05 x3 (phone diff, no-change, multi-field diff), E-13 x4 (other doc, own doc in other form, race, rethrow), E-16 x3, E-17 x2, E-23 x2, E-24 x2, E-38, CLI-007, E-03, CLI-008 x2 (+3 mandatory fields) | 4.3 below |
+| 4.3 | - | - | 141/141 Customers suite | - | green after extraction | - | duplicate-phone finder, document normalization and unique-index race conversion moved to `Concerns\WritesCustomers` (trait), used by both Actions; Actions stay separate |
+| 4.4 (dates) | `tests/Feature/Customers/CommemorativeDatesTest.php` | Feature (HTTP) | - | PASSED IMMEDIATELY by construction (13/13): the rules from 2b and the wiring of 4a already cover E-20/E-21/E-22; no gap found in `CustomerRules` | 13/13 (56 assertions) | natural+company, null clears, 4 impossible dates, 29 Feb both dates, anniversary company vs natural, 4 half dates | none |
+| 4.4/4.5 (phone) | `DuplicateDetectionTest.php` (extended) | Feature (HTTP) | 10/10 | 15 tests: 2 failed (E-14 edit warning: 302 instead of 422; Inertia flash redirect), 3 passed by construction (confirm=true, DEC-CLI-27 no-warning on unchanged phone, own/contact phones) | 15/15 (75 assertions) | change warns, confirm saves, Inertia flash, unchanged phone no warning, contact phones and self never match | none |
+
+### Work Unit Evidence
+
+| Evidence | Unit 4a | Unit 4b |
+|---|---|---|
+| Focused test | `sail pest tests/Feature/Customers/UpdateCustomerTest.php`: 23 passed | `CommemorativeDatesTest`: 13 passed; `DuplicateDetectionTest`: 15 passed |
+| Runtime harness | `sail artisan route:list --name=customers.update`: `PUT customers/{customer} customers.update › Customers\CustomerController@update` | N/A: HTTP feature tests |
+| Rollback boundary | `UpdateCustomer`, `UpdateCustomerRequest`, controller `update`, route, `Concerns\WritesCustomers` + the `CreateCustomer` edits that use it, `updateCustomerPayload()` in `tests/Pest.php`, `UpdateCustomerTest`, the create-side rethrow test | phone check and `confirmDuplicatePhone` argument in `UpdateCustomer`/controller, `CommemorativeDatesTest`, the `(edit)` tests in `DuplicateDetectionTest` |
+
+### Slice-close gate (observed)
+- `sail pest --filter="E-05|E-13|E-16|E-17|E-23|E-24|E-38|CLI-007|E-20|E-21|E-22|E-14"`: 83 passed (341 assertions)
+- `sail artisan test`: 524 passed, 2303 assertions
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors
+- `sail pnpm types:check`: vue-tsc clean
+- `sail pnpm build`: built OK
+
+### Deviations / decisions
+- `UpdateCustomer::handle(Customer, array, User, bool $confirmDuplicatePhone = false)` returns the row locked and reloaded (a fresh instance), not the instance passed in.
+- 4a was built without the phone check and 4b added it, so the units are separable at the behavior level, but the hunks share `UpdateCustomer.php`, `CustomerController.php` (the `confirm_duplicate_phone` argument) and the new files: a clean per-unit commit needs `git add -p`. A single commit for the phase is recommended.
+- Moved the shared helpers of `CreateCustomer` into a trait (`Concerns/WritesCustomers`) in the same step as writing `UpdateCustomer`, so there was no separate GREEN-with-duplication state; the Create tests stayed green (141/141).
+- `updateCustomerPayload()` lives in `tests/Pest.php` so `DuplicateDetectionTest` runs alone.
+- Missing `contact`/`address` keys in an update payload mean "none" (full-replace), per Decision 9; a natural customer's anniversary and contact are cleaned by the Action even if a caller sends them.
+- `customers.show` is still a fixed URL in the redirect (task 5.6 swaps it).
+- The Phase 3 rethrow tests mock `RecordAuditEvent` to throw a unique violation on a different index (no real second unique index is reachable from the Action).
+- Authored diff about 1,050 lines (new files 841 plus about 158 added and 55 removed in tracked files), roughly 65% tests: `size:exception` recommended for PR 4 (4a about 700, 4b about 350).

@@ -3,13 +3,12 @@
 namespace App\Actions\Customers;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Customers\Concerns\WritesCustomers;
 use App\Enums\AuditAction;
 use App\Enums\CustomerStatus;
-use App\Enums\DocumentType;
 use App\Exceptions\DuplicatePhoneWarning;
 use App\Models\Customer;
 use App\Models\User;
-use App\Support\Customers\DocumentNumber;
 use App\Support\Customers\PhoneNumber;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +22,7 @@ use Illuminate\Validation\ValidationException;
  */
 class CreateCustomer
 {
-    private const DOCUMENT_UNIQUE_INDEX = 'customers_document_unique';
+    use WritesCustomers;
 
     public function __construct(private readonly RecordAuditEvent $audit) {}
 
@@ -38,14 +37,7 @@ class CreateCustomer
         try {
             return DB::transaction(fn (): Customer => $this->create($data, $actor, $confirmDuplicatePhone));
         } catch (UniqueConstraintViolationException $exception) {
-            // A race that passed validation and hit the unique index reads as the validation error (CLI-012).
-            if (! str_contains($exception->getMessage(), self::DOCUMENT_UNIQUE_INDEX)) {
-                throw $exception;
-            }
-
-            throw ValidationException::withMessages([
-                'document_number' => __('validation.customer_document_unique'),
-            ]);
+            $this->rethrowDocumentRaceAsValidationError($exception);
         }
     }
 
@@ -107,47 +99,6 @@ class CreateCustomer
         );
 
         return $customer;
-    }
-
-    /**
-     * Other customers, active or inactive, with the same main phone. Contact-person phones are
-     * never compared (DEC-CLI-27). Nothing has been written when this throws.
-     */
-    private function warnAboutDuplicatePhone(string $phone): void
-    {
-        $matches = array_values(Customer::query()
-            ->where('phone', $phone)
-            ->orderBy('name')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (Customer $other): array => [
-                'id' => $other->id,
-                'name' => $other->name,
-                'document' => $other->document_type === null || $other->document_number === null
-                    ? null
-                    : DocumentNumber::display($other->document_type, $other->document_number),
-                'status' => $other->status->value,
-                'status_label' => $other->status->label(),
-            ])
-            ->all());
-
-        if ($matches !== []) {
-            throw new DuplicatePhoneWarning($matches);
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    private function normalizedDocument(array $data): ?string
-    {
-        $type = $data['document_type'] ?? null;
-
-        if ($type === null || ! isset($data['document_number'])) {
-            return null;
-        }
-
-        return DocumentNumber::normalize(DocumentType::from($type), $data['document_number']);
     }
 
     /**

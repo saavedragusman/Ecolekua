@@ -8,6 +8,7 @@ use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\CustomerContact;
+use App\Support\Customers\DocumentNumber;
 
 /**
  * Phone stored by the factory below and the several ways of typing it (design Decision 4).
@@ -177,4 +178,82 @@ it('DEC-CLI-27 does not compare the contact phone of the new customer against ma
     ]))->assertRedirect();
 
     expect(Customer::query()->where('name', 'Cliente nuevo')->sole()->contact?->phone)->toBe('+582125551234');
+});
+
+it('E-14 (edit) warns when the phone changes to one another customer already has, and writes nothing', function () {
+    $actor = userWithPermissions(PermissionName::CustomersUpdate);
+    $existing = Customer::factory()->withDocument()->create(['name' => 'Cliente existente', 'phone' => DUPLICATE_STORED_PHONE]);
+    $customer = Customer::factory()->create(['phone' => '+584169999999', 'name' => 'Sin cambios']);
+
+    $this->actingAs($actor)
+        ->putJson("/customers/{$customer->id}", updateCustomerPayload($customer, ['phone' => DUPLICATE_TYPED_PHONE, 'name' => 'Cambio pendiente']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['confirm_duplicate_phone'])
+        ->assertJsonPath('errors.confirm_duplicate_phone.0', 'Este teléfono ya está registrado en otro cliente. Revise las coincidencias y confirme si desea guardar de todos modos.')
+        ->assertJsonCount(1, 'duplicate_phone_matches')
+        ->assertJsonPath('duplicate_phone_matches.0.id', $existing->id)
+        ->assertJsonPath('duplicate_phone_matches.0.document', DocumentNumber::display($existing->document_type, $existing->document_number));
+
+    expect($customer->fresh()->phone)->toBe('+584169999999')
+        ->and($customer->fresh()->name)->toBe('Sin cambios')
+        ->and(AuditLog::query()->where('action', AuditAction::CustomerUpdated->value)->count())->toBe(0);
+});
+
+it('E-14 (edit) saves the same change once confirm_duplicate_phone is true', function () {
+    $actor = userWithPermissions(PermissionName::CustomersUpdate);
+    Customer::factory()->inactive()->create(['phone' => DUPLICATE_STORED_PHONE]);
+    $customer = Customer::factory()->create(['phone' => '+584169999999']);
+
+    $this->actingAs($actor)
+        ->putJson("/customers/{$customer->id}", updateCustomerPayload($customer, ['phone' => DUPLICATE_TYPED_PHONE, 'confirm_duplicate_phone' => true]))
+        ->assertRedirect();
+
+    expect($customer->fresh()->phone)->toBe(DUPLICATE_STORED_PHONE)
+        ->and(AuditLog::query()->where('action', AuditAction::CustomerUpdated->value)->sole()->new_values)->toEqual(['phone' => DUPLICATE_STORED_PHONE]);
+});
+
+it('E-14 (edit) flashes the matches and goes back with the error on an Inertia submission', function () {
+    $actor = userWithPermissions(PermissionName::CustomersUpdate);
+    $existing = Customer::factory()->create(['phone' => DUPLICATE_STORED_PHONE, 'name' => 'Cliente existente']);
+    $customer = Customer::factory()->create(['phone' => '+584169999999']);
+
+    $this->actingAs($actor)
+        ->from("/customers/{$customer->id}/edit")
+        ->put("/customers/{$customer->id}", updateCustomerPayload($customer, ['phone' => DUPLICATE_TYPED_PHONE]))
+        ->assertRedirect("/customers/{$customer->id}/edit")
+        ->assertSessionHasErrors(['confirm_duplicate_phone'])
+        ->assertInertiaFlash('duplicatePhoneMatches', [[
+            'id' => $existing->id,
+            'name' => 'Cliente existente',
+            'document' => null,
+            'status' => 'active',
+            'status_label' => 'Activo',
+        ]]);
+
+    expect($customer->fresh()->phone)->toBe('+584169999999');
+});
+
+it('DEC-CLI-27 (edit) saves other data without a warning when the phone is not changed, even if another customer shares it', function () {
+    $actor = userWithPermissions(PermissionName::CustomersUpdate);
+    Customer::factory()->create(['phone' => DUPLICATE_STORED_PHONE]);
+    $customer = Customer::factory()->create(['phone' => DUPLICATE_STORED_PHONE, 'notes' => null]);
+
+    $this->actingAs($actor)
+        ->putJson("/customers/{$customer->id}", updateCustomerPayload($customer, ['notes' => 'Nota nueva', 'phone' => DUPLICATE_TYPED_PHONE]))
+        ->assertRedirect();
+
+    expect($customer->fresh()->notes)->toBe('Nota nueva');
+});
+
+it('DEC-CLI-27 (edit) never matches the customer being edited nor contact-person phones', function () {
+    $actor = userWithPermissions(PermissionName::CustomersUpdate);
+    $company = Customer::factory()->company()->create(['phone' => '+584169999999']);
+    CustomerContact::factory()->for($company)->create(['phone' => DUPLICATE_STORED_PHONE]);
+    $customer = Customer::factory()->create(['phone' => '+584168888888']);
+
+    $this->actingAs($actor)
+        ->putJson("/customers/{$customer->id}", updateCustomerPayload($customer, ['phone' => DUPLICATE_TYPED_PHONE]))
+        ->assertRedirect();
+
+    expect($customer->fresh()->phone)->toBe(DUPLICATE_STORED_PHONE);
 });

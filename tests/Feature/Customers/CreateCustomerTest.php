@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Customers\CreateCustomer;
 use App\Enums\AuditAction;
 use App\Enums\CustomerStatus;
@@ -11,6 +12,7 @@ use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\CustomerContact;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
 
 function customerCreator(PermissionName ...$extra): User
@@ -211,6 +213,25 @@ it('E-13 turns a unique-index race on the document into the same validation erro
 
     expect(Customer::query()->count())->toBe(1)
         ->and(AuditLog::query()->where('action', AuditAction::CustomerCreated->value)->count())->toBe(0);
+});
+
+it('E-13 rethrows a unique violation on any index other than the document one instead of converting it', function () {
+    $actor = customerCreator();
+
+    // Backfill of the Phase 3 conversion rule: only `customers_document_unique` reads as a validation error.
+    $violation = new UniqueConstraintViolationException(
+        'mysql',
+        'insert into `customers` (...) values (...)',
+        [],
+        new Exception("Duplicate entry 'x' for key 'customers.some_other_unique'"),
+    );
+
+    $this->mock(RecordAuditEvent::class, fn ($mock) => $mock->shouldReceive('handle')->andThrow($violation));
+
+    expect(fn () => app(CreateCustomer::class)->handle(createCustomerPayload(), $actor))
+        ->toThrow(UniqueConstraintViolationException::class);
+
+    expect(Customer::query()->count())->toBe(0);
 });
 
 it('E-25 makes a creator with customers.portfolio the advisor of the new customer', function () {

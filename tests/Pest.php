@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\PermissionName;
+use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Cookie\CookieValuePrefix;
@@ -64,6 +65,38 @@ function createCustomerPayload(array $overrides = []): array
         'type' => 'natural',
         'name' => 'Cliente de prueba',
         'phone' => '0414-123.45.67',
+        ...$overrides,
+    ];
+}
+
+/**
+ * Complete state of a customer as the edit form sends it for `PUT /customers/{customer}`
+ * (the contact person and the address are replaced, so the whole state travels).
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function updateCustomerPayload(Customer $customer, array $overrides = []): array
+{
+    $customer->loadMissing(['contact', 'address']);
+
+    return [
+        'type' => $customer->type->value,
+        'name' => $customer->name,
+        'document_type' => $customer->document_type?->value,
+        'document_number' => $customer->document_number,
+        'phone' => $customer->phone,
+        'email' => $customer->email,
+        'birthday_day' => $customer->birthday_day,
+        'birthday_month' => $customer->birthday_month,
+        'anniversary_day' => $customer->anniversary_day,
+        'anniversary_month' => $customer->anniversary_month,
+        'notes' => $customer->notes,
+        'contact' => $customer->contact?->only(['name', 'position', 'phone', 'email']),
+        'address' => $customer->address === null ? null : [
+            ...$customer->address->only(['line', 'city', 'reference']),
+            'state' => $customer->address->state->value,
+        ],
         ...$overrides,
     ];
 }
