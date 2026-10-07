@@ -121,7 +121,7 @@ Categoría                         (Camisas, Línea escolar, Restaurantes, Paña
 
 Atributo                          (Tela, Modelo, Manga, Género, Talla, Color, Tipo de prenda…)  DEC-PRD-03
  ├── presentación                 (texto | imagen | color)  DEC-PRD-30
- ├── atributo de tela             (sí | no; como máximo uno en el catálogo)  DEC-PRD-32
+ ├── uso especial                 (Tela | Talla | Género | ninguno; como máximo uno de cada uso)  DEC-PRD-32, DEC-PRD-49
  └── Valor                        (ALG-OXF PIMA, Columbia especial, Manga corta, 3XG, Azul marino…)
       └── nombre, orden, descripción opcional (p. ej., "40 a 60 kg"), estado,
           tono de referencia      (obligatorio si la presentación es "color")  DEC-PRD-17
@@ -135,7 +135,7 @@ Ubicación de detalle              (Pechera, Orilla de pechera, Orilla de mangas
 Producto                          (Camisa corporativa)
  ├── nombre, descripción, categoría, línea de negocio (uniformes | pañales)  DEC-PRD-26
  ├── modo de abastecimiento       (bajo pedido | stock con mínimo | stock agotable | servicio)  DEC-PRD-09
- ├── stock mínimo por artículo    (solo modo "stock con mínimo")  DEC-PRD-10
+ ├── stock mínimo por defecto     (solo modo "stock con mínimo"; valor propio opcional por artículo)  DEC-PRD-10, DEC-PRD-46
  ├── admite color personalizado  (sí | no; solo modo "bajo pedido" con color)  DEC-PRD-34
  ├── visible en el portal         DEC-PRD-19
  ├── imagen principal             DEC-PRD-20
@@ -172,7 +172,7 @@ Combo                             (Kit Oro antiderrame…)  DEC-PRD-12
 
 ### PRD-001 — Categorías
 
-Un usuario con `products.catalog` puede crear, editar, ordenar, desactivar y reactivar categorías. Cada producto pertenece a **una** categoría (DEC-PRD-18). Una categoría inactiva no se muestra en el portal. Las categorías no se eliminan; se desactivan.
+Un usuario con `products.catalog` puede crear, editar, ordenar, desactivar y reactivar categorías. Cada producto pertenece a **una** categoría (DEC-PRD-18). Una categoría inactiva no se muestra en el portal. Las categorías no se eliminan; se desactivan. El nombre de una categoría es único, sin distinguir mayúsculas (DEC-PRD-45).
 
 ### PRD-002 — Catálogo de atributos y valores
 
@@ -180,17 +180,19 @@ Un usuario con `products.catalog` puede crear atributos y sus valores, editarlos
 
 - Cada valor tiene nombre, orden y una descripción opcional (p. ej., la talla 3XG con "40 a 60 kg").
 - El nombre de un atributo es único. El nombre de un valor es único dentro de su atributo.
-- Cada atributo indica su presentación: **texto**, **imagen** o **color** (DEC-PRD-30). Un producto declara como máximo un atributo de presentación "color": el color de la prenda.
+- Cada atributo indica su presentación: **texto**, **imagen** o **color** (DEC-PRD-30). El catálogo tiene como máximo un atributo de presentación "color": la paleta de Ecolekua, de la que salen el color de la prenda, los colores ofrecidos en cada tela y los colores de los detalles (DEC-PRD-38).
 - Cada valor de un atributo de presentación "color" tiene, además del nombre, un **tono de referencia** que el usuario elige con un selector de colores; el sistema lo guarda como código hexadecimal. El backend rechaza un valor sin tono o con un tono inválido. El tono es una referencia visual: el color real es el de la tela disponible con ese nombre (DEC-PRD-17).
+- **Atributos en uso (DEC-PRD-51).** Desactivar un atributo se rechaza mientras algún producto activo lo declare, e indica cuáles. Un atributo inactivo no se puede declarar en un producto, y un producto que declara un atributo inactivo no se puede seleccionar. Cambiar la presentación o el uso especial de un atributo se rechaza mientras algún producto lo declare.
 - Los atributos, los valores y las ubicaciones de detalle no se eliminan; se desactivan. Un valor inactivo no se ofrece en selecciones nuevas, las combinaciones y combos que lo usan como eje dejan de ofrecerse, y las cotizaciones y pedidos existentes lo conservan.
 - El nombre de un valor se puede editar para corregir erratas. El cambio se refleja en todas las combinaciones que lo usan y queda auditado. Para una tela o un color distinto se crea un valor nuevo.
 - Un atributo puede marcarse como **atributo de tela** (DEC-PRD-32). Cada valor de ese atributo tiene la lista de **colores que Ecolekua ofrece** en esa tela, elegidos entre los valores activos del atributo de color. Son los colores que se ofrecen aunque haya que comprar la tela, no solo los que hay en stock. El catálogo tiene como máximo un atributo de tela.
+- **Uso especial (DEC-PRD-49).** Un atributo puede tener un uso especial: **Tela**, **Talla** o **Género**, con como máximo un atributo de cada uso en el catálogo. La marca de tela anterior es el uso "Tela". El uso "Talla" identifica la talla del artículo de stock (PRD-009) y el uso "Género" identifica qué plantilla aplica cuando el corte cambia por género (PRD-020). La carga inicial asigna los usos a Tela, Talla y Género, y se pueden editar en el catálogo con `products.catalog`.
 - Después de la carga inicial, los colores y los colores ofrecidos en cada tela se gestionan desde el ERP con `products.catalog`: crear un color, editar su nombre o tono, desactivarlo, y agregarlo o quitarlo de la lista de una tela. Quitar un color de una tela solo afecta a las selecciones nuevas; las cotizaciones y pedidos existentes lo conservan. Cada cambio queda auditado.
 - La carga inicial crea los atributos Tela (atributo de tela), Modelo, Manga, Género y Talla con los valores de la lista actual, y el atributo Color, de presentación "color", con la paleta validada por Ecolekua y los colores ofrecidos en cada tela (PRD-018).
 
 ### PRD-003 — Registrar producto
 
-Un usuario con `products.create` registra un producto con **nombre**, **categoría**, **línea de negocio** y **modo de abastecimiento**. La descripción y la visibilidad en el portal son opcionales. El producto se crea **activo** y la acción queda auditada.
+Un usuario con `products.create` registra un producto con **nombre**, **categoría**, **línea de negocio** y **modo de abastecimiento**. La descripción y la visibilidad en el portal son opcionales. El producto se crea **activo** y la acción queda auditada. El nombre de un producto es único en todo el catálogo, sin distinguir mayúsculas (DEC-PRD-45).
 
 ### PRD-004 — Atributos del producto
 
@@ -199,11 +201,12 @@ El producto declara qué atributos usa, con qué rol y qué valores admite (DEC-
 - **Eje**: define la combinación comercial y su código. Ejemplo: en la camisa corporativa, tela, modelo, manga y género; en los pañales de adulto, talla.
 - **De pedido**: se elige al cotizar o pedir y no cambia el código. Ejemplo: talla y color en la camisa corporativa.
 - Un atributo aparece una sola vez en el producto y con un solo rol.
+- Si el producto declara el atributo de tela, lo declara como eje. El atributo de color, cuando se declara, es siempre de pedido. El backend rechaza otro rol (DEC-PRD-50).
 - El producto define el **orden de sus ejes** (p. ej., Tela → Modelo → Manga → Género). Es el orden de los pasos del cotizador (PRD-019).
-- Cada atributo declarado admite al menos un valor activo.
+- Cada atributo declarado admite al menos un valor activo, salvo el color de un producto que declara el atributo de tela, que no guarda valores admitidos (DEC-PRD-35).
 - Todo atributo declarado es obligatorio al seleccionar el producto (PRD-011).
 - Los colores de la prenda son una lista cerrada (DEC-PRD-17):
-  - si el producto declara el atributo de tela, los colores disponibles son los que se ofrecen en la tela elegida y el producto no tiene lista propia;
+  - si el producto declara el atributo de tela, los colores disponibles son los que se ofrecen en la tela elegida y el producto no tiene lista propia: declara el color sin valores admitidos (DEC-PRD-35);
   - si el producto lleva color pero no declara el atributo de tela (p. ej., gorras), el producto tiene su propia lista de colores admitidos, que el equipo marca;
   - un producto sin color (p. ej., sublimación completa, pañales) no declara el atributo de color.
 - **Color personalizado (DEC-PRD-34).** Un producto de modo "bajo pedido" que lleva color admite además la opción **Personalizado**, al final de la lista de colores, salvo que el equipo la desactive en ese producto. Los productos de otros modos no la admiten.
@@ -211,7 +214,8 @@ El producto declara qué atributos usa, con qué rol y qué valores admite (DEC-
   - No es un color de la paleta ni pertenece a ninguna tela. Aplica solo al color de la prenda; los colores de los detalles siguen saliendo de la paleta (PRD-007).
   - Una selección con color personalizado requiere atención de una asesora: el pedido no se procesa desde la web y se habilita el botón de WhatsApp (§10).
 - Un producto puede no tener atributos (p. ej., lanyard corporativo: el cliente solo elige la cantidad).
-- No se puede retirar un atributo con rol de eje mientras existan combinaciones del producto, ni retirar un valor admitido que use alguna combinación o componente de combo. El backend rechaza el cambio e indica qué lo impide.
+- Mientras existan combinaciones del producto, no se puede agregar un eje ni cambiar el rol de un atributo (de pedido a eje o de eje a pedido). Para reestructurar, se crea un producto nuevo y se desactiva el anterior (DEC-PRD-41).
+- No se puede retirar un atributo con rol de eje mientras existan combinaciones del producto, ni retirar un valor admitido que use alguna combinación (como valor de eje o en la restricción de un atributo de pedido, DEC-PRD-37) o componente de combo. El backend rechaza el cambio e indica qué lo impide.
 
 ### PRD-005 — Combinaciones comerciales
 
@@ -219,6 +223,7 @@ Un usuario con `products.create` crea las combinaciones de un producto **de form
 
 - Cada combinación tiene un **código** que es **texto** (conserva ceros a la izquierda y sufijos: `088-1`, `001RN`) y es **único** en todo el catálogo, incluidos los códigos de combos (DEC-PRD-01, DEC-PRD-02).
 - Tiene uno o varios valores por cada eje del producto, elegidos entre los valores admitidos. Varios valores en un eje significan opciones bajo el mismo código y precio: `159-1` admite Tela Drill o Gabardina, y el cliente elige una (DEC-PRD-33).
+- Opcionalmente, restringe los valores de uno o varios atributos de pedido a un subconjunto de los admitidos por el producto. Por ejemplo, una combinación de dama admite solo las tallas XS a XL. Si un atributo de pedido no tiene restricción, la combinación admite todos los valores del producto. La restricción funciona igual que en los componentes de combo (PRD-010) y no aplica al color de un producto con tela, que sale de la tela elegida (DEC-PRD-35, DEC-PRD-36).
 - Dos combinaciones activas del mismo producto no pueden coincidir en ninguna selección posible: si comparten al menos un valor en todos sus ejes, el backend rechaza el guardado.
 - Un producto sin ejes tiene una sola combinación.
 - Un producto activo necesita al menos una combinación activa para mostrarse en el portal y aceptarse en cotizaciones.
@@ -227,6 +232,7 @@ Un usuario con `products.create` crea las combinaciones de un producto **de form
 
 Un producto puede declarar las ubicaciones de detalle que admite (pechera, orilla de pechera, orilla de mangas, pie de cuello). En cada ubicación, el cliente elige un color entre los valores activos del atributo de presentación "color" al cotizar o pedir.
 
+- El nombre de una ubicación de detalle es único, sin distinguir mayúsculas (DEC-PRD-45).
 - Los detalles son opcionales al seleccionar el producto.
 - Los detalles no afectan al precio y son una especificación para producción (DEC-PRD-07).
 - Los botones son transparentes y no se eligen (business rules §26).
@@ -237,8 +243,9 @@ Personalizaciones añadidas a la prenda e incluidas en ciertas combinaciones (DE
 
 - Un producto puede declarar qué productos de modo **servicio** admite como personalización añadida a la prenda (bordado pequeño o grande, vinil, sublimación sencilla).
 - Una combinación puede declarar personalizaciones **incluidas** en su precio. Por ejemplo, `119` "…/BORD/SUBLSENC", `158-4` "(1 BORDADO)" o `139-1` "C/VINIL". Una personalización incluida no se cobra de nuevo.
+- Las personalizaciones incluidas y las admitidas son independientes (DEC-PRD-47): "incluida" describe lo que cubre el precio de la combinación y "admitida" es lo que se puede agregar como extra. Por ejemplo, `139-1` (mono escolar "C/VINIL") incluye vinil sin que el producto ofrezca vinil adicional.
 - La cantidad, el precio y la relación con el pedido los definen `004` y `006`.
-- Qué servicios se venden también por sí solos (p. ej., sublimación sobre una prenda del cliente) está pendiente (DEC-PRD-28).
+- Un servicio activo y visible en el portal se vende también por sí solo (p. ej., sublimación sobre una prenda del cliente) (DEC-PRD-28).
 
 ### PRD-009 — Modo de abastecimiento y stock mínimo
 
@@ -252,6 +259,9 @@ Cada producto tiene uno de estos modos (DEC-PRD-09):
 | Servicio | No es una prenda ni tiene stock propio | Bordados, vinil, sublimación, planchado |
 
 - El **stock mínimo** solo existe en el modo "stock con mínimo". Es un entero ≥ 0 y se aplica **por artículo de stock**, es decir, por combinación más la talla cuando el producto la tiene como atributo de pedido (DEC-PRD-10).
+- **Mínimo por defecto y excepciones (DEC-PRD-46).** En el modo "stock con mínimo", el producto tiene un **mínimo por defecto obligatorio**. Al registrarlo, el formulario propone 6. Cada artículo de stock hereda ese valor y puede tener un **valor propio opcional** que lo reemplaza.
+  - Al cambiar el producto a otro modo, se borran el mínimo por defecto y los valores propios, con auditoría de los valores anteriores.
+  - Al volver al modo "stock con mínimo", se pide de nuevo el mínimo por defecto. Los valores propios anteriores no se recuperan.
 - Valor inicial: **6** para productos terminados y **2 por talla** para pantalones industriales (business rules §27).
 - El backend rechaza un stock mínimo en productos de otros modos.
 - Las existencias y los movimientos son de `008`. La forma de aplicar el mínimo en el portal y en los pedidos es de `005` / `006` (DEC-PRD-11, §10).
@@ -260,10 +270,11 @@ Cada producto tiene uno de estos modos (DEC-PRD-09):
 
 Un usuario con `products.create` registra combos de la línea de pañales (DEC-PRD-12), por ejemplo "Kit Oro antiderrame": 2 pañales, 3 absorbentes y 1 protector de cama.
 
-- Cada componente indica un **producto**, la **cantidad** (entero ≥ 1) y, opcionalmente, qué valores admite en cada eje del producto. El usuario los marca al registrar el combo. Por ejemplo, al crear "Kit juvenil", el usuario marca solo la talla 2XG para el absorbente. Si en un eje no se marca ninguna restricción, se admiten todos sus valores activos. Si un eje queda con un solo valor admitido, el cliente no elige nada en ese eje y el sistema lo aplica directamente.
+- Cada componente indica un **producto**, la **cantidad** (entero ≥ 1) y, opcionalmente, qué valores admite en cada atributo del producto, sea eje o de pedido (DEC-PRD-44). En un atributo de pedido, el valor elegido debe respetar tanto la restricción del componente como la de la combinación resuelta, si la tiene (DEC-PRD-36). El usuario los marca al registrar el combo. Por ejemplo, al crear "Kit juvenil", el usuario marca solo la talla 2XG para el absorbente. Si en un eje no se marca ninguna restricción, se admiten todos sus valores activos. Si un eje queda con un solo valor admitido, el cliente no elige nada en ese eje y el sistema lo aplica directamente.
 - Al cotizar o pedir, el cliente elige los valores de cada componente dentro de lo admitido. La elección vale para todas las unidades del componente (DEC-PRD-12).
 - Solo se admiten componentes de productos que no sean de modo "servicio".
-- El combo tiene código propio, asignado por Ecolekua (DEC-PRD-14).
+- Los combos son siempre de la línea de pañales: solo admiten componentes de productos de esa línea y el backend rechaza cualquier otro. El combo no guarda la línea; es implícita (DEC-PRD-43).
+- El combo tiene código propio, asignado por Ecolekua (DEC-PRD-14). Su nombre es único, sin distinguir mayúsculas (DEC-PRD-45).
 - Un combo con algún componente que no se pueda resolver a una combinación activa (producto inactivo o todos sus valores admitidos inactivos) no se ofrece.
 - El precio de cada ítem dentro del combo y el total son de `004` (§10).
 
@@ -279,7 +290,7 @@ Reglas:
 
 1. El producto (o el combo) está activo, y también su categoría.
 2. Cada eje y cada atributo de pedido del producto tiene un valor, que está admitido y activo. El color, además, es uno de los ofrecidos en la tela elegida o, si el producto no declara el atributo de tela, uno de los admitidos por el producto. Si el color es **Personalizado**, el producto debe admitirlo y el tono debe ser un código de color válido.
-3. Existe **exactamente una** combinación activa cuyos valores de eje incluyen los elegidos. La selección normalizada guarda el valor elegido en cada eje, aunque la combinación admita varios.
+3. Existe **exactamente una** combinación activa cuyos valores de eje incluyen los elegidos. La selección normalizada guarda el valor elegido en cada eje, aunque la combinación admita varios. Si esa combinación restringe un atributo de pedido, el valor elegido está dentro de la restricción (DEC-PRD-36).
 4. Cada ubicación de detalle elegida está admitida y su color es un valor activo del atributo de presentación "color".
 5. En un combo, cada componente se resuelve con estas mismas reglas y sus valores respetan el subconjunto admitido.
 
@@ -291,6 +302,12 @@ Un usuario con `products.update` modifica productos, combinaciones, combos, deta
 
 El código y los valores de eje de una combinación con historial (cotizaciones, pedidos o movimientos de stock) no se modifican: se crea una combinación nueva y se desactiva la anterior (DEC-PRD-21). En `003` todavía no existe historial; cada spec que lo cree añade esta condición (§10).
 
+Ediciones que afectan a otros registros (DEC-PRD-52):
+
+- Cambiar la línea de negocio de un producto que es componente de un combo, o pasarlo a modo "servicio", se rechaza e indica los combos que lo usan.
+- Sacar del modo "servicio" un producto que otros productos admiten o que otras combinaciones incluyen como personalización se rechaza e indica cuáles lo usan. Lo mismo aplica a su eliminación (PRD-014).
+- Quitar una talla de los valores admitidos de un producto elimina los mínimos propios de esa talla (PRD-009), con auditoría de los valores anteriores. El bloqueo por existencias lo añade `008` (§10).
+
 ### PRD-013 — Desactivar y reactivar
 
 Un usuario con `products.deactivate` puede desactivar y reactivar productos, combinaciones y combos.
@@ -298,6 +315,7 @@ Un usuario con `products.deactivate` puede desactivar y reactivar productos, com
 - Desactivar requiere confirmación con `ConfirmDialog` (design system §7.10). Reactivar no la requiere.
 - Lo inactivo no se ofrece en el portal ni se acepta en cotizaciones o pedidos nuevos. Lo que ya esté en curso sigue su flujo (aplican `004` y `006`).
 - Desactivar un producto deja fuera de la oferta todas sus combinaciones sin cambiar el estado propio de cada una. Al reactivarlo, cada combinación vuelve a su estado anterior.
+- Reactivar una combinación que se superpone con otra combinación activa del mismo producto (PRD-005) se rechaza con un error que indica la combinación con la que coincide (DEC-PRD-40).
 - Cambiar al estado que ya se tiene no produce cambios ni auditoría, igual que en `001` y `002`.
 
 ### PRD-014 — Eliminación restringida
@@ -305,7 +323,7 @@ Un usuario con `products.deactivate` puede desactivar y reactivar productos, com
 Un usuario con `products.delete` puede eliminar un producto, una combinación o un combo **solo si no tienen historial**. El uso previsto es corregir registros creados por error o datos de prueba; lo que tiene historial se desactiva (AGENTS §7.9).
 
 - Eliminar un producto elimina sus atributos, detalles, personalizaciones y combinaciones en la misma transacción, siempre que ninguna combinación tenga historial ni forme parte de un combo.
-- No se puede eliminar un producto ni una combinación que forme parte de un combo.
+- No se puede eliminar un producto ni una combinación que forme parte de un combo. Una combinación forma parte de un combo cuando su producto es componente del combo y la combinación comparte al menos un valor en cada eje con los valores que admite el componente, es decir, cuando el cliente podría elegirla en ese combo (DEC-PRD-42).
 - La eliminación queda auditada con una copia de los valores eliminados.
 - En `003` todavía no existen registros de historial. `004`, `006` y `008` añaden su condición de bloqueo y su escenario (§10), con claves foráneas de restricción de borrado.
 
@@ -332,7 +350,7 @@ Se auditan el alta (incluida la importación), la edición, la desactivación, l
 
 El equipo técnico carga una única vez el catálogo existente mediante un comando de consola, sin pantalla en el ERP (DEC-PRD-24), siguiendo el patrón de CLI-018.
 
-- **Origen**: un CSV en UTF-8 preparado a partir de las hojas "Uniformes" y "Pañales para adultos" y validado por Ecolekua. Cada fila es una combinación e indica producto, categoría, línea, modo, stock mínimo, código, valores de eje, valores admitidos de los atributos de pedido y la descripción original de la lista. Los combos van en un segundo archivo con sus componentes. Un tercer archivo trae la paleta de colores (nombre y tono) y los colores ofrecidos en cada tela, preparado a partir del archivo de limpieza de telas y colores validado por Ecolekua. Las columnas se definen en `design.md`.
+- **Origen**: un CSV en UTF-8 preparado a partir de las hojas "Uniformes" y "Pañales para adultos" y validado por Ecolekua. Cada fila es una combinación e indica producto, categoría, línea, modo, stock mínimo, código, valores de eje, valores admitidos de los atributos de pedido y la descripción original de la lista. Cuando los valores de pedido de una fila son un subconjunto de los del producto, se cargan como restricción de esa combinación (DEC-PRD-36). El stock mínimo de cada fila es el mínimo por defecto del producto (DEC-PRD-46): si las filas de un mismo producto traen valores distintos, la carga se rechaza con fila, campo y motivo. Los valores propios por artículo se cargan después desde el ERP (DEC-PRD-48). Los combos van en un segundo archivo con sus componentes. Un tercer archivo trae la paleta de colores (nombre y tono) y los colores ofrecidos en cada tela, preparado a partir del archivo de limpieza de telas y colores validado por Ecolekua. Las columnas se definen en `design.md`.
 - **Normalización** (Anexo B): se unifican los nombres de telas y valores, y se aplican las correcciones confirmadas por Ecolekua. Los códigos se cargan tal como están.
 - Cada registro pasa por las mismas validaciones del alta (PRD-002 a PRD-010).
 - **Todo o nada**: el comando valida primero todas las filas, incluidos los códigos repetidos dentro del archivo. Si alguna falla, no importa nada y entrega un informe con fila, campo y motivo. Si todas son válidas, importa en una sola transacción.
@@ -346,10 +364,10 @@ El equipo técnico carga una única vez el catálogo existente mediante un coman
 El backend ofrece una operación de consulta, sin efectos, que el cotizador del ERP (`004`) y el del portal (`005`) usan para mostrar en cada paso solo las opciones que existen (DEC-PRD-31). Ningún frontend calcula estas opciones por su cuenta (AGENTS §7.1).
 
 - **Entrada**: producto (o combo y componente) y los valores de eje ya elegidos, en el orden de ejes del producto.
-- **Mientras falten ejes**: devuelve los valores activos del siguiente eje que llevan al menos a una combinación activa compatible con lo ya elegido. Una combinación con varios valores en un eje (DEC-PRD-33) aporta todos ellos. En un componente de combo, solo se devuelven los valores admitidos por el componente.
+- **Mientras falten ejes**: devuelve los valores activos del siguiente eje que llevan al menos a una combinación activa compatible con lo ya elegido. Una combinación con varios valores en un eje (DEC-PRD-33) aporta todos ellos. En un componente de combo, solo se devuelven los valores admitidos por el componente, tanto en los ejes como en las opciones de pedido (DEC-PRD-44).
 - **Con todos los ejes elegidos**: devuelve el código de la combinación y las opciones de pedido:
-  - colores: los ofrecidos en la tela elegida o, si el producto no declara tela, los admitidos por el producto; más la opción **Personalizado** si el producto la admite (PRD-004);
-  - valores admitidos de los demás atributos de pedido (p. ej., tallas);
+  - colores: los ofrecidos en la tela elegida o, si el producto no declara tela, los admitidos por el producto, o por la combinación si los restringe; más la opción **Personalizado** si el producto la admite (PRD-004);
+  - valores admitidos de los demás atributos de pedido (p. ej., tallas), por el producto o por la combinación si los restringe (DEC-PRD-36);
   - ubicaciones de detalle admitidas, con los colores de la paleta;
   - personalizaciones admitidas.
 - Cada opción incluye lo necesario para mostrarla: nombre, orden, descripción, imagen, tono de referencia y capa SVG (PRD-020).
@@ -380,6 +398,7 @@ Un usuario con `products.catalog` gestiona las imágenes y capas de los valores 
   4. exige la capa de cada valor admitido por el producto que tenga capa asignada y la de cada ubicación de detalle admitida. Si falta alguna, rechaza la plantilla e indica cuáles faltan.
 - Se rechaza un archivo que no sea un SVG válido, que supere el tamaño máximo definido en `design.md` o que esté asociado a un género que el producto no admite.
 - Si se añade al producto un valor o una ubicación cuya capa no existe en sus plantillas, el backend rechaza el cambio hasta que se suba una plantilla que la incluya.
+- Asignar o cambiar desde el catálogo la capa de un valor o de una ubicación que admiten productos con plantilla se rechaza si alguna de esas plantillas no tiene la capa, e indica los productos afectados (DEC-PRD-53).
 
 **Vista previa** (la dibuja `005`; el ERP la muestra al subir una plantilla)
 
@@ -425,8 +444,8 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 ### E-05 — Declarar atributos con su rol (PRD-004)
 
 - **GIVEN** el producto "Camisa corporativa"
-- **WHEN** declara Tela, Modelo, Manga y Género como ejes, y Talla y Color como atributos de pedido, cada uno con sus valores admitidos
-- **THEN** el producto guarda los seis atributos con su rol y sus valores
+- **WHEN** declara Tela, Modelo, Manga y Género como ejes, y Talla y Color como atributos de pedido; Tela, Modelo, Manga, Género y Talla con sus valores admitidos y Color sin valores admitidos
+- **THEN** el producto guarda los seis atributos con su rol, y los valores admitidos de todos salvo Color, cuyos colores salen de la tela elegida (DEC-PRD-35)
 
 ### E-06 — Atributo repetido en el producto (PRD-004)
 
@@ -723,6 +742,128 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 - **WHEN** se consultan las opciones del eje Tela
 - **THEN** Microfibra no aparece entre las opciones
 
+### E-54 — Combinación que restringe las tallas (PRD-005, PRD-011, PRD-019)
+
+- **GIVEN** un producto que admite las tallas XS a 3XL y una combinación de dama que restringe la Talla a XS a XL
+- **WHEN** se consultan las opciones de pedido con los ejes de esa combinación completos
+- **THEN** la operación devuelve solo las tallas XS a XL
+- **AND** resolver esa combinación con Talla 2XL se rechaza con un error en la talla
+
+### E-55 — Combinación sin restricción (PRD-005, PRD-019)
+
+- **GIVEN** un producto que admite las tallas XS a 3XL y una combinación sin restricción de Talla
+- **WHEN** se consultan las opciones de pedido con los ejes de esa combinación completos
+- **THEN** la operación devuelve las tallas XS a 3XL
+
+### E-56 — Restricción fuera de lo admitido por el producto (PRD-005)
+
+- **GIVEN** un producto que admite las tallas S a XL
+- **WHEN** se guarda una combinación que restringe la Talla a M y 2XL
+- **THEN** el backend rechaza el guardado con un error en la talla y la combinación no cambia
+
+### E-57 — Retirar del producto un valor usado en una restricción (PRD-004, DEC-PRD-37)
+
+- **GIVEN** un producto que admite las tallas XS a 3XL y una combinación que restringe la Talla a XS a XL
+- **WHEN** se retira XS de las tallas admitidas del producto
+- **THEN** el backend rechaza el cambio, indica la combinación que lo impide y el producto no cambia
+
+### E-58 — Un solo atributo de color (PRD-002, DEC-PRD-38)
+
+- **GIVEN** el atributo Color, de presentación "color"
+- **WHEN** se intenta crear otro atributo de presentación "color" o cambiar a "color" la presentación de otro atributo
+- **THEN** el backend rechaza el cambio
+
+### E-59 — Reactivar una combinación superpuesta (PRD-005, PRD-013, DEC-PRD-40)
+
+- **GIVEN** la combinación inactiva `110-4` (Microfibra, Dama) y una combinación activa del mismo producto con los mismos valores de eje
+- **WHEN** se reactiva `110-4`
+- **THEN** el backend rechaza la reactivación, indica la combinación con la que coincide y `110-4` sigue inactiva
+
+### E-60 — Cambiar la estructura de un producto con combinaciones (PRD-004, DEC-PRD-41)
+
+- **GIVEN** la camisa corporativa con combinaciones y Talla como atributo de pedido
+- **WHEN** se intenta agregar un eje nuevo, pasar Talla a eje o pasar Manga a atributo de pedido
+- **THEN** el backend rechaza cada cambio, indica que el producto tiene combinaciones y el producto no cambia
+
+### E-61 — Eliminar una combinación según el componente del combo (PRD-014, DEC-PRD-42)
+
+- **GIVEN** un combo cuyo componente "absorbente" admite solo la talla 2XG, y dos combinaciones del absorbente sin historial: una con talla 2XG y otra con talla 3XG
+- **WHEN** se intenta eliminar cada una
+- **THEN** el backend rechaza eliminar la de talla 2XG e indica el combo
+- **AND** elimina la de talla 3XG
+
+### E-62 — Componente de otra línea (PRD-010, DEC-PRD-43)
+
+- **GIVEN** un combo de pañales
+- **WHEN** se intenta agregar como componente un producto de la línea de uniformes
+- **THEN** el backend rechaza el componente con un error en el producto y el combo no cambia
+
+### E-63 — Componente que restringe un atributo de pedido (PRD-010, PRD-011, DEC-PRD-44)
+
+- **GIVEN** un combo cuyo componente "protector de cama" restringe el Color a Blanco
+- **WHEN** se consultan las opciones de pedido de ese componente y se resuelve con Color Azul
+- **THEN** las opciones devuelven solo Blanco
+- **AND** la resolución con Azul se rechaza con un error en el color del componente
+
+### E-64 — Nombre repetido (PRD-001, PRD-003, PRD-007, PRD-010, DEC-PRD-45)
+
+- **GIVEN** la categoría "Camisas", el producto "Camisa corporativa", la ubicación de detalle "Pechera" y el combo "Kit Oro antiderrame"
+- **WHEN** se intenta crear otra entidad del mismo tipo con el mismo nombre en otras mayúsculas (p. ej., "camisas")
+- **THEN** el backend rechaza cada alta con un error en el nombre
+
+### E-65 — Mínimo por defecto obligatorio y valor propio (PRD-009, DEC-PRD-46)
+
+- **GIVEN** un producto de modo "stock con mínimo" con Talla como atributo de pedido
+- **WHEN** se guarda sin mínimo por defecto
+- **THEN** el backend rechaza el guardado con un error en el mínimo
+- **AND** con mínimo por defecto 2, la talla 38 de una combinación con valor propio 4 tiene mínimo 4 y las demás tallas tienen mínimo 2
+
+### E-66 — Cambio de modo borra los mínimos (PRD-009, PRD-017, DEC-PRD-46)
+
+- **GIVEN** un producto de modo "stock con mínimo" con mínimo por defecto 6 y un valor propio en un artículo
+- **WHEN** se cambia a modo "bajo pedido"
+- **THEN** se borran el mínimo por defecto y el valor propio, y la auditoría registra los valores anteriores
+- **AND** al volver a "stock con mínimo" se exige un mínimo por defecto nuevo y no hay valores propios
+
+### E-67 — Personalización incluida no admitida como extra (PRD-008, DEC-PRD-47)
+
+- **GIVEN** el mono escolar, que no admite vinil como personalización adicional
+- **WHEN** se guarda la combinación `139-1` con vinil como personalización incluida
+- **THEN** el backend acepta la combinación
+- **AND** al resolver `139-1`, vinil no se ofrece como personalización adicional
+
+### E-68 — Editar producto y combinación (PRD-012, PRD-017)
+
+- **GIVEN** el producto "Camisa corporativa" y su combinación `110-1`, sin historial
+- **WHEN** un usuario con `products.update` cambia el nombre del producto y la descripción de `110-1`
+- **THEN** se guardan los cambios y la auditoría registra, en cada uno, los valores anteriores y nuevos
+- **AND** una edición que no cumple las validaciones del alta (p. ej., un nombre de producto ya existente) se rechaza con un error en el campo y nada cambia
+
+### E-69 — Atributo en uso (PRD-002, DEC-PRD-51)
+
+- **GIVEN** el atributo Tela, declarado por la camisa corporativa, que está activa
+- **WHEN** se intenta desactivarlo, quitarle el uso especial "Tela" o cambiar su presentación
+- **THEN** el backend rechaza cada cambio, indica los productos que lo declaran y el atributo no cambia
+- **AND** un atributo inactivo no se puede declarar en un producto
+
+### E-70 — Edición que rompería un combo o una personalización (PRD-012, PRD-014, DEC-PRD-52)
+
+- **GIVEN** un pañal que es componente de un combo y el servicio "Bordado pequeño", admitido por la camisa corporativa
+- **WHEN** se intenta pasar el pañal a la línea de uniformes, sacar "Bordado pequeño" del modo "servicio" o eliminarlo
+- **THEN** el backend rechaza cada cambio, indica el combo o los productos que los usan y nada cambia
+
+### E-71 — Quitar una talla con mínimo propio (PRD-009, PRD-012, DEC-PRD-52)
+
+- **GIVEN** un producto de modo "stock con mínimo" con un mínimo propio 4 en la talla 38 de una combinación
+- **WHEN** se quita la talla 38 de los valores admitidos del producto
+- **THEN** se guarda el cambio, se elimina el mínimo propio de la talla 38 y la auditoría registra el valor anterior
+
+### E-72 — Cambiar la capa de un valor en uso (PRD-020, DEC-PRD-53)
+
+- **GIVEN** el valor "Manga 3/4" con la capa `manga-3-4`, admitido por un producto cuya plantilla tiene esa capa pero no `manga-tres-cuartos`
+- **WHEN** se cambia en el catálogo la capa de "Manga 3/4" a `manga-tres-cuartos`
+- **THEN** el backend rechaza el cambio, indica el producto afectado y el valor no cambia
+
 ---
 
 ## 8. Interfaz (ERP)
@@ -784,6 +925,25 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | DEC-PRD-33 | Telas alternativas bajo un mismo código | A) Varios valores por eje en una combinación · B) Un valor combinado "Drill/Gabardina" | **Confirmada** (2026-10-06): en la lista de precios, "DRILL/GABARDINA" significa que el cliente elige una de las dos con el mismo código y precio. Lo mismo en `170-2` (Atlética o Microdurazno) y `170-4` (Manchester o Atlética). Mecanismo: **A** | — Producción sabe qué tela se eligió y los colores salen de esa tela |
 | DEC-PRD-34 | Color personalizado | Opción "Personalizado" cuando el cliente no encuentra un color de su gusto | **Confirmada** (2026-10-06): solo para el color de la prenda (no para los detalles), en productos bajo pedido. El cliente indica el tono con un selector y una nota con el nombre de referencia. Se deriva a la asesora por WhatsApp. La tela se compra para ese pedido y no entra al inventario salvo que el equipo lo decida | — |
 | DEC-PRD-31 | Opciones disponibles en cada paso del cotizador | A) PRD-019: dada una selección parcial, el backend devuelve los valores válidos del siguiente eje, en el orden de ejes del producto · B) Cada frontend lo calcula | **Confirmada** (2026-10-06): **A** | — El backend es la autoridad (AGENTS §7.1) |
+| DEC-PRD-35 | Colores admitidos de un producto con tela | A) No guarda lista: declara el color sin valores y los colores salen solo de la tela elegida · B) Guarda una lista que filtra los colores de la tela | **Confirmada** (2026-10-07): **A**. Se corrige E-05 y la regla de PRD-004 sobre valores admitidos | — Coincide con PRD-011 regla 2 y PRD-019 |
+| DEC-PRD-36 | Valores admitidos de los atributos de pedido | A) Por producto · B) Por combinación · C) Por producto, con restricción opcional por combinación | **Confirmada** (2026-10-07): **C**, para cualquier atributo de pedido, incluido el color de un producto sin tela. Sin restricción, la combinación admite todos los valores del producto. Mismo mecanismo que los componentes de combo (PRD-010) | — No es un concepto nuevo |
+| DEC-PRD-37 | Retirar del producto un valor de pedido usado en una restricción | A) Se rechaza mientras alguna restricción lo use · B) Se quita también de las restricciones | **Confirmada** (2026-10-07): **A** | — Misma regla que los valores de eje (E-24) |
+| DEC-PRD-38 | Cantidad de atributos de presentación "color" | A) Uno en todo el catálogo (la paleta) · B) Varios, con vínculo explícito desde telas y detalles | **Confirmada** (2026-10-07): **A** | — Igual que el atributo de tela; coincide con DEC-PRD-17 |
+| DEC-PRD-39 | Garantía de no superposición de combinaciones | A) Backend en transacción con bloqueo del producto, más índice único para duplicados exactos · B) Triggers de MySQL | **Confirmada** (2026-10-07): **A**. Se ajusta la Definition of Done (§12) | — Con varios valores por eje (DEC-PRD-33) la superposición no se expresa con un índice único; evita lógica de negocio en la base de datos (constitución §11) |
+| DEC-PRD-40 | Reactivar una combinación superpuesta | A) Se rechaza indicando la combinación activa con la que coincide · B) Se reactiva y se desactiva la otra | **Confirmada** (2026-10-07): **A** | — Misma regla que el guardado, sin efectos colaterales |
+| DEC-PRD-41 | Cambiar la estructura de un producto con combinaciones | A) Agregar un eje o cambiar el rol de un atributo se rechaza; se crea un producto nuevo · B) Asistente que asigna el nuevo eje a cada combinación | **Confirmada** (2026-10-07): **A** | — Coherente con DEC-PRD-21; sin caso real que pida B (constitución §11) |
+| DEC-PRD-42 | Cuándo una combinación forma parte de un combo | A) Su producto es componente y comparte al menos un valor en cada eje con lo admitido por el componente · B) Basta con que su producto sea componente | **Confirmada** (2026-10-07): **A** | — Reutiliza la compatibilidad de PRD-019 |
+| DEC-PRD-43 | Línea de negocio de los combos | A) Siempre pañales, implícita; solo componentes de esa línea · B) Línea propia del combo · C) Sin restricción | **Confirmada** (2026-10-07): **A** | — Coincide con DEC-PRD-12; el tramo por línea no queda ambiguo |
+| DEC-PRD-44 | Restricción de atributos de pedido en un componente de combo | A) El componente restringe cualquier atributo, eje o de pedido · B) Solo ejes | **Confirmada** (2026-10-07): **A**. El valor de pedido respeta la restricción del componente y la de la combinación | — Mismo mecanismo que DEC-PRD-36 |
+| DEC-PRD-45 | Unicidad de nombres | A) Únicos sin distinguir mayúsculas en categorías, productos (todo el catálogo), ubicaciones de detalle y combos · B) Productos con nombre repetible · C) Ninguno único | **Confirmada** (2026-10-07): **A** | — Evita duplicados y búsquedas ambiguas; la carga inicial rechaza nombres de producto repetidos |
+| DEC-PRD-46 | Carga del stock mínimo y cambio de modo | A) Obligatorio por artículo · B) Opcional, 0 por defecto · C) Se conserva al salir del modo · D) Mínimo por defecto obligatorio en el producto, heredado por cada artículo con valor propio opcional; al salir del modo se borran ambos | **Confirmada** (2026-10-07): **D**. El formulario propone 6; los pantalones industriales reciben 2 en la carga inicial (Anexo A) | — B dejaría 0 sin aviso de reposición (business rules §27); A obliga a cargar cada combinación + talla |
+| DEC-PRD-47 | Relación entre personalizaciones incluidas y admitidas | A) La incluida debe estar entre las admitidas · B) Independientes | **Confirmada** (2026-10-07): **B**. "Incluida" es lo que cubre el precio de la combinación; "admitida" es lo que se agrega como extra (p. ej., `139-1` incluye vinil sin ofrecer vinil adicional) | — |
+| DEC-PRD-48 | Stock mínimo en el CSV de la carga inicial | A) El valor de la fila es el mínimo por defecto del producto; filas del mismo producto con valores distintos se rechazan · B) El archivo admite valores propios por artículo | **Confirmada** (2026-10-07): **A**. Los valores propios por artículo se cargan después desde el ERP | — Una fila por combinación |
+| DEC-PRD-49 | Cómo se identifican Talla y Género | A) Marca de uso especial en el atributo (Tela \| Talla \| Género), como máximo uno de cada uso · B) Por nombre · C) Elección por producto | **Confirmada** (2026-10-07): **A**. Generaliza la marca de tela (DEC-PRD-32) | — Explícito y garantizado en la base de datos |
+| DEC-PRD-50 | Rol de la tela y del color | A) Tela siempre eje; color siempre de pedido · B) Cualquier rol | **Confirmada** (2026-10-07): **A**. Ningún código de la lista cambia por color (DEC-PRD-01), y las telas alternativas bajo un código ya son un eje con varios valores (DEC-PRD-33) | — |
+| DEC-PRD-51 | Desactivar o cambiar un atributo en uso | A) Inactivo cuenta como valores inactivos; cambios de presentación o uso rechazados en uso · B) Solo impide nuevas declaraciones | **Confirmada** (2026-10-07): **A con ajuste**. Desactivar se rechaza mientras un producto activo lo declare (desactivar Tela sacaría de oferta casi todo el catálogo). Cambiar presentación o uso especial se rechaza en uso. Un producto que declara un atributo inactivo no se puede seleccionar | — Coherente con E-24 |
+| DEC-PRD-52 | Ediciones que invalidan otros registros | A) Rechazar e indicar quién lo usa · B) Aplicar y borrar referencias | **Confirmada** (2026-10-07): **A** para cambios de línea o modo de un componente de combo y para servicios admitidos o incluidos (misma regla que PRD-014 y DEC-PRD-37). **B** al quitar una talla: se eliminan sus mínimos propios con auditoría; el bloqueo por existencias lo añade `008` | — |
+| DEC-PRD-53 | Cambiar la capa SVG de un valor o ubicación en uso | A) Se rechaza si una plantilla de los productos que lo admiten no tiene la capa · B) Se permite y la vista previa no la muestra | **Confirmada** (2026-10-07): **A** | — Misma regla que E-40 |
 
 ### Decisiones técnicas
 
@@ -791,7 +951,7 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 |---|---|---|
 | DT-01 | Los códigos se guardan como texto y se comparan sin distinguir mayúsculas, sin recortar ceros ni sufijos | Propuesta — se confirma en `design.md` |
 | DT-02 | PRD-011 se implementa como una Action reutilizable (`app/Actions/Products/ResolveSelection`) sin dependencias de precio ni de stock | Propuesta — se confirma en `design.md` |
-| DT-03 | El SVG se sanea en el backend con una librería mantenida, no con expresiones regulares propias. Las imágenes y plantillas se guardan con el sistema de archivos de Laravel | Propuesta — se confirma en `design.md` |
+| DT-03 | El SVG se sanea en el backend con una librería mantenida, no con expresiones regulares propias. Las imágenes y plantillas se guardan con el sistema de archivos de Laravel | Propuesta — se confirma en `design.md`. Dependencia aprobada (2026-10-07): `enshrined/svg-sanitize` (GPL-2.0-or-later, versión fijada; uso interno sin distribución) |
 
 ---
 
@@ -812,6 +972,7 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | `008` | Artículos de stock por combinación + talla; existencias de producto terminado; stock de tela por color; consumo de materiales (tela, cinta de lanyard, hilo de bordado, papel de sublimación y vinil, pendiente de datos de Ecolekua) |
 | `008` / `009` | Prendas base en stock: un pedido de 15 franelas de sublimación completa dryfit blancas con 5 franelas dryfit blancas en stock reserva tela solo para 10 |
 | `008` / `009` | Stock inicial de tela por color a partir del inventario de materia prima, usando la correspondencia entre telas del inventario y telas comerciales del archivo de limpieza. La reserva de `009` usa esa correspondencia para saber qué tela del inventario reservar |
+| `008` | Bloquear quitar una talla de un producto mientras haya existencias de esa talla (DEC-PRD-52) |
 | `008` / `014` | Detectar cuando el stock de un producto queda por debajo del mínimo y notificar a ventas, administración o gerencia para reponer (DEC-PRD-11) |
 | `010` | Reposición del stock por confección (pañales de adulto, productos de Los Cedros, pantalones industriales) |
 | `005` / `006` | Una cotización con al menos una línea de color personalizado no se procesa desde la web: se habilita el botón de WhatsApp y la asesora acuerda tela, precio y entrega (business rules §26). La copia de la selección guarda el tono y la nota |
@@ -846,7 +1007,7 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 - [ ] Las pruebas se ejecutan sobre MySQL (base `testing` de Sail).
 - [ ] Autorización con Policies; ninguna comprobación por nombre de rol.
 - [ ] Altas, ediciones, eliminaciones e importación dentro de Actions (`app/Actions/Products/`), con transacción cuando afecten a varias entidades.
-- [ ] Unicidad de códigos y de valores de eje por producto garantizada también en la base de datos.
+- [ ] Unicidad de códigos garantizada también en la base de datos. La no superposición de combinaciones activas (PRD-005) la garantiza el backend en una transacción con bloqueo del producto, y la base de datos impide al menos los duplicados exactos (DEC-PRD-39).
 - [ ] Ninguna plantilla SVG se guarda sin sanear; existe una prueba con un SVG malicioso (E-39).
 - [ ] Seeders con datos ficticios. El CSV de carga no se versiona si contiene datos que Ecolekua considere reservados.
 - [ ] `sail artisan test`, `sail pint --test` y `sail pnpm build` en verde.
