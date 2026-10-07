@@ -65,6 +65,13 @@ class CustomerController extends Controller
         ]);
     }
 
+    public function create(): Response
+    {
+        Gate::authorize('create', Customer::class);
+
+        return Inertia::render('customers/Create', CustomerPresenter::formOptions());
+    }
+
     public function show(Customer $customer): Response
     {
         Gate::authorize('view', $customer);
@@ -87,6 +94,18 @@ class CustomerController extends Controller
         Inertia::flash(['type' => 'success', 'message' => 'El cliente fue registrado.']);
 
         return redirect()->route('customers.show', $customer);
+    }
+
+    public function edit(Customer $customer): Response
+    {
+        Gate::authorize('update', $customer);
+
+        $customer->load(['contact', 'address']);
+
+        return Inertia::render('customers/Edit', [
+            'customer' => CustomerPresenter::editable($customer),
+            ...CustomerPresenter::formOptions(),
+        ]);
     }
 
     public function update(UpdateCustomerRequest $request, Customer $customer, UpdateCustomer $updateCustomer): RedirectResponse

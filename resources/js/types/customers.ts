@@ -67,3 +67,91 @@ export type CustomerDetail = {
     notes: string | null;
     advisor: CustomerAdvisor | null;
 };
+
+// Create and edit forms. The backend validates and normalizes every value; these types only
+// describe what the form sends and what the edit page receives.
+export type FormOption = {
+    value: string;
+    label: string;
+};
+
+// Sent by `CustomerPresenter::formOptions()`.
+export type CustomerFormOptions = {
+    customerTypes: FormOption[];
+    // Allowed document types per customer type (CLI-003).
+    documentTypes: Record<CustomerType, FormOption[]>;
+    states: FormOption[];
+};
+
+// Customer already stored with the same phone, listed by the duplicate-phone warning (E-14).
+export type DuplicatePhoneMatch = {
+    id: number;
+    name: string;
+    document: string | null;
+    status: CustomerStatus;
+    status_label: string;
+};
+
+// Contact person as the edit page receives it (phone as display string).
+export type CustomerContactFields = {
+    name: string;
+    position: string;
+    phone: string;
+    email: string;
+};
+
+export type CustomerAddressFields = {
+    line: string;
+    city: string;
+    // `VenezuelanState` value.
+    state: string;
+    reference: string;
+};
+
+// Day and month stay separate: an empty select is `''`.
+export type CustomerFormFields = {
+    type: CustomerType | '';
+    name: string;
+    document_type: string;
+    document_number: string;
+    phone: string;
+    email: string;
+    birthday_day: number | '';
+    birthday_month: number | '';
+    anniversary_day: number | '';
+    anniversary_month: number | '';
+    notes: string;
+    contact: CustomerContactFields;
+    address: CustomerAddressFields;
+};
+
+// What the edit page receives from `CustomerPresenter::editable()`: nullable columns are `null`,
+// contact and address are `null` when the customer has none.
+export type CustomerEditable = {
+    id: number;
+    type: CustomerType;
+    name: string;
+    document_type: string | null;
+    // Canonical form, e.g. `J123456784`.
+    document_number: string | null;
+    // Display form, e.g. `0414-123-4567`; the backend accepts it back.
+    phone: string;
+    email: string | null;
+    birthday_day: number | null;
+    birthday_month: number | null;
+    anniversary_day: number | null;
+    anniversary_month: number | null;
+    notes: string | null;
+    contact: {
+        name: string;
+        position: string | null;
+        phone: string;
+        email: string | null;
+    } | null;
+    address: {
+        line: string;
+        city: string;
+        state: string;
+        reference: string | null;
+    } | null;
+};

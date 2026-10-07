@@ -7,6 +7,7 @@ use App\Enums\CustomerStatus;
 use App\Enums\CustomerType;
 use App\Enums\DocumentType;
 use App\Enums\PermissionName;
+use App\Enums\VenezuelanState;
 use App\Models\AuditLog;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
@@ -15,6 +16,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function customerUpdater(PermissionName ...$extra): User
 {
@@ -432,3 +434,136 @@ it('CLI-008 rejects a missing mandatory field on that field and changes nothing'
 
     expect(updatedAuditRows())->toHaveCount(0);
 })->with(['type', 'name', 'phone']);
+
+it('E-03 (edit form) forbids the edit form to a user without customers.update', function () {
+    $customer = Customer::factory()->create();
+    $user = userWithPermissions(PermissionName::CustomersView, PermissionName::CustomersCreate);
+
+    $this->actingAs($user)->get("/customers/{$customer->id}/edit")->assertForbidden();
+});
+
+it('E-03 (edit form) redirects a guest to the login', function () {
+    $customer = Customer::factory()->create();
+
+    $this->get("/customers/{$customer->id}/edit")->assertRedirect('/login');
+});
+
+it('CLI-008 renders the edit form with the stored customer as an editable DTO and the form options', function () {
+    $customer = Customer::factory()->company()->create([
+        'name' => 'Textiles Aurora',
+        'document_type' => DocumentType::RifJ,
+        'document_number' => 'J123456784',
+        'phone' => '+584141234567',
+        'email' => 'ventas@aurora.example.test',
+        'birthday_day' => 29,
+        'birthday_month' => 2,
+        'anniversary_day' => 5,
+        'anniversary_month' => 11,
+        'notes' => 'Prefiere entregas por la tarde.',
+    ]);
+    CustomerContact::factory()->for($customer)->create([
+        'name' => 'Luis Pérez', 'position' => 'Compras', 'phone' => '+584249876543', 'email' => 'luis@aurora.example.test',
+    ]);
+    CustomerAddress::factory()->for($customer)->create([
+        'line' => 'Av. Principal, local 3', 'city' => 'Valencia', 'state' => 'carabobo', 'reference' => 'Frente a la plaza',
+    ]);
+
+    $this->actingAs(customerUpdater())
+        ->get("/customers/{$customer->id}/edit")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('customers/Edit')
+            ->where('customer', [
+                'id' => $customer->id,
+                'type' => 'company',
+                'name' => 'Textiles Aurora',
+                'document_type' => 'rif_j',
+                'document_number' => 'J123456784',
+                'phone' => '0414-123-4567',
+                'email' => 'ventas@aurora.example.test',
+                'birthday_day' => 29,
+                'birthday_month' => 2,
+                'anniversary_day' => 5,
+                'anniversary_month' => 11,
+                'notes' => 'Prefiere entregas por la tarde.',
+                'contact' => [
+                    'name' => 'Luis Pérez',
+                    'position' => 'Compras',
+                    'phone' => '0424-987-6543',
+                    'email' => 'luis@aurora.example.test',
+                ],
+                'address' => [
+                    'line' => 'Av. Principal, local 3',
+                    'city' => 'Valencia',
+                    'state' => 'carabobo',
+                    'reference' => 'Frente a la plaza',
+                ],
+            ])
+            ->has('customerTypes', 2)
+            ->has('documentTypes.natural', 3)
+            ->has('documentTypes.company', 5)
+            ->has('states', count(VenezuelanState::cases()))
+        );
+});
+
+it('CLI-008 sends null for the optional values and the missing contact and address of a bare customer', function () {
+    $customer = Customer::factory()->create([
+        'name' => 'Cliente sin extras',
+        'phone' => '+584141234567',
+        'email' => null,
+        'notes' => null,
+    ]);
+
+    $this->actingAs(customerUpdater())
+        ->get("/customers/{$customer->id}/edit")
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('customers/Edit')
+            ->where('customer.type', 'natural')
+            ->where('customer.document_type', null)
+            ->where('customer.document_number', null)
+            ->where('customer.email', null)
+            ->where('customer.birthday_day', null)
+            ->where('customer.anniversary_month', null)
+            ->where('customer.notes', null)
+            ->where('customer.contact', null)
+            ->where('customer.address', null)
+        );
+});
+
+it('DEC-CLI-28 lets an inactive customer open the edit form', function () {
+    $customer = Customer::factory()->inactive()->create();
+
+    $this->actingAs(customerUpdater())
+        ->get("/customers/{$customer->id}/edit")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->component('customers/Edit')->where('customer.id', $customer->id));
+});
+
+it('CLI-008 answers 404 for the edit form of a customer that does not exist', function () {
+    $this->actingAs(customerUpdater())->get('/customers/999999/edit')->assertNotFound();
+});
+
+it('CLI-008 deletes the stored address when the update omits the address key (full-replace semantics)', function () {
+    $customer = Customer::factory()->create();
+    CustomerAddress::factory()->for($customer)->create();
+    $payload = updateCustomerPayload($customer);
+    unset($payload['address']);
+
+    $this->actingAs(customerUpdater())
+        ->putJson("/customers/{$customer->id}", $payload)
+        ->assertRedirect("/customers/{$customer->id}");
+
+    expect(CustomerAddress::query()->where('customer_id', $customer->id)->exists())->toBeFalse();
+});
+
+it('CLI-008 keeps the stored address when the update sends it, so a normal edit never drops it', function () {
+    $customer = Customer::factory()->create();
+    $address = CustomerAddress::factory()->for($customer)->create(['city' => 'Valencia']);
+
+    $this->actingAs(customerUpdater())
+        ->putJson("/customers/{$customer->id}", updateCustomerPayload($customer, ['name' => 'Nombre nuevo']))
+        ->assertRedirect();
+
+    expect($customer->fresh()->name)->toBe('Nombre nuevo')
+        ->and($address->fresh()->city)->toBe('Valencia');
+});
