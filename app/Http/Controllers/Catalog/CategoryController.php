@@ -16,13 +16,40 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
+use Inertia\Response;
 
 /**
- * Write endpoints of the category catalog (PRD-001). The page (`index`) ships with the UI slice.
- * Authorization is `CatalogPolicy::manage`; categories are never deleted.
+ * Page and write endpoints of the category catalog (PRD-001). Authorization is
+ * `CatalogPolicy::manage` (`products.catalog`; `products.view` alone does not open the page, spec
+ * §8); categories are never deleted.
  */
 class CategoryController extends Controller
 {
+    /**
+     * Every category in display order, inactive ones included. `can.manage` mirrors the policy so the
+     * page can hide controls; the writes authorize again.
+     */
+    public function index(): Response
+    {
+        Gate::authorize('manage', ProductCategory::class);
+
+        return Inertia::render('catalog/Categories', [
+            'categories' => ProductCategory::query()
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (ProductCategory $category): array => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'status' => $category->status->value,
+                    'status_label' => $category->status->label(),
+                    'sort_order' => $category->sort_order,
+                ])
+                ->all(),
+            'can' => ['manage' => Gate::allows('manage', ProductCategory::class)],
+        ]);
+    }
+
     public function store(StoreCategoryRequest $request, CreateCategory $createCategory): RedirectResponse
     {
         $createCategory->handle($request->validated(), $request->user());
