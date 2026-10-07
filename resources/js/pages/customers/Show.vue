@@ -7,13 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { usePermissions } from '@/composables/usePermissions';
 import AppLayout from '@/layouts/AppLayout.vue';
-import {
-    activate,
-    deactivate,
-    destroy,
-    edit,
-    index,
-} from '@/routes/customers';
+import { activate, deactivate, destroy, edit, index } from '@/routes/customers';
 import type { CustomerDetail } from '@/types/customers';
 
 defineOptions({ layout: AppLayout });
@@ -65,7 +59,9 @@ const EMPTY = 'No registrado';
                     {{ customer.name }}
                 </h1>
                 <StatusBadge
-                    :category="customer.status === 'active' ? 'done' : 'neutral'"
+                    :category="
+                        customer.status === 'active' ? 'done' : 'neutral'
+                    "
                     :label="customer.status_label"
                 />
             </div>
@@ -209,7 +205,9 @@ const EMPTY = 'No registrado';
                 Editar
             </AppButton>
             <AppButton
-                v-if="can('customers.deactivate') && customer.status === 'active'"
+                v-if="
+                    can('customers.deactivate') && customer.status === 'active'
+                "
                 variant="outlined"
                 :disabled="statusForm.processing"
                 @click="confirmingDeactivate = true"
@@ -218,7 +216,8 @@ const EMPTY = 'No registrado';
             </AppButton>
             <AppButton
                 v-if="
-                    can('customers.deactivate') && customer.status === 'inactive'
+                    can('customers.deactivate') &&
+                    customer.status === 'inactive'
                 "
                 variant="outlined"
                 :disabled="statusForm.processing"
@@ -255,6 +254,5 @@ const EMPTY = 'No registrado';
             :processing="deleteForm.processing"
             @confirm="deleteCustomer"
         />
-
     </div>
 </template>
