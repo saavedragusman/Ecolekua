@@ -546,7 +546,7 @@ Dev server up (`sail up -d`, `sail pnpm dev`), a user with the needed permission
 13. Visibility by permission on the detail: log in as a user with only `customers.view` (no Editar, Desactivar, Eliminar, assign control) and as one with `customers.update` only (Editar yes, the rest no).
 14. Navigation: the "Clientes" entry (group Comercial) appears only with `customers.view` and highlights on `/customers` and its sub-pages.
 
-Result of the manual run: PENDING for the human; not claimed here. Task 10.4 (f) can be closed with the outcome of items 6 to 9 or by an approved frontend test runner.
+Result of the manual run (2026-10-06, by the human): items 6 to 9 passed, so task 10.4 (f) is closed. Requested adjustment: the detail page `resources/js/pages/customers/Show.vue` gets an `arrow_back` icon link to the list at the top left of the header card, because the "Volver a clientes" button at the bottom went unnoticed; the bottom button stays. Checked with `sail pnpm types:check` and `sail pnpm build`. Items 1 to 5 and 10 to 14 were not reported.
 
 ### Deviations / decisions
 - 10.1 counts are restricted to the spec 002 test locations because spec 001 reuses `E-nn` IDs in its own tests; the unrestricted filter gives larger numbers (for example E-19: 6 tests, 5 passed + 1 todo) that mix both specs.
