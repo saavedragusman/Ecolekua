@@ -159,3 +159,39 @@ Chain: PR 5, branch `feat/003-products-5-detail-locations`, targets `feat/003-pr
 - Create accepts an optional `svg_layer`; update edits only the keys sent (omitted layer kept, null clears), same semantics as `UpdateAttributeValue`. Create audit new_values: `name`, `svg_layer`, `status`.
 - Hooks left empty and documented: `CreateDetailLocation::ensureNoProductMissesLayer()` and `UpdateDetailLocation::ensureNoProductMissesLayer()` (task 22.7, E-72, DEC-PRD-53).
 - Route parameter is `{location}` (design API table); activate/deactivate reuse the generic `ActivateCatalogItem`/`DeactivateCatalogItem` with `Gate::authorize('manage')` in the controller.
+
+## Phase 6: Catalog UI 1 — shared components, categories and locations pages (COMPLETE, tasks 6.1-6.5)
+
+Chain: PR 6, branch `feat/003-products-6-catalog-ui-1`, targets `feat/003-products-5-detail-locations`. No commit made (orchestrator commits).
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 6.1/6.3 (categories) | `tests/Feature/Catalog/CategoryTest.php` | Feature (HTTP + Inertia props) | 867 tests green at Phase 5 close | 5 new tests, 0 passed (405: GET route missing; "Not a valid Inertia response") | 5 passed | out-of-order rows by `sort_order` with an inactive row in the middle, exact row shape, empty list, `sort_order` ties broken by id, 403 for `products.view` alone and for every product permission but catalog, `authorization.denied` audited with route `catalog.categories.index`, guest redirected to `/login`, `can.manage` | None needed |
+| 6.1/6.3 (locations) | `tests/Feature/Catalog/DetailLocationTest.php` | Feature (HTTP + Inertia props) | same | 5 new tests, 0 passed (same 405) | 5 passed | listing by name case-insensitively (`pechera` after `Bolsillo`, `Manga`), exact row shape with null and set `svg_layer`, inactive included, empty list, same 403/audit/guest cases | None needed |
+| 6.2 | no frontend test runner | n/a | n/a | n/a | `pnpm types:check` and `pnpm build` pass | n/a (components exercised in a later phase: ColorPicker by the value form, AppCheckboxGroup by the structure editors) | `pnpm check:fix` formatting only |
+
+RED run: `sail pest tests/Feature/Catalog/CategoryTest.php tests/Feature/Catalog/DetailLocationTest.php --filter="page"`: 10 tests, 0 passed, 10 failed. GREEN run: same command, 10 passed, 94 assertions.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Catalog/CategoryTest.php tests/Feature/Catalog/DetailLocationTest.php --filter="page"`: 10 passed, 94 assertions |
+| Runtime harness | `sail artisan route:list --name=catalog.categories.index` and `--name=catalog.detail-locations.index`: one `GET|HEAD` route each; `sail pnpm build`: built (pages compile). Browser check at 375/768/1280 px: PENDING (human) |
+| Rollback boundary | `ColorPicker.vue`, `AppCheckboxGroup.vue`, `components/catalog/CatalogSections.vue`, `pages/catalog/Categories.vue`, `pages/catalog/DetailLocations.vue`, `types/products.ts`, the `index` actions and 2 GET routes, the "Catálogo" entry in `navigation.ts`, design-system §7.12, §7.13 and 2 checklist items, and the 10 page tests |
+
+### Slice-close gate
+
+- `sail pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (67 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 877 tests, 876 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Authored lines: about 727 new frontend lines (2 pages 445, 2 components 223, `CatalogSections` 31, types 28) + 203 modified/added in tracked files (controllers 62, routes 2, navigation 14, design-system 19, tests 106) = about 930. Over the 400 advisory: the slice ships two generic components, two full pages and 10 tests; production backend is only 62 lines.
+- Props: categories `{id, name, status, status_label, sort_order}`; locations `{id, name, svg_layer, status, status_label}` (`svg_layer` added to the 6.1 list because the edit form needs it, PRD-007/DEC-PRD-29). `can` is `{manage}`, resolved with `Gate::allows('manage', ...)`: always true on a page that opened, it exists so the controls follow the policy.
+- Write endpoints keep `redirect()->back()`: Inertia sends the Referer of the index page, so they return to it; no controller change was needed.
+- The "Catálogo" entry points to the categories page (`products.catalog`, group Comercial, priority 30). `useNavigation.ts` is untouched (design), so the entry is highlighted only on `/catalog/categories`; `CatalogSections` (SegmentedTabs) switches between sections, and Phase 7 adds the attributes tab.
+- Deactivating asks for `ConfirmDialog`; reactivating does not (design-system §7.10). Messages state only spec facts (inactive category not shown in the portal).
+- `ColorPicker` text field emits what is typed (invalid tones reach the backend, E-36); the native picker emits `#RRGGBB` uppercase. Tone is an inline style on the swatch only.
+- Not covered: DT-03 image upload on locations (Phase 21).

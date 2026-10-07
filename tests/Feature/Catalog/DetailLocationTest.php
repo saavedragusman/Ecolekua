@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function locationManager(): User
 {
@@ -299,6 +300,55 @@ it('PRD-016 denies each location write to a user without products.catalog and au
     'deactivate' => ['POST', fn (DetailLocation $location) => "/catalog/detail-locations/{$location->id}/deactivate", []],
     'activate' => ['POST', fn (DetailLocation $location) => "/catalog/detail-locations/{$location->id}/activate", []],
 ]);
+
+it('PRD-007 page GET /catalog/detail-locations renders catalog/DetailLocations listed by name, inactive ones included', function () {
+    DetailLocation::factory()->create(['name' => 'pechera', 'svg_layer' => 'pechera']);
+    $first = DetailLocation::factory()->create(['name' => 'Bolsillo', 'svg_layer' => null]);
+    DetailLocation::factory()->inactive()->create(['name' => 'Manga', 'svg_layer' => 'manga']);
+
+    $this->actingAs(locationManager())->get('/catalog/detail-locations')->assertOk()->assertInertia(function (Assert $page) use ($first) {
+        $page->component('catalog/DetailLocations')
+            ->has('locations', 3)
+            ->where('locations.0', [
+                'id' => $first->id,
+                'name' => 'Bolsillo',
+                'svg_layer' => null,
+                'status' => 'active',
+                'status_label' => 'Activo',
+            ])
+            ->where('locations.1.name', 'Manga')
+            ->where('locations.1.svg_layer', 'manga')
+            ->where('locations.1.status', 'inactive')
+            ->where('locations.1.status_label', 'Inactivo')
+            ->where('locations.2.name', 'pechera')
+            ->where('can.manage', true);
+    });
+});
+
+it('PRD-007 page renders an empty list of locations', function () {
+    $this->actingAs(locationManager())->get('/catalog/detail-locations')->assertInertia(
+        fn (Assert $page) => $page->component('catalog/DetailLocations')->has('locations', 0)->where('can.manage', true)
+    );
+});
+
+it('PRD-016 page GET /catalog/detail-locations is forbidden without products.catalog, even with products.view, and audits the denial', function (array $permissions) {
+    $actor = userWithPermissions(...$permissions);
+    DetailLocation::factory()->create();
+
+    $this->actingAs($actor)->get('/catalog/detail-locations')->assertForbidden();
+
+    $audit = AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole();
+
+    expect($audit->actor_id)->toBe($actor->id)
+        ->and($audit->context['route'])->toBe('catalog.detail-locations.index');
+})->with([
+    'products.view alone' => [[PermissionName::ProductsView]],
+    'every product permission but catalog' => [[PermissionName::ProductsView, PermissionName::ProductsCreate, PermissionName::ProductsUpdate, PermissionName::ProductsDeactivate, PermissionName::ProductsDelete]],
+]);
+
+it('PRD-016 page GET /catalog/detail-locations redirects a guest to the login', function () {
+    $this->get('/catalog/detail-locations')->assertRedirect('/login');
+});
 
 it('DEC-PRD-53 call site of the layer hook lets a location gain, change and lose its svg layer', function () {
     $location = DetailLocation::factory()->create(['name' => 'Pechera', 'svg_layer' => null]);

@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function catalogManager(): User
 {
@@ -387,6 +388,61 @@ it('PRD-001 never deletes a category: there is no delete route', function () {
 
     expect($deleteRoutes)->toHaveCount(0)
         ->and(ProductCategory::query()->count())->toBe(1);
+});
+
+it('PRD-001 page GET /catalog/categories renders catalog/Categories with the rows in sort order, inactive ones included', function () {
+    ProductCategory::factory()->create(['name' => 'Pantalones', 'sort_order' => 3]);
+    $second = ProductCategory::factory()->create(['name' => 'Camisas', 'sort_order' => 1]);
+    ProductCategory::factory()->inactive()->create(['name' => 'Chaquetas', 'sort_order' => 2]);
+
+    $this->actingAs(catalogManager())->get('/catalog/categories')->assertOk()->assertInertia(function (Assert $page) use ($second) {
+        $page->component('catalog/Categories')
+            ->has('categories', 3)
+            ->where('categories.0', [
+                'id' => $second->id,
+                'name' => 'Camisas',
+                'status' => 'active',
+                'status_label' => 'Activo',
+                'sort_order' => 1,
+            ])
+            ->where('categories.1.name', 'Chaquetas')
+            ->where('categories.1.status', 'inactive')
+            ->where('categories.1.status_label', 'Inactivo')
+            ->where('categories.2.name', 'Pantalones')
+            ->where('can.manage', true);
+    });
+});
+
+it('PRD-001 page breaks sort_order ties by id and renders an empty list', function () {
+    $this->actingAs(catalogManager())->get('/catalog/categories')->assertInertia(
+        fn (Assert $page) => $page->component('catalog/Categories')->has('categories', 0)->where('can.manage', true)
+    );
+
+    $first = ProductCategory::factory()->create(['name' => 'Zeta', 'sort_order' => 1]);
+    $second = ProductCategory::factory()->create(['name' => 'Alfa', 'sort_order' => 1]);
+
+    $this->actingAs(catalogManager())->get('/catalog/categories')->assertInertia(
+        fn (Assert $page) => $page->where('categories.0.id', $first->id)->where('categories.1.id', $second->id)
+    );
+});
+
+it('PRD-016 page GET /catalog/categories is forbidden without products.catalog, even with products.view, and audits the denial', function (array $permissions) {
+    $actor = userWithPermissions(...$permissions);
+    ProductCategory::factory()->create();
+
+    $this->actingAs($actor)->get('/catalog/categories')->assertForbidden();
+
+    $audit = AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole();
+
+    expect($audit->actor_id)->toBe($actor->id)
+        ->and($audit->context['route'])->toBe('catalog.categories.index');
+})->with([
+    'products.view alone' => [[PermissionName::ProductsView]],
+    'every product permission but catalog' => [[PermissionName::ProductsView, PermissionName::ProductsCreate, PermissionName::ProductsUpdate, PermissionName::ProductsDeactivate, PermissionName::ProductsDelete]],
+]);
+
+it('PRD-016 page GET /catalog/categories redirects a guest to the login', function () {
+    $this->get('/catalog/categories')->assertRedirect('/login');
 });
 
 it('PRD-016 denies each category write to a user without products.catalog and audits authorization.denied', function (string $method, Closure $path, array $payload) {
