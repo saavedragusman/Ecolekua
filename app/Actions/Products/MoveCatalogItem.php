@@ -4,7 +4,9 @@ namespace App\Actions\Products;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Enums\AuditAction;
+use App\Models\AttributeValue;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
@@ -14,8 +16,8 @@ use Illuminate\Support\Facades\DB;
  * neighbor (design Decision 9). The scope is locked in id order in one query (no deadlocks, with
  * retry as a backstop); ties on `sort_order` are resolved by id, renumbering the scope when needed.
  * Each moved row gets a `catalog.updated` audit row with its old and new `sort_order`. Moving the first row up or the
- * last row down is a no-op without audit. Generic over every catalog entity that has `sort_order`
- * (categories now; attributes and values reuse it in later slices).
+ * last row down is a no-op without audit. Generic over every catalog entity that has `sort_order`:
+ * categories and attributes are ordered among the whole table, values among those of their attribute.
  */
 class MoveCatalogItem
 {
@@ -33,7 +35,7 @@ class MoveCatalogItem
         DB::transaction(function () use ($item, $direction, $actor): void {
             // One locking query in ascending id order: every concurrent move takes the locks in
             // the same order, so two opposite moves cannot deadlock. The scope is a handful of rows.
-            $rows = $item->newQuery()->orderBy('id')->lockForUpdate()->get();
+            $rows = $this->scope($item)->orderBy('id')->lockForUpdate()->get();
 
             // Observable order is (sort_order, id), so rows that tie on sort_order are still ordered.
             $ordered = $rows->sort(fn (Model $a, Model $b): int => [(int) $a->getAttribute('sort_order'), $a->getKey()] <=> [(int) $b->getAttribute('sort_order'), $b->getKey()])->values()->all();
@@ -91,5 +93,22 @@ class MoveCatalogItem
                 newValues: ['sort_order' => (int) $neighbor->getAttribute('sort_order')],
             );
         }, self::ATTEMPTS);
+    }
+
+    /**
+     * The rows the item is ordered among: the values of one attribute for an attribute value, the
+     * whole table for categories and attributes (design Decision 9).
+     *
+     * @return Builder<Model>
+     */
+    private function scope(Model $item): Builder
+    {
+        $query = $item->newQuery();
+
+        if ($item instanceof AttributeValue) {
+            $query->where('catalog_attribute_id', $item->catalog_attribute_id);
+        }
+
+        return $query;
     }
 }
