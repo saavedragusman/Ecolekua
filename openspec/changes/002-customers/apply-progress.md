@@ -43,3 +43,59 @@ Branch: `feat/002-customers-1-permissions`. Changes left in the working tree.
 - R3-001: `FoundationSeeder::run()` now wraps snapshot + `PermissionCatalogSeeder` + `RoleSeeder` + `InitialRolePermissions::apply()` in one `DB::transaction`. RED: new test (failure injected via `Role::retrieved` inside `apply()`) failed with "16 is identical to 0" (permissions not rolled back). GREEN: nothing persists after the failure and the retry grants the full matrix (Administrador 15).
 - R3-002: `RoleSeeder` docblock states it must run only through `FoundationSeeder`; new test scans `database/seeders/` and fails if any seeder other than `FoundationSeeder`/`RoleSeeder` references `RoleSeeder`. No runtime change.
 - Gate: `sail artisan test` 240 passed (1407 assertions); pint, pint --test, `composer types:check` clean.
+
+## Phase 2 (PR 2): Domain core — COMPLETE (16/16 tasks, units 2a + 2b)
+
+Branch: `feat/002-customers-2-domain` (from `feat/002-customers-1-permissions` at 5b3c108). Changes left in the working tree; no commit made.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-------|-------------|----------|
+| 2.1/2.2 | `tests/Unit/Customers/EnumsTest.php` | Unit | n/a (new) | 9 errors (classes not found) | 9/9 pass (134 assertions) | 24 states, unique values/labels, accent/case folding, round trip, unknown text | none needed |
+| 2.3/2.4 | `tests/Feature/Customers/CustomerSchemaTest.php` | Feature | n/a (new) | 7 errors (`testing.customers` missing) | 7/7 pass (26 assertions) | unique pair, many NULL pairs, 1:1 contact/address, cascade, restrict FKs, casts/relations, scopes | `migrate:rollback --step=1` then `migrate` round-trips on `testing` DB |
+| 2.5 | `tests/Feature/Customers/CustomerFactoryTest.php` | Feature | n/a (new) | 4 errors (factory missing) | 4/4 pass | default, company/inactive, contact+address, assignedTo | none |
+| 2.8/2.9 | `tests/Unit/Customers/PhoneNumberTest.php` | Unit | n/a (new) | 38 errors (class missing) | 37/37 pass (44 assertions) | 9 accepted forms, landline, 3 foreign, 7 format failures, mobile/landline, display, 7 fragments, 7 null fragments | none |
+| 2.10/2.11 | `tests/Unit/Customers/DocumentNumberTest.php` | Unit | n/a (new) | 42 errors (class missing) | 42/42 pass (64 assertions) | normalization x7, wrong letter, cédula 5/6/9/10, passport 4/5/20/21, check digit x7 (J G V E P, raw 10 and 11 to 0), RIF wrong digit, display | none |
+| 2.12/2.13 | `tests/Unit/Customers/CustomerRulesTest.php` | Unit (boots app + DB) | n/a (new) | 38 errors (`CustomerRules` missing) | 38/38 pass (83 assertions) | phone x4 messages, contact phone, doc format/type/unique/pair, dates (29 Feb, 31 Apr, 30 Feb), half dates, prohibited, 24 states + 3 rejected, notes 5000/5001 | none |
+| 2.14 | `tests/Unit/Customers/AdvisorEligibilityTest.php` | Unit (boots app + DB) | n/a (new) | 6 errors (`isEligibleAdvisor` undefined) | 6/6 pass (12 assertions) | active/inactive/no permission/no role, same set, two roles listed once, deactivation | none |
+| 2.14 (factory) | `tests/Feature/Customers/CustomerFactoryTest.php` | Feature | 4/4 | 10 errors (`withDocument` undefined) | 14/14 pass (46 assertions) | cédula/RIF defaults, all 8 types canonical + valid, 12 unique documents | none |
+| 2.6/2.15 | - | - | - | - | `composer types:check` 0 errors | - | digit stripping not shared (different separator sets): no helper extracted |
+
+### Work Unit Evidence
+
+| Evidence | Unit 2a | Unit 2b |
+|---|---|---|
+| Focused test | `sail pest tests/Unit/Customers/EnumsTest.php`: 9 passed; `CustomerSchemaTest`: 7 passed; `CustomerFactoryTest`: 14 passed | `sail pest tests/Unit/Customers`: all green (Phone 37, Document 42, Rules 38, Eligibility 6) |
+| Runtime harness | `migrate:rollback --step=1` then `migrate` on the `testing` DB (`DB_DATABASE=testing`): both DONE; status shows the migration Ran | N/A: pure domain classes covered by unit tests |
+| Rollback boundary | migration, 4 enums, 3 models, 3 factories, `CustomerSchemaTest`, `EnumsTest`, `CustomerFactoryTest` (the `withDocument` hunk needs `DocumentNumber` from 2b) | `app/Support/Customers/*`, `app/Rules/*`, `User` additions, `lang/es/validation.php` additions, 4 unit test files |
+
+### Slice-close gate (observed)
+- `sail artisan test`: 393 passed, 1816 assertions
+- `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors
+- `sail pnpm types:check`: vue-tsc clean
+- `sail pnpm build`: built OK
+
+### Deviations / decisions
+- `Customer::scopeSearch` is NOT created in 2.4: nothing in Phase 2 tests it and it needs `PhoneNumber::searchFragment` plus E-11 tests; it belongs to task 5.2 (already listed there). `withStatus` and `assignedTo` exist and are tested.
+- Document-type vs customer-type compatibility (E-24, E-35) is reported on `document_type` by a closure in `CustomerRules::after()`, not by `DocumentNumberFormat` (a rule on `document_number` cannot fail another attribute). `DocumentNumberFormat` still reads `document_type` and validates format only. Error key and behavior are as the spec requires. Phases 3-4 must register `CustomerRules::after()` on the FormRequests, as already planned.
+- `CustomerRules::uniqueDocument()` is an anonymous `DataAwareRule` (needs `document_type` to normalize the number).
+- Added `DocumentType::isRif()` (used by `DocumentNumber` and the factory).
+- `PhoneNumber::searchFragment` requires at least 3 digits AFTER stripping the leading `+58`/`0058`/`0` (design left the order ambiguous; this avoids a near-match-everything fragment such as `04`).
+- Added a `withDocument(?DocumentType)` factory state (opt-in; default documents stay null so tests control uniqueness). Call it after `company()` so the type resolves to RIF J.
+- `VenezuelanState` values are snake_case ASCII slugs (e.g. `distrito_capital`, `la_guaira`); "La Guaira" is the current official name of the former Vargas state.
+- Confirmed the technical follow-up: Laravel v13.33.0 on MySQL 8.4 throws `Illuminate\Database\UniqueConstraintViolationException` for the unique-index violation (asserted in `CustomerSchemaTest`).
+- Real authored diff about 2,050 lines (68 tracked + 1,981 new files; tests about 855, production about 1,126), mostly tests and dataset-heavy: far above the ~450 threshold. `size:exception` recommended for PR 2; units 2a (about 950) and 2b (about 1,100) are the honest split.
+
+## Review follow-up Phase 2 (R3-empty-nested-array, R3-plus58-trunk-zero, R3-revocation-untested)
+
+Scoped fixes after the native review of 6b3e460 + fd69109.
+
+| Finding | RED | GREEN | Change |
+|---|---|---|---|
+| R3-empty-nested-array | 4 failures (`contact: []` / `address: []` passed validation for company and natural) | 92/92 in the 3 touched files | Decision: an empty array is REJECTED (422 on `contact` / `address`), not normalized to null. `null`/absent still means "none" and an object upserts, so deleting stays explicit and an accidental `[]` cannot silently remove data. Implemented as `CustomerRules::notEmptyArray()` plus `validation.not_empty_array` message. (`required_array_keys` and `filled` were tried and discarded: duplicate parent+child errors, and `filled` rejects `null`.) |
+| R3-plus58-trunk-zero | 3 errors (`+58 0414…`, `+58 0212…`, `0058 0414…` rejected as format) + 1 fragment failure (`0414123`) | green | `PhoneNumber::withoutTrunkZero()` drops a single `0` after `+58`/`0058` in `parse` and `searchFragment`. Foreign numbers still `foreign`; `+58 00414…` still `format`; customer landline rule untouched. |
+| R3-revocation-untested | n/a | passed immediately (no production change) | New test detaches `customers.portfolio` from the role; `isEligibleAdvisor()` false and the user leaves `eligibleAdvisors()`. |
+
+Verification: touched tests 92/92; `sail artisan test` 404 passed (1838 assertions); `sail pint --test` passed; `composer types:check` phpstan 0 errors. Authored diff about 88 lines (83 added, 5 removed).
