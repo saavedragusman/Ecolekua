@@ -111,13 +111,10 @@ class SyncRolePermissions
             $messages[] = 'Los permisos de clientes requieren también «Ver el listado y la ficha de todos los clientes».';
         }
 
-        $productsDependents = [
-            PermissionName::ProductsCreate,
-            PermissionName::ProductsUpdate,
-            PermissionName::ProductsDeactivate,
-            PermissionName::ProductsDelete,
-            PermissionName::ProductsCatalog,
-        ];
+        $productsDependents = array_filter(
+            PermissionName::cases(),
+            fn (PermissionName $permission): bool => str_starts_with($permission->value, 'products.') && $permission !== PermissionName::ProductsView,
+        );
 
         if (! $has(PermissionName::ProductsView) && array_filter($productsDependents, $has) !== []) {
             $messages[] = 'Los permisos de productos requieren también «Ver categorías, atributos, productos, combinaciones y combos».';
