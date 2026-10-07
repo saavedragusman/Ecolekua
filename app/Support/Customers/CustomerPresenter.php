@@ -46,6 +46,23 @@ final class CustomerPresenter
     }
 
     /**
+     * Eligible advisors a customer can be assigned to (CLI-014): active users holding
+     * `customers.portfolio`, by full name. Sent only to users allowed to assign (design Decision 12).
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public static function advisorOptions(): array
+    {
+        return array_values(User::eligibleAdvisors()
+            ->orderBy('users.first_name')
+            ->orderBy('users.last_name')
+            ->orderBy('users.id')
+            ->get()
+            ->map(fn (User $user): array => ['id' => $user->id, 'name' => $user->fullName()])
+            ->all());
+    }
+
+    /**
      * One row of the customers list (design Decision 13). Expects `advisor` to be loaded.
      *
      * @param  list<int>  $availableAdvisorIds  from availableAdvisorIds()

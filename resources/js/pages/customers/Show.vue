@@ -1,28 +1,63 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
+import AppSelect from '@/components/AppSelect.vue';
+import type { SelectOption } from '@/components/AppSelect.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { usePermissions } from '@/composables/usePermissions';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { activate, deactivate, destroy, edit, index } from '@/routes/customers';
-import type { CustomerDetail } from '@/types/customers';
+import { update as updateAdvisor } from '@/routes/customers/advisor';
+import type { AdvisorOption, CustomerDetail } from '@/types/customers';
 
 defineOptions({ layout: AppLayout });
 
 // Every value arrives formatted by the backend (CLI-013). The buttons only reflect the shared
-// permissions; the backend authorizes every operation (the advisor control arrives in a later
-// phase).
+// permissions; the backend authorizes every operation. `advisorOptions` arrives only for users
+// who may assign the advisor (CLI-014).
 const props = defineProps<{
     customer: CustomerDetail;
+    advisorOptions?: AdvisorOption[];
 }>();
 
 const { can } = usePermissions();
 
 const statusForm = useForm({});
 const deleteForm = useForm({});
+
+// '' is "Sin asesora"; the backend receives `null` to remove the advisor (DEC-CLI-18).
+const advisorForm = useForm<{ advisor_id: string | number }>({
+    advisor_id: props.customer.advisor?.id ?? '',
+});
+
+// The current advisor stays selectable even when no longer eligible (DEC-CLI-29), so that
+// opening the control never silently shows "Sin asesora" for an assigned customer.
+const advisorSelectOptions = computed<SelectOption[]>(() => {
+    const options: SelectOption[] = (props.advisorOptions ?? []).map(
+        (option) => ({ value: option.id, label: option.name }),
+    );
+    const current = props.customer.advisor;
+
+    if (current !== null && !options.some((o) => o.value === current.id)) {
+        options.push({
+            value: current.id,
+            label: `${current.name} (no disponible)`,
+        });
+    }
+
+    return options;
+});
+
+function saveAdvisor(): void {
+    advisorForm
+        .transform((data) => ({
+            advisor_id: data.advisor_id === '' ? null : data.advisor_id,
+        }))
+        .submit(updateAdvisor(props.customer.id), { preserveScroll: true });
+}
 
 // Destructive actions submit only after the confirmation dialog (design-system §7.10).
 const confirmingDeactivate = ref(false);
@@ -193,6 +228,24 @@ const EMPTY = 'No registrado';
                     label="Asesora no disponible"
                 />
             </div>
+            <form
+                v-if="advisorOptions !== undefined"
+                class="flex flex-col gap-space-sm md:flex-row md:items-end"
+                @submit.prevent="saveAdvisor"
+            >
+                <div class="md:flex-1">
+                    <AppSelect
+                        v-model="advisorForm.advisor_id"
+                        label="Cambiar asesora"
+                        placeholder="Sin asesora"
+                        :options="advisorSelectOptions"
+                        :error="advisorForm.errors.advisor_id"
+                    />
+                </div>
+                <AppButton type="submit" :disabled="advisorForm.processing">
+                    Guardar asesora
+                </AppButton>
+            </form>
         </AppCard>
 
         <!-- Quotation (004) and order (006) history sections are added here by those specs. -->

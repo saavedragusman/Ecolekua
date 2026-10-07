@@ -19,6 +19,12 @@ export type CustomerAdvisor = {
     available: boolean;
 };
 
+// Eligible advisor offered by the assignment control; sent only to users with `customers.assign`.
+export type AdvisorOption = {
+    id: number;
+    name: string;
+};
+
 export type CustomerListRow = {
     id: number;
     name: string;

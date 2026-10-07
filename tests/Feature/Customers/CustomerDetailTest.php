@@ -108,15 +108,6 @@ it('CLI-013 shows an inactive customer with its Inactivo label', function () {
     });
 });
 
-it('CLI-013 advisorOptions is not sent until the assignment control exists', function () {
-    $customer = Customer::factory()->create();
-    $assigner = userWithPermissions(PermissionName::CustomersView, PermissionName::CustomersAssign);
-
-    $this->actingAs($assigner)->get("/customers/{$customer->id}")->assertInertia(function (Assert $page) {
-        $page->missing('advisorOptions');
-    });
-});
-
 it('E-06 the customer page shows a stored +584141234567 as 0414-123-4567', function () {
     $customer = Customer::factory()->create(['phone' => '+584141234567']);
 
