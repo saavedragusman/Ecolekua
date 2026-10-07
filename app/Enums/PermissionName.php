@@ -3,7 +3,7 @@
 namespace App\Enums;
 
 /**
- * Permission catalog of spec 001 (section 9). Copied into the `permissions` table by
+ * Permission catalog of spec 001 (section 9) and spec 002 (section 4). Copied into the `permissions` table by
  * PermissionCatalogSeeder; code asks for permissions, never for role names.
  */
 enum PermissionName: string
@@ -17,6 +17,13 @@ enum PermissionName: string
     case RolesView = 'roles.view';
     case RolesManage = 'roles.manage';
     case AuditView = 'audit.view';
+    case CustomersView = 'customers.view';
+    case CustomersCreate = 'customers.create';
+    case CustomersUpdate = 'customers.update';
+    case CustomersDeactivate = 'customers.deactivate';
+    case CustomersDelete = 'customers.delete';
+    case CustomersAssign = 'customers.assign';
+    case CustomersPortfolio = 'customers.portfolio';
 
     /**
      * Spanish description stored in `permissions.description`.
@@ -33,6 +40,13 @@ enum PermissionName: string
             self::RolesView => 'Consultar roles y sus permisos',
             self::RolesManage => 'Crear, modificar y eliminar roles y asignarles permisos',
             self::AuditView => 'Consultar registros de auditoría',
+            self::CustomersView => 'Ver el listado y la ficha de todos los clientes',
+            self::CustomersCreate => 'Registrar clientes',
+            self::CustomersUpdate => 'Editar datos del cliente, su persona de contacto y su dirección',
+            self::CustomersDeactivate => 'Desactivar y reactivar clientes',
+            self::CustomersDelete => 'Eliminar clientes sin historial',
+            self::CustomersAssign => 'Asignar y reasignar la asesora de un cliente',
+            self::CustomersPortfolio => 'Poder tener cartera: ser asesora asignada de clientes',
         };
     }
 }

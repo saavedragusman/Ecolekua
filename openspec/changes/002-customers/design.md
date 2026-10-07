@@ -292,6 +292,7 @@ The 001 requirements do not change (proposal "Modified Capabilities: none"); onl
 | `tests/Feature/Roles/PermissionCoherenceTest.php:116` | protected role still has 9 | "unchanged" (count captured before the request) | Administrador now holds 15 |
 | `tests/Feature/AdministrativeProtections/LastAdministratorTest.php:80, :93` | 9 unchanged / 8 after revoke | "unchanged" / `count(submitted set)` | literals depended on the catalog size |
 | `tests/Pest.php` (`administrator()` docblock) | "all 9 permissions" | "the Administrador grants of the initial matrix (all except `customers.portfolio`)" | documentation accuracy |
+| `tests/Feature/Roles/RoleManagementTest.php:151, :173` (found during apply of Phase 1) | `has('role.permissions', 9)` / `has('permissions', 9)` | role's real permission count / `count(PermissionName::cases())` | same literal dependency on the catalog size |
 
 `AuditQueryTest` already derives from `AuditAction::cases()`; the E-24 test in `PermissionCatalogTest` submits every permission, which stays coherent. No other 001 test asserts the catalog size (checked with a search over `tests/`).
 
