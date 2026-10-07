@@ -52,6 +52,23 @@ function administrator(): User
 }
 
 /**
+ * Valid minimum payload for `POST /customers` (spec 002). Phones are fictitious; tests that create
+ * several customers pass distinct phones so they never trip the duplicate-phone warning.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function createCustomerPayload(array $overrides = []): array
+{
+    return [
+        'type' => 'natural',
+        'name' => 'Cliente de prueba',
+        'phone' => '0414-123.45.67',
+        ...$overrides,
+    ];
+}
+
+/**
  * Performs a real `POST /login` and returns the decrypted session id from the response cookie,
  * so the database session mechanism is exercised instead of the guard's in-memory user.
  */

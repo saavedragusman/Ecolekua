@@ -99,3 +99,43 @@ Scoped fixes after the native review of 6b3e460 + fd69109.
 | R3-revocation-untested | n/a | passed immediately (no production change) | New test detaches `customers.portfolio` from the role; `isEligibleAdvisor()` false and the user leaves `eligibleAdvisors()`. |
 
 Verification: touched tests 92/92; `sail artisan test` 404 passed (1838 assertions); `sail pint --test` passed; `composer types:check` phpstan 0 errors. Authored diff about 88 lines (83 added, 5 removed).
+
+## Phase 3 (PR 3): Create backend — COMPLETE (6/6 tasks, units 3a + 3b)
+
+Branch: `feat/002-customers-3-create` (from `feat/002-customers-2-domain` at b895a00). Changes left in the working tree; no commit made. The run was interrupted twice (rate limit, timeout) and resumed; state was re-verified by running the scoped tests.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-------|-------------|----------|
+| 3.1/3.2 | `tests/Feature/Customers/CreateCustomerTest.php` | Feature (HTTP) | `NoManualForbiddenTest`, Authorization tests 14/14 after | 46 tests, 0 passed (43 failed with 404, 3 errors: `CreateCustomer` missing) | 46/46 (194 assertions) | E-01 min and full company, E-02 x5, E-03 x2, E-06 x4 forms, E-13 x4 (active/inactive/other type/race), E-25 x3, E-34 x10, E-35 x2, E-36, E-37 x3, E-38, CLI-007 x2, empty `{}`/`[]` contact and address with resolved Spanish message, natural + contact, ignored client fields | none needed |
+| 3.2 (policy) | `tests/Feature/Customers/CustomerPolicyTest.php` | Feature | n/a (new) | 22 tests: 8 failed (no policy: every allow failed) | 22/22 | 7 abilities allow, deny with every other permission, deny without roles, no role-name grant | none |
+| 3.4/3.5 | `tests/Feature/Customers/DuplicateDetectionTest.php` | Feature (HTTP) | 46/46 + 22/22 | 10 tests: 6 failed (422 expected, 302 received; Inertia back vs redirect), 4 passed by design (no-warning and confirm clauses) | 10/10 (51 assertions) | document display/null, inactive matches, name order, explicit false, no contact/address written, validation wins, Inertia flash, DEC-CLI-27 both directions | PHPStan list type fixed with `array_values` |
+| 3.3 | `NoManualForbiddenTest`, `ProtectedByDefaultTest` | Architecture | - | - | pass in the full suite | - | controller kept thin |
+
+RED evidence was captured for all three test files in this run. Not captured: a RED run of the tests that passed immediately (DEC-CLI-27 no-warning, validation-wins and confirm=true clauses and the "deny" half of the policy test): they are regression guards that pass before the production code by construction, noted as such.
+
+### Work Unit Evidence
+
+| Evidence | Unit 3a | Unit 3b |
+|---|---|---|
+| Focused test | `CreateCustomerTest` 46 passed; `CustomerPolicyTest` 22 passed | `DuplicateDetectionTest` 10 passed |
+| Runtime harness | `sail artisan route:list --name=customers.store`: `POST customers customers.store › Customers\CustomerController@store` | N/A: HTTP feature tests |
+| Rollback boundary | policy, request, `CreateCustomer` (minus phone check), controller `store`, route, `User::fullName()`, `tests/Pest.php` helper, 2 test files | `DuplicatePhoneWarning`, `RenderDuplicatePhoneWarning`, `bootstrap/app.php` hook, phone check and `confirmDuplicatePhone` argument in `CreateCustomer`/controller, `DuplicateDetectionTest` |
+
+### Slice-close gate (observed)
+- `sail artisan test`: 482 passed, 2108 assertions
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors
+- `sail pnpm types:check`: vue-tsc clean
+- `sail pnpm build`: built OK
+
+### Deviations / decisions
+- `CreateCustomer::handle()` has only `(array $data, User $actor, bool $confirmDuplicatePhone = false)`. The Phase 9 parameters (`origin`, `autoAssign`, `advisor`, `auditContext`) are NOT added: no test needs them yet (Strict TDD); task 9.4 adds them with their tests.
+- Success redirect uses the URL `/customers/{id}` instead of `route('customers.show')`: the named route arrives with 5.6. Tests assert the URL; swap to `route()` in 5.6.
+- Added `User::fullName()` (used for `advisor_name` in the audit; Phase 8 reuses it) and moved the `createCustomerPayload()` test helper to `tests/Pest.php` so the test files run alone.
+- Added `CustomerPolicyTest` (not listed in tasks): all 7 abilities map to one permission each.
+- Duplicate-phone match `document` is the display string (`J-12345678-4`) or null.
+- The unique-index race is caught outside the transaction and only converted when the message names `customers_document_unique`.
+- Duplicate-phone finder lives as a private method of `CreateCustomer`; extraction for `UpdateCustomer` is a 4.3 decision.
+- Authored diff about 1,075 lines (3a about 790, 3b about 285), mostly tests: `size:exception` recommended for PR 3.

@@ -4,6 +4,7 @@ use App\Http\Controllers\Audit\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
@@ -37,6 +38,9 @@ Route::post('/users/{user}/activate', [UserStatusController::class, 'activate'])
 Route::post('/users/{user}/deactivate', [UserStatusController::class, 'deactivate'])->name('users.deactivate');
 Route::put('/users/{user}/password', [UserPasswordController::class, 'update'])->name('users.password.reset');
 Route::put('/users/{user}/roles', [UserRoleController::class, 'update'])->name('users.roles.update');
+
+// Customers (spec 002, CLI-001). Authorization lives in CustomerPolicy.
+Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
