@@ -92,3 +92,40 @@ Chain: PR 3, branch `feat/003-products-3-categories`, targets `feat/003-products
 - Write endpoints redirect back (`redirect()->back()`) since the categories page (Phase 6) does not exist yet; flash messages in Spanish.
 - `MoveCatalogItem` neighbor lookup is global per model; Phase 4 must scope it for attribute values (by `catalog_attribute_id`). `MoveCatalogItemRequest` authorizes `manage` on `ProductCategory::class` (the policy ignores the subject).
 - `DeactivateCatalogItem` carries no in-use hook yet (task 4.5 adds it).
+
+## Phase 4: Attributes, values, special uses and offered colors (COMPLETE, tasks 4.1-4.7)
+
+Chain: PR 4, branch `feat/003-products-4-attributes`, targets `feat/003-products-3-categories`. No commit made (orchestrator commits).
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4.1/4.2 | `tests/Feature/Catalog/AttributeCatalogTest.php` | Feature (HTTP) + Action | 748 tests green at Phase 3 close; `tests/Feature/Catalog` 35 green before | 58 tests, 54 failed (404 routes, missing Actions); the 4 passing were absence checks (no delete route, 405) | 58/58 (320 assertions); `tests/Feature/Catalog` 93 green | E-36 (5 invalid tones, picker tone stored uppercase, non-color tone, edit), E-45 (create + switch), DEC-PRD-49 (size and gender, release/take), fabric vs color, E-58 (create, switch, keep own), switch-to-color needs tones, name unique ci / across attributes, 10 layer cases, rename audit, lifecycle no-ops, 10 denied writes, unique-index backstops (name, special use, color) | One failure on the backstop mapping (the MySQL message includes the SQL, so the violated key is parsed with `for key '...'`) |
+| 4.1 (move scope) | same file | Feature + Action | n/a | values moved across attributes in the old global scope (tests written with the other 4.1 tests, RED because the routes did not exist) | green | neighbor inside the attribute, no-op edges with foreign rows around, ties inside scope, lock query has `catalog_attribute_id = ?` and `order by id`, attributes keep the whole table | Scope extracted to `MoveCatalogItem::scope()` |
+| 4.3/4.4 | same file | Feature (HTTP) | 93 green | 10 failed (404 route) | 10/10; `tests/Feature/Catalog` 103 green (525 assertions) | add + remove with names, several names / empty set, no-change no audit (dup ids), inactive addition rejected but resubmitted inactive kept, non-fabric value, non-color id and unknown id, malformed payloads, 403 audited | None needed |
+| 4.5 | same file | Feature | n/a | Triangulation/RED not applicable: the hooks are empty by design, tests pass because the behavior is unchanged (explicit requirement of task 4.5) | 2 tests (attribute deactivate/presentation edit; layer set/change/clear) | n/a | n/a |
+| 4.6 | n/a | n/a | n/a | n/a | scope shared with categories | n/a | `composer types:check` 0 errors |
+
+Note: `SyncFabricOfferedColors` was written before the 4.3 tests were run (no route existed, so the tests were still observed RED with 404 before the controller and route were added).
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Catalog`: 103 passed, 525 assertions (AttributeCatalogTest 68, CategoryTest 35) |
+| Runtime harness | `sail artisan route:list --name=catalog.attributes` lists 6 routes (store, update, move, activate, deactivate, values.store); values and offered-colors routes under `catalog.values.*`; no DELETE route |
+| Rollback boundary | 5 Actions (`CreateCatalogAttribute`, `UpdateCatalogAttribute`, `CreateAttributeValue`, `UpdateAttributeValue`, `SyncFabricOfferedColors`), `app/Support/Products/CatalogRules.php`, 5 requests, 3 controllers, routes block, `lang/es/validation.php` additions, the `scope()` in `MoveCatalogItem` and the hook in `DeactivateCatalogItem`, `AttributeCatalogTest` |
+
+### Slice-close gate
+
+- `sail pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (61 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 830 tests, 829 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Authored lines: about 960 production (5 Actions 440, `CatalogRules` 119, 5 requests 230, 3 controllers 190 incl. offered-colors, routes/lang/Move/Deactivate edits 72) plus 762 test lines, about 1,720 total. Well over the 400 advisory: the slice is five Actions, two controllers, five requests and a 68-test file. Recommend `size:exception` or splitting the PR along 4.1-4.2 and 4.3-4.4 if the reviewer wants a hard cap.
+- Hooks left empty and documented: `UpdateCatalogAttribute::ensureNotDeclaredByProducts()` and `DeactivateCatalogItem::ensureNotDeclaredByProducts()` (task 9.6, E-69), `CreateAttributeValue::ensureNoProductMissesLayer()` and `UpdateAttributeValue::ensureNoProductMissesLayer()` (task 22.7, E-72).
+- `UpdateAttributeValue` edits only the keys present in the request (PATCH-like semantics on PUT); the attribute edit requires `special_use` to be present (null clears it) so an omitted field cannot drop a use.
+- `special_use = fabric` with presentation `color` is rejected on `special_use` (design Decision 9). Not covered by the spec text: a color attribute whose presentation changes away from `color` keeps the tones of its values (no rule says to clear them).
+- Offered colors request field is `color_ids`; errors for non-fabric value, non-color id and inactive addition are all keyed on `color_ids`. Added colors must be active; already offered inactive colors may be resubmitted.
+- Unique-index backstop errors are mapped by the violated key name (`special_use` or `color_marker`, otherwise `name`).

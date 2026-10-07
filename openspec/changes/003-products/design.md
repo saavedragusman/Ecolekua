@@ -772,6 +772,7 @@ All five answers are recorded in `docs/specs/003-products.md` §9 (2026-10-07) a
 - **N-6** DEC-PRD-52 names the removal of one size from a product's allowed values. Removing the whole size-use attribute from a product removes all its sizes, so the same cleanup (delete the size-keyed own minimums, with audit) is applied; the spec does not mention this case separately.
 - **N-7** DEC-PRD-51 makes a product that declares an inactive attribute unselectable but does not say whether reactivating that product must be rejected. The design does not reject it: the product stays unselectable until the attribute is reactivated (availability is computed, Decision 16).
 - **N-8** Source spec §5 (conceptual model) still lists "atributo de tela (sí | no)" and does not show the special uses of DEC-PRD-49; PRD-002 is authoritative and states that the fabric mark is the use "Tela". Worth aligning in the spec; no design impact.
+- **N-9** The unique-violation backstop in `CatalogRules` identifies the violated index by parsing the MySQL error message (`for key '...'`). Accepted because the project is MySQL-only (AGENTS §2, tests run on MySQL); revisit if the database engine ever changes.
 
 ### Technical follow-ups (apply phase)
 
