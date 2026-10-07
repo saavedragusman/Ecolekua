@@ -152,8 +152,7 @@ const documentKeptButUnfit = computed(
 );
 
 const showTypeChangeWarning = computed(
-    () =>
-        removedByTypeChange.value.length > 0 || documentKeptButUnfit.value,
+    () => removedByTypeChange.value.length > 0 || documentKeptButUnfit.value,
 );
 
 // Duplicate-phone warning (E-14): the backend asks for confirmation through an error on
@@ -178,9 +177,7 @@ form.transform((data) => ({
     anniversary_day: data.type === 'company' ? data.anniversary_day : '',
     anniversary_month: data.type === 'company' ? data.anniversary_month : '',
     contact:
-        data.type === 'company' && !isBlank(data.contact)
-            ? data.contact
-            : null,
+        data.type === 'company' && !isBlank(data.contact) ? data.contact : null,
     address: isBlank(data.address) ? null : data.address,
 }));
 
