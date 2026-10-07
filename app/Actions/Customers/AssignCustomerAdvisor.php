@@ -35,7 +35,7 @@ class AssignCustomerAdvisor
 
             if ($advisor !== null && ! $advisor->isEligibleAdvisor()) {
                 throw ValidationException::withMessages([
-                    'advisor_id' => 'La asesora debe ser un usuario activo con permiso para tener cartera.',
+                    'advisor_id' => __('validation.customer_advisor_ineligible'),
                 ]);
             }
 

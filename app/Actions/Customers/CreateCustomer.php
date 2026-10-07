@@ -9,6 +9,7 @@ use App\Enums\CustomerStatus;
 use App\Exceptions\DuplicatePhoneWarning;
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\Audit\AuditOrigin;
 use App\Support\Customers\PhoneNumber;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,9 @@ use Illuminate\Validation\ValidationException;
  * the document in its canonical form (design Decision 9). The creator becomes the advisor only
  * when eligible (CLI-014, E-25). Contact person and address are part of the aggregate and are
  * written in the same transaction as the `customers.created` audit row.
+ *
+ * The one-time import (CLI-018) reuses it through the optional parameters: a console `$origin`,
+ * `$autoAssign = false` with the row's own `$advisor` (DEC-CLI-23) and an `$auditContext` marker.
  */
 class CreateCustomer
 {
@@ -28,14 +32,30 @@ class CreateCustomer
 
     /**
      * @param  array<string, mixed>  $data  validated customer input (see CustomerRules::customer())
+     * @param  bool  $autoAssign  true: the actor becomes the advisor when eligible (CLI-014); false: only `$advisor` is used
+     * @param  array<string, mixed>  $auditContext  extra audit context, e.g. the import marker
      *
-     * @throws ValidationException when the document is taken by a concurrent request
+     * @throws ValidationException when the document is taken by a concurrent request or `$advisor` is not eligible
      * @throws DuplicatePhoneWarning when other customers have the phone and it was not confirmed (E-14)
      */
-    public function handle(array $data, User $actor, bool $confirmDuplicatePhone = false): Customer
-    {
+    public function handle(
+        array $data,
+        User $actor,
+        bool $confirmDuplicatePhone = false,
+        ?AuditOrigin $origin = null,
+        bool $autoAssign = true,
+        ?User $advisor = null,
+        array $auditContext = [],
+    ): Customer {
         try {
-            return DB::transaction(fn (): Customer => $this->create($data, $actor, $confirmDuplicatePhone));
+            return DB::transaction(fn (): Customer => $this->create(
+                $data,
+                $actor,
+                $confirmDuplicatePhone,
+                $origin,
+                $autoAssign ? ($actor->isEligibleAdvisor() ? $actor : null) : $this->eligibleOrFail($advisor),
+                $auditContext,
+            ));
         } catch (UniqueConstraintViolationException $exception) {
             $this->rethrowDocumentRaceAsValidationError($exception);
         }
@@ -43,16 +63,15 @@ class CreateCustomer
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $auditContext
      */
-    private function create(array $data, User $actor, bool $confirmDuplicatePhone): Customer
+    private function create(array $data, User $actor, bool $confirmDuplicatePhone, ?AuditOrigin $origin, ?User $advisor, array $auditContext): Customer
     {
         $phone = PhoneNumber::parse($data['phone'])->e164();
 
         if (! $confirmDuplicatePhone) {
             $this->warnAboutDuplicatePhone($phone);
         }
-
-        $advisor = $actor->isEligibleAdvisor() ? $actor : null;
 
         $customer = Customer::query()->create([
             'type' => $data['type'],
@@ -96,9 +115,34 @@ class CreateCustomer
             $actor,
             $customer,
             newValues: $this->auditValues($customer, $advisor),
+            context: $auditContext,
+            origin: $origin,
         );
 
         return $customer;
+    }
+
+    /**
+     * An advisor chosen by the caller (the import) must hold the same eligibility as in E-28;
+     * checked here too so no caller can store an ineligible assignment. The advisor is re-read
+     * (and locked) inside the transaction: the instance the caller holds may predate a
+     * deactivation made by another process. A user that no longer exists is ineligible.
+     *
+     * @throws ValidationException
+     */
+    private function eligibleOrFail(?User $advisor): ?User
+    {
+        if ($advisor === null) {
+            return null;
+        }
+
+        $current = User::query()->whereKey($advisor->getKey())->lockForUpdate()->first();
+
+        if ($current === null || ! $current->isEligibleAdvisor()) {
+            throw ValidationException::withMessages(['advisor_id' => __('validation.customer_advisor_ineligible')]);
+        }
+
+        return $current;
     }
 
     /**

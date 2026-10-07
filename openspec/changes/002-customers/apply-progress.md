@@ -369,3 +369,87 @@ Search over `app`, `routes`, `database/seeders`, `database/factories` (PHP):
 
 ### Proposed commit (Spanish description, no attribution lines)
 - `feat(002): asignar, reasignar y quitar la asesora de un cliente desde su ficha [CLI-014, CLI-015, CLI-016, DEC-CLI-18, DEC-CLI-28, DEC-CLI-29, E-26, E-27, E-28, E-33]`
+
+## Phase 9 (PR 9): One-time import - COMPLETE (6/6 tasks)
+
+Branch: `feat/002-customers-9-import` (from `feat/002-customers-8-advisor` at 411c957). Changes left in the working tree; no commit made. All files written with Edit/Write only. Mode: Strict TDD.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-----------|-------------|----------|
+| 9.1/9.2 (unit 9a) | `tests/Feature/Console/ImportCustomersTest.php` (14 file-level tests) | Feature (console + reader) | 76 passed (CreateCustomerTest, DuplicateDetectionTest, tests/Feature/Console) before | 14 of 14 failed (command and `CustomerCsvReader` did not exist) | 14/14 (47 assertions) | Latin-1 vs the same text in UTF-8; missing column, unknown + missing, repeated column; any order/case/spaces; BOM; `;`; quoted cell with delimiter and line break with physical line numbers; blank lines + CRLF; irregular cell count; empty file; header only; missing path | none needed |
+| 9.3/9.4 (unit 9b) | same file (43 more tests incl. 19 dataset cases) | Feature (console, DB, audit) | 14/14 of 9a green | 41 of 57 failed (no import behavior); 15 passed = 14 file-level + 1 regression guard (`CreateCustomer` default advisor, passes immediately because extra args are ignored by old signature) | 57/57 (302 assertions) after one test-side fix: audit `new_values` compared with `toEqual` because the JSON column does not keep key order | E-30: missing phone, registered document, repeated document (rows 2/4, 5/6, typed differently), same number under another document type, state label match (case, accents, spaces) + unknown state, 19 column-mapping cases, no cell values; E-32: 3 advisor cases, 3 author cases (before reading file), author email normalization; E-31: DB + file warnings, confirmation, inactive DB match, 3-way group, confirmation does not override row errors; E-29: full payload, no auto-assignment of the author, BOM + `;` end to end, rollback mid-run with no cell values in output or log; `CreateCustomer` options (4 tests) | `phpstan` fix: `->value ?? $cell` instead of `?->value ?? $cell` |
+| 9.5 | search below | - | - | - | - | - | no import-specific branching in `CreateCustomer` beyond its documented parameters |
+
+Audit payload asserted in full for the company row (all scalar fields, `advisor_id`, `advisor_name`, `contact`, `address`) and for the others (`advisor_id`, `advisor_name`, birthday). Per audit row: `actor_id`, `actor_email`, `ip_address` null, `entity_type`, `entity_id`, `old_values` empty, `context.import = true`, `context.source = 'console'`, `context.command = 'customers:import'`, `context.import_row` (physical line: 2, 3, 4; and 2, 4 for a file with a multi-line cell) and the `os_user`/`host` keys. Exit codes asserted on every run; the report tables are parsed from the console output and compared with exact columns (`Fila | Columna | Motivo`, `Fila | Advertencia`) and exact rows; sentinel values in every cell of the leak tests never appear in the output.
+
+### What was built
+- `app/Support/Customers/CustomerCsvReader.php` (+ `InvalidCustomerCsv`): path, BOM, UTF-8, delimiter from the header, exact header set, `SplFileObject::fgetcsv` over `php://memory` with escape disabled, physical line numbers (newlines counted per record), blank lines skipped. Reasons carry column names and line numbers only.
+- `app/Actions/Customers/ImportCustomers.php` (+ `app/Support/Customers/ImportReport.php`): phase 0 author (before the file), phase 1 validation with `CustomerRules` (+ `after()` hooks), `isEligibleAdvisor()`, intra-file document check, phone warnings against file and DB, phase 2 one `DB::transaction` calling `CreateCustomer::handle(..., confirmDuplicatePhone: true, origin: AuditOrigin::console('customers:import'), autoAssign: false, advisor: row advisor, auditContext: ['import' => true, 'import_row' => line])`.
+- `app/Console/Commands/ImportCustomers.php`: thin; prints reasons, the two tables, the hint for `--confirm-duplicate-phones`, "Se importaron N clientes."; any unexpected `Throwable` prints a generic message with the class name only and logs only the class.
+- `CreateCustomer::handle()` gained `?AuditOrigin $origin`, `bool $autoAssign = true`, `?User $advisor`, `array $auditContext`; defaults keep every existing caller and test unchanged. With `$autoAssign = false` an ineligible advisor throws `ValidationException` on `advisor_id`.
+- `lang/es/validation.php`: new key `customer_advisor_ineligible` (same text as before), now shared by `AssignCustomerAdvisor` and `CreateCustomer` (and the import report).
+
+### 8.4 re-check: every write to `advisor_id` (PHP search over `app`, `routes`, `database/seeders`, `database/factories`)
+- `app/Actions/Customers/CreateCustomer.php:88` - the only creation write. With `autoAssign` true it is the creator when eligible (E-25); with false (import) it is the row's own advisor or null (DEC-CLI-23, asserted: an eligible author is never assigned).
+- `app/Actions/Customers/AssignCustomerAdvisor.php:42` - the only reassign/unassign path (explicit, requires `customers.assign`).
+- `database/factories/CustomerFactory.php:79` - test factory state `assignedTo()`.
+- The import has no write of its own: it goes through `CreateCustomer`. Reads only elsewhere (`Customer` relation/scope, presenter, `DeleteCustomer` audit copy, audit values). `UpdateCustomer` still ignores `advisor_id`; no automatic unassignment exists.
+
+### 9.5 checks
+- `storage/app/private/.gitignore` is `*` + `!.gitignore`; `git check-ignore -v storage/app/private/imports/clientes.csv` reports the rule, so `storage/app/private/imports/` is ignored and no `.gitignore` change was needed (the design follow-up checkbox in `design.md` is now satisfied).
+- Cell values never reach disk: the reader writes only to `php://memory`; the command prints row numbers, column names and reasons (never cell values; an existing customer's id and name appear only in phone warnings, as designed); the single `Log::error` records the exception class only (exception messages can carry SQL bindings). Covered by the rollback test (`Log::spy()`) and the sentinel tests.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest tests/Feature/Console/ImportCustomersTest.php`: 57 passed (302 assertions) |
+| Runtime harness | Run on the `testing` DB only (`sail exec -e DB_DATABASE=testing laravel.test php artisan ...`, config confirmed as `testing`): `migrate:fresh --seed`, two fictitious users (author, advisor with role "Asesora de Ventas"), a fictitious `;` CSV with a multi-line quoted cell in `storage/app/private/imports/` (deleted afterwards, never committed). Missing `--author` -> exit 1 with reason; `/nonexistent.csv` -> exit 1 with reason; real run -> "Se importaron 3 clientes.", exit 0, 3 customers, 3 `customers.created` rows with `actor_id` = author, `ip_address` NULL, `{import: true, source: console, command: customers:import, import_row: 2|4|5}`; second run -> exit 1, report with the two registered documents and three phone warnings, nothing created. Testing DB left at `migrate:fresh` (empty). The dev DB was never touched. |
+| Rollback boundary | `ImportCustomers` Action + Command + `CustomerCsvReader` + `InvalidCustomerCsv` + `ImportReport` + `ImportCustomersTest`; the `CreateCustomer` optional parameters (revert with the test cases at the end of the test file); the `customer_advisor_ineligible` lang key and its use in `AssignCustomerAdvisor` |
+
+### Slice-close gate (observed)
+- `sail pest tests/Feature/Console/ImportCustomersTest.php`: 57 passed (302 assertions)
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors (after fixing 1 finding)
+- `sail pnpm types:check`: vue-tsc clean
+- `sail pnpm build`: built OK
+- `sail artisan test`: 670 passed + 1 todo (E-19), 3407 assertions (613 + 57 new)
+- `git status --short`: only the intended source, test, lang and openspec files; no CSV, `.env` or dump
+
+### Deviations / decisions
+- Row-shape and empty-file checks are file-level failures (design lists only path, UTF-8, delimiter, header): a row whose number of cells differs from the header, an empty file and a header with no rows stop the run with a reason naming line numbers only ("Filas con distinto número de columnas que el encabezado: N."). Also a repeated header column ("Columnas repetidas: x."). These are technical guards, not business rules.
+- Blank cells are omitted from the mapped input (not sent as null) so each rule reports once, like a request that omits the field; whole numbers are cast to int as a JSON request would send them.
+- Reasons reuse the HTTP validation messages (Spanish attribute names such as "teléfono"), including "solo se admite cuando tipo es company" for company-only fields on a natural row; the CSV `empresa` value maps to the stored `company`, and `pasaporte` to `passport`.
+- A bad advisor (unknown, inactive or without `customers.portfolio`) gets one reason for the three cases, the same text as E-28: "La asesora debe ser un usuario activo con permiso para tener cartera." (the report does not reveal which users exist).
+- Phone warnings are listed per involved row ("El teléfono se repite en la fila N" / "en las filas N, M" / "El teléfono ya está registrado en el cliente #id (nombre)"); the confirmation option never overrides row errors. With errors, the warnings are still printed after the error table.
+- The author check runs before the file is read and returns two reasons: missing `--author` ("Debe indicar el autor con --author=correo.") and unknown/inactive ("El autor indicado no existe o está inactivo.").
+- An unexpected failure in phase 2 prints "No se guardó ningún cliente: la importación falló (<class>)." and logs the class only; exit 1.
+- Singular wording "Se importó 1 cliente." for one row.
+- The reader is an instance (not static) so the Action gets it by injection.
+- Design said the Action's phase 2 calls `CreateCustomer` with `origin`, `autoAssign`, `advisor`, `auditContext` named arguments: followed exactly. The eligibility re-check in `CreateCustomer` also protects the race where an advisor is deactivated between validation and creation (tested at Action level).
+
+### Review size and split
+- Authored lines: about 1,500 in 9 files (production PHP about 700: Action 358, Command 82, reader 199, report 36, exception 20, plus about 53 changed in `CreateCustomer`, lang and `AssignCustomerAdvisor`; tests about 810). Far over the 400 budget; cohesive (tests sit with the code that turns them green) and the tests are about half of it. `size:exception` recommended for PR 9.
+- Honest split if the reviewer wants smaller PRs: 9a reader and file checks (reader, `InvalidCustomerCsv`, command skeleton, the 14 file-level tests, about 560 lines) and 9b row validation and import (Action, `ImportReport`, full command, `CreateCustomer` parameters, lang key, the 43 row-level tests, about 940 lines; 9b alone still exceeds 400 because of the 19-case column-mapping dataset and the E-29/E-31 fixtures). The current working tree is one phase, so splitting means committing 9a first (reader files + the first 14 tests + a skeleton command) and 9b after; the final command file is the 9b version.
+
+### Gaps for the orchestrator
+- No [DEC-PENDIENTE] gaps found. Technical choices listed under deviations (file-level shape checks, single advisor reason, per-row warning wording) may be reviewed but do not invent business behavior.
+
+### Proposed commit (Spanish description, no attribution lines)
+- Single commit: `feat(002): importar clientes desde CSV con todo o nada, informe por fila y marca de importación en la auditoría [CLI-018, CLI-012, CLI-016, DEC-CLI-20, DEC-CLI-21, DEC-CLI-22, DEC-CLI-23, DEC-CLI-24, DEC-CLI-33, E-29, E-30, E-31, E-32, E-39]`
+- If split: `feat(002): lector de CSV y comprobaciones de archivo para customers:import [CLI-018, DEC-CLI-20, E-39]` then `feat(002): importar clientes todo o nada con informe y marca de importación en la auditoría [CLI-018, CLI-012, CLI-016, DEC-CLI-21, DEC-CLI-22, DEC-CLI-23, DEC-CLI-24, DEC-CLI-33, E-29, E-30, E-31, E-32]`
+
+## Review follow-up Phase 9 (R3-stale-advisor-recheck, R3-phase2-error-loses-row)
+
+Scoped fixes after the native review of 13bb8f6.
+
+| Finding | RED | GREEN | Change |
+|---|---|---|---|
+| R3-stale-advisor-recheck | Test deactivating the advisor through the DB while passing the stale instance: no exception (customer created) | green | `CreateCustomer::eligibleOrFail()` re-reads the advisor inside the transaction (`User::query()->whereKey()->lockForUpdate()->first()`) and checks eligibility on that fresh record; a missing user is ineligible. Same `ValidationException` on `advisor_id`. The fresh record is the one used for `advisor_id` and the audit values. |
+| R3-phase2-error-loses-row | Command tests: output showed no `Fila / Columna / Motivo` table (generic failure line with the class name, or exit 0 for the advisor case before finding 1 was fixed) | 61/61 in `ImportCustomersTest.php` | `ImportCustomers::create()` catches a row's `ValidationException`, keeps the whole-import rollback by rethrowing inside the transaction, and returns an `ImportReport` with line, CSV column and reason. The column reuses `column()` and `COLUMN_BY_ATTRIBUTE`, which gained `advisor_id => correo_asesora` (no second mapping). Other Throwables keep the generic handling. |
+
+Decision: the phase 2 report is the same `ImportReport` errors and the same console table as phase 1 (exit 1), so no command change was needed; the header line "el archivo tiene N error(es)" is reused as is. Prepared rows now carry their `cells` so nested-object keys can map to a column. No cell values are printed (reasons come from the lang files).
+
+Tests added: 2 at Action level (stale instance; deleted user) and 2 through the command (document inserted by "another process" via a `creating` hook; advisor deactivated between rows), both asserting exit 1, zero customers and audit rows, the row line, the column and the reason, and no cell value in the output.
