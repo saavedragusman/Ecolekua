@@ -282,3 +282,47 @@ Inspected the generated CSS of `sail pnpm build`: `.px-space-md{padding-inline:v
 ### Proposed commits (Spanish descriptions, no attribution lines)
 - `feat(002): formulario de alta de cliente con aviso de teléfono repetido y confirmación [CLI-001, E-03, E-04, E-14]`
 - `feat(002): formulario de edición de cliente con advertencia de cambio de tipo [CLI-002, CLI-008, DEC-CLI-15, DEC-CLI-28, E-23]`
+
+## Phase 7 (PR 7): Lifecycle (deactivate, reactivate, delete) - COMPLETE (7/7 tasks)
+
+Branch: `feat/002-customers-7-lifecycle` (from `feat/002-customers-6-forms` at 644eedb). Changes left in the working tree; no commit made. All files written with Edit/Write only.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|-----|-------|-------------|----------|
+| 7.1/7.2 | `tests/Feature/Customers/CustomerStatusTest.php` (8 tests) | Feature (HTTP) | Customers suite green (583 full suite) | 7 of 8 failed with 404 (no routes); the DEC-CLI-28 "inactive stays editable" test passed immediately (backfill of Phase 4 behavior, as the task states) | 8/8 (40 assertions) | deactivate and activate, both forbidden with `customers.update` only, guest redirect, E-40 both directions, relations and advisor intact | none needed |
+| 7.3/7.4 | `tests/Feature/Customers/DeleteCustomerTest.php` (4 tests + E-19 todo) | Feature (HTTP) | same | 4 of 4 failed with 405 (no `DELETE` route); E-19 shown as pending | 4 passed, 1 todo (39 assertions) | company with contact + address and full audit copy, bare customer (`contact`/`address` null in the copy), E-18 forbidden, guest | none needed |
+| 7.5 (frontend) | none (no frontend test runner) | - | `pnpm types:check` clean before | - | `pnpm types:check` clean, `pnpm build` OK | - | - |
+| 7.6 | `tests/Feature/Architecture/NoManualForbiddenTest.php` | Architecture | - | - | 1/1 passed | - | no `abort(403)` added; no FK from history tables assumed (rule documented in `DeleteCustomer` docblock) |
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest tests/Feature/Customers/CustomerStatusTest.php`: 8 passed; `sail pest tests/Feature/Customers/DeleteCustomerTest.php`: 4 passed, 1 todo |
+| Runtime harness | `sail pnpm types:check` clean and `sail pnpm build` OK. Manual flow (deactivate with dialog, reactivate, delete with dialog, "Nuevo cliente" button, permission-based visibility, 375/1280 px, both themes, keyboard only): **PENDING for the human, not claimed** |
+| Rollback boundary | `DeactivateCustomer`, `ActivateCustomer`, `CustomerStatusController`, the two POST routes, `CustomerStatusTest`; `DeleteCustomer`, `CustomerController::destroy`, the DELETE route, `DeleteCustomerTest`; `Show.vue` buttons and dialogs; `Index.vue` "Nuevo cliente" button |
+
+### Slice-close gate (observed)
+- `sail pest tests/Feature/Customers/CustomerStatusTest.php`: 8 passed (40 assertions)
+- `sail pest tests/Feature/Customers/DeleteCustomerTest.php`: 4 passed, 1 todo (39 assertions)
+- `sail pint` then `sail pint --test`: passed
+- `sail composer types:check`: phpstan 0 errors
+- `sail pnpm types:check`: vue-tsc clean (after `sail artisan wayfinder:generate`)
+- `sail pnpm build`: built OK
+- `sail artisan test`: 595 passed + 1 todo (E-19), 2958 assertions (baseline 583 + 12 new passing tests + 1 todo)
+- PENDING (human): browser checks listed above.
+
+### Deviations / decisions
+- Both status Actions re-read the customer with `lockForUpdate()` inside the transaction and compare the locked status (no-op when already in the target state), so concurrent requests cannot double-audit.
+- `DeleteCustomer` copy includes `advisor_id` and `advisor_name` (same shape as the `customers.created` audit values) besides the fields, `contact` and `address` the task lists; `new_values` stays empty. `ensureHasNoHistory()` is intentionally empty with the docblock the task requires.
+- `Show.vue`: "Desactivar" is shown only when the customer is active and "Reactivar" only when inactive (both need `customers.deactivate`); "Editar" needs `customers.update`; "Eliminar" needs `customers.delete`. A history rejection (not reachable in 002) comes back through the existing `BusinessRuleViolation` hook as an error flash on the page, where "Desactivar" is already offered; no extra UI code was needed.
+- Delete confirmation text also states that a customer with history cannot be deleted and must be deactivated.
+- Review size: about 530 authored lines (tracked about 114, new files about 416; tests about 207, production PHP about 210, frontend about 100). Over the 400 budget but cohesive: `size:exception` recommended for PR 7. Honest split if wanted: 7a status (Actions, controller, routes, `CustomerStatusTest`, Show.vue activate/deactivate buttons, about 250), 7b delete (`DeleteCustomer`, `destroy`, route, `DeleteCustomerTest`, Show.vue delete button, about 200), 7c UI (`Index.vue` "Nuevo cliente" button and the Show.vue dialogs, about 80). Shared hunks in `routes/web.php`, `CustomerController.php` and `Show.vue` make a single phase commit the practical option.
+
+### Gaps for the orchestrator
+- No [DEC-PENDIENTE] gaps found.
+
+### Proposed commit (Spanish description, no attribution lines)
+- `feat(002): desactivar, reactivar y eliminar clientes sin historial, y botón "Nuevo cliente" en el listado [CLI-009, CLI-010, CLI-015, CLI-016, DEC-CLI-09, DEC-CLI-28, E-07, E-08, E-09, E-10, E-18, E-40]`

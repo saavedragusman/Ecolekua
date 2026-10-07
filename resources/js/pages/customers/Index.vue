@@ -12,7 +12,7 @@ import type { SegmentedTab } from '@/components/SegmentedTabs.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { usePermissions } from '@/composables/usePermissions';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index, show } from '@/routes/customers';
+import { create, index, show } from '@/routes/customers';
 import type {
     CustomerListPage,
     CustomerStatusCounts,
@@ -126,6 +126,9 @@ function toggleMine(value: boolean): void {
             <h1 class="font-headline-md text-headline-md text-primary">
                 Clientes
             </h1>
+            <AppButton v-if="can('customers.create')" :href="create().url">
+                Nuevo cliente
+            </AppButton>
         </div>
 
         <form

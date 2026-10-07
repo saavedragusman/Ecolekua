@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Customers;
 
 use App\Actions\Customers\CreateCustomer;
+use App\Actions\Customers\DeleteCustomer;
 use App\Actions\Customers\UpdateCustomer;
 use App\Enums\CustomerStatus;
 use App\Enums\PermissionName;
@@ -120,5 +121,16 @@ class CustomerController extends Controller
         Inertia::flash(['type' => 'success', 'message' => 'El cliente fue actualizado.']);
 
         return redirect()->route('customers.show', $customer);
+    }
+
+    public function destroy(Request $request, Customer $customer, DeleteCustomer $deleteCustomer): RedirectResponse
+    {
+        Gate::authorize('delete', $customer);
+
+        $deleteCustomer->handle($customer, $request->user());
+
+        Inertia::flash(['type' => 'success', 'message' => 'El cliente fue eliminado.']);
+
+        return redirect()->route('customers.index');
     }
 }
