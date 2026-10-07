@@ -124,9 +124,9 @@ Depends on Phase 2. Covers PRD-002, E-36, E-45, E-46 (catalog part), E-58, DEC-P
 
 Depends on Phase 2. Covers PRD-007 (catalog side), E-64 (location). The page ships in Phase 6.
 
-- [ ] 5.1 RED — Create `tests/Feature/Catalog/DetailLocationTest.php`: `E-64 (location)` "pechera" after "Pechera" → 422 on `name`; create / update (name, `svg_layer` format and reserved names) / deactivate / activate with audit `catalog.*` and no-op rule; no delete route; `products.catalog` required (403 otherwise). Expected: fail. [PRD-007, PRD-016, PRD-017, DEC-PRD-45, E-64]
-- [ ] 5.2 GREEN — Create `app/Actions/Products/CreateDetailLocation.php`, `UpdateDetailLocation.php` (with the empty layer-guard call site, filled in task 22.7), `app/Http/Requests/Catalog/StoreDetailLocationRequest.php`, `UpdateDetailLocationRequest.php`, `app/Http/Controllers/Catalog/DetailLocationController.php` (writes), routes `/catalog/detail-locations...` including activate/deactivate. Run the test: GREEN. [Decision 9]
-- [ ] 5.3 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): manage detail locations [PRD-007, E-64]`.
+- [x] 5.1 RED — Create `tests/Feature/Catalog/DetailLocationTest.php`: `E-64 (location)` "pechera" after "Pechera" → 422 on `name`; create / update (name, `svg_layer` format and reserved names) / deactivate / activate with audit `catalog.*` and no-op rule; no delete route; `products.catalog` required (403 otherwise). Expected: fail. [PRD-007, PRD-016, PRD-017, DEC-PRD-45, E-64]
+- [x] 5.2 GREEN — Create `app/Actions/Products/CreateDetailLocation.php`, `UpdateDetailLocation.php` (with the empty layer-guard call site, filled in task 22.7), `app/Http/Requests/Catalog/StoreDetailLocationRequest.php`, `UpdateDetailLocationRequest.php`, `app/Http/Controllers/Catalog/DetailLocationController.php` (writes), routes `/catalog/detail-locations...` including activate/deactivate. Run the test: GREEN. [Decision 9]
+- [x] 5.3 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): manage detail locations [PRD-007, E-64]`.
 
 ## Phase 6: Catalog UI 1 — shared components, categories and locations pages (design slice 6)
 

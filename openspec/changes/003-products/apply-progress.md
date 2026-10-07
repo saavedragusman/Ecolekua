@@ -129,3 +129,33 @@ Note: `SyncFabricOfferedColors` was written before the 4.3 tests were run (no ro
 - `special_use = fabric` with presentation `color` is rejected on `special_use` (design Decision 9). Not covered by the spec text: a color attribute whose presentation changes away from `color` keeps the tones of its values (no rule says to clear them).
 - Offered colors request field is `color_ids`; errors for non-fabric value, non-color id and inactive addition are all keyed on `color_ids`. Added colors must be active; already offered inactive colors may be resubmitted.
 - Unique-index backstop errors are mapped by the violated key name (`special_use` or `color_marker`, otherwise `name`).
+
+## Phase 5: Detail locations backend (COMPLETE, tasks 5.1-5.3)
+
+Chain: PR 5, branch `feat/003-products-5-detail-locations`, targets `feat/003-products-4-attributes`. No commit made (orchestrator commits).
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5.1/5.2 | `tests/Feature/Catalog/DetailLocationTest.php` | Feature (HTTP) + Action | 830 tests green at Phase 4 close | 35 tests, 0 passed (33 failed with 404, 2 errors: Actions missing) | 35/35 (204 assertions) | create with/without layer, E-64 create/rename/own-case change, name required/blank/101 (create and update), 11 layer cases on create and update (valid, malformed, reserved, 65 chars), rename audit, layer change and clear audit, omitted layer kept, no-change no audit, unique-index backstop in both Actions, deactivate/activate audit, repeat-state no-op, no DELETE route (405), 4 denied writes audited `authorization.denied`, layer hook call site neutral | Layer rule extracted to `CatalogRules::layerRules()` shared by values and locations |
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Catalog/DetailLocationTest.php`: 35 passed, 204 assertions |
+| Runtime harness | `sail artisan route:list --name=catalog.detail-locations`: 4 routes (store, update, activate, deactivate), no move and no delete |
+| Rollback boundary | `CreateDetailLocation`, `UpdateDetailLocation`, 2 requests, `DetailLocationController`, routes block, `location_name_unique` in `lang/es/validation.php`, `CatalogRules::locationRules()`/`layerRules()` (values keep the same rule), `DetailLocationTest` |
+
+### Slice-close gate
+
+- `sail pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass. `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 867 tests, 866 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Authored lines: about 296 new production (2 Actions 157, controller 63, 2 requests 76) + 38 modified (CatalogRules 28, routes 8, lang 1) + 313 test = about 647. Over the 400 advisory because of the 35-test file (313 lines) and docblocks; production alone is about 334.
+- Resolved the Phase 2 note: locations have no `sort_order` (design table, no move route). Phase 6 task 6.1 must drop `sort_order` from the location props (listed by name); no migration added.
+- Create accepts an optional `svg_layer`; update edits only the keys sent (omitted layer kept, null clears), same semantics as `UpdateAttributeValue`. Create audit new_values: `name`, `svg_layer`, `status`.
+- Hooks left empty and documented: `CreateDetailLocation::ensureNoProductMissesLayer()` and `UpdateDetailLocation::ensureNoProductMissesLayer()` (task 22.7, E-72, DEC-PRD-53).
+- Route parameter is `{location}` (design API table); activate/deactivate reuse the generic `ActivateCatalogItem`/`DeactivateCatalogItem` with `Gate::authorize('manage')` in the controller.
