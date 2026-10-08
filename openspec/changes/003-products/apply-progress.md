@@ -307,3 +307,39 @@ Chain: PR 9, branch `feat/003-products-9-structure`, targets `feat/003-products-
 - Step 6 layer guard and the combo check of step 5 are hooks; step 7 (size cleanup, E-71) is Phase 12.
 - Redirect after the structure update is `back()` (the structure page arrives in Phase 14).
 - No UI in this phase; no manual checks.
+
+## Phase 10: Codes and commercial combinations (COMPLETE, tasks 10.1-10.6)
+
+Chain: PR 10, branch `feat/003-products-10-combinations`, targets `feat/003-products-9-structure`. Committed with the user's per-phase authorization; no push.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 10.1/10.2 | `tests/Unit/Products/CombinationOverlapTest.php`, `AxisSignatureTest.php` | Unit | n/a (new) | 11 errors (classes not found) | 11/11 (16 assertions) | intersection on every axis, E-48 multi-valued, disjoint axis, missing axis, vacuous overlap without axes (N-2), generator input and order, signature order independence, repeated value, empty axes | None needed |
+| 10.3/10.4 | `tests/Feature/Products/CombinationTest.php` | Feature (HTTP) | 1003 tests green at Phase 9 | 42 tests, 1 passed, 41 failed (404 route missing / `CreateCombination` not found) | 43/43 after fixing two test-fixture assumptions (JSON column key order; inactive combos built with factories) | E-07 (+ " o " join), E-08 (+ raw insert), DT-01 (case, `088-1` vs `88`, whitespace, blank, 31 chars, 30 chars, trim), E-09, E-10 (missing, not admitted, foreign, non-axis), E-11, E-48 (+ accepted Gabardina/Dama), DEC-PRD-39 (inactive ignored, DB exact duplicate, duplicate-key mapping), N-2, E-56 (subset, outside, color of fabric product, axis, unknown attribute, empty list, own color list), E-68 (description, no-op, duplicate code, own code case change, axes+restrictions edit, overlap on edit, PRD-012 same rules), E-59 (+ edit while inactive), PRD-013 (status audit, no-op), PRD-016 (create/update/deactivate 403 audited), 404 scoped bindings | `phpstan` fixes (pivot access replaced with a query; list typing) |
+| 10.5 | n/a | n/a | n/a | n/a | Code and axis/restriction validation were written directly in `CombinationRules` (pure, array input) so the importer can reuse them | `composer types:check` 0 errors | None needed |
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Products/CombinationTest.php tests/Unit/Products`: 65 passed |
+| Runtime harness | `sail artisan route:list --name=products.combinations` lists store, update, activate, deactivate; all exercised over HTTP |
+| Rollback boundary | `CombinationOverlap`, `AxisSignature`, `CombinationRules`, `ProductCombinations`, `CombinationAudit`, `ProductPresenter::descriptiveName/combinationName`, `Combination::code` accessor, `CombinationPolicy`, 4 Actions, 2 requests, `CombinationController`, 4 routes, validation strings, 3 test files |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass. `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1057 tests, 1056 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Extra helpers not listed in the design file table: `ProductCombinations` (declared structure, axes of a combination, overlap lookup, value sync) and `CombinationAudit` (audit snapshot by name), so Create/Update/Activate/Deactivate do not duplicate queries.
+- `ProductPresenter::descriptiveName(Product, list<list<string>>)` takes value names per axis in axis order; `combinationName(Combination)` resolves them from the database (values of an axis in catalog order `sort_order, id`).
+- Payload: `code`, `description`, `axes {attributeId: [valueIds]}`, `restrictions {attributeId: [valueIds]}`. An empty restriction list means no restriction. `included_customization_ids` is Phase 11 (the table exists but PRD-008 is out of this slice).
+- Overlap on edit only runs while the combination is active; an inactive one is checked on activation (E-59).
+- Audit JSON column does not keep key order (MySQL JSON), so tests compare `axes` with `toEqual`.
+- The registry-only "combo with the same code" clause of E-08 is completed in Phase 13 (the registry already rejects it).
+- `ensureEditableWithoutHistory()` hook is empty in `UpdateCombination` (DEC-PRD-21, 004/006/008).
+- Redirect after store/update goes to `/products/{id}` (R-3 precedent); activate/deactivate go back.
+- No UI in this phase; no manual checks.

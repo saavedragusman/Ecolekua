@@ -13,6 +13,7 @@ use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Products\ProductStructureController;
@@ -102,6 +103,15 @@ Route::put('/products/{product}', [ProductController::class, 'update'])->name('p
 Route::post('/products/{product}/activate', [ProductStatusController::class, 'activate'])->name('products.activate');
 Route::post('/products/{product}/deactivate', [ProductStatusController::class, 'deactivate'])->name('products.deactivate');
 Route::put('/products/{product}/attributes', [ProductStructureController::class, 'update'])->name('products.attributes.update');
+
+// Combinations of a product (PRD-005). Scoped bindings: a combination of another product is a 404.
+// The editor pages (`create`, `edit`) are declared with their pages in Phase 19.
+Route::scopeBindings()->group(function () {
+    Route::post('/products/{product}/combinations', [CombinationController::class, 'store'])->name('products.combinations.store');
+    Route::put('/products/{product}/combinations/{combination}', [CombinationController::class, 'update'])->name('products.combinations.update');
+    Route::post('/products/{product}/combinations/{combination}/activate', [CombinationController::class, 'activate'])->name('products.combinations.activate');
+    Route::post('/products/{product}/combinations/{combination}/deactivate', [CombinationController::class, 'deactivate'])->name('products.combinations.deactivate');
+});
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

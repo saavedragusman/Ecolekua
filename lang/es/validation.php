@@ -80,6 +80,18 @@ return [
     'attribute_in_use_deactivate' => 'No se puede desactivar el atributo: lo declaran los productos activos :products.',
     'attribute_in_use_change' => 'No se puede cambiar la presentación ni el uso especial del atributo: lo declaran los productos :products.',
 
+    // Combinations (spec 003, PRD-005, DT-01).
+    'combination_code_unique' => 'Ya existe una combinación o un combo con ese código.',
+    'combination_code_format' => 'El código no puede contener espacios.',
+    'combination_axis_required' => 'Elija al menos un valor para este eje.',
+    'combination_axis_unknown' => 'Este atributo no es un eje del producto.',
+    'combination_axis_value_not_allowed' => 'Algún valor no está admitido por el producto para este eje.',
+    'combination_restriction_not_order' => 'Solo se pueden restringir los atributos de pedido del producto.',
+    'combination_restriction_color_fabric' => 'El color de un producto con tela sale de la tela elegida y no se restringe.',
+    'combination_restriction_value_not_allowed' => 'Algún valor de la restricción no está admitido por el producto.',
+    'combination_overlap' => 'Coincide con la combinación activa «:code» en todos sus ejes.',
+    'combination_axes_duplicate' => 'Ya existe una combinación activa con esos mismos valores de eje.',
+
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
         'mixed' => 'El campo :attribute debe contener al menos una mayúscula y una minúscula.',
@@ -141,5 +153,8 @@ return [
         'attributes.*.attribute_id' => 'atributo',
         'attributes.*.role' => 'rol',
         'attributes.*.allowed_value_ids' => 'valores admitidos',
+        'code' => 'código',
+        'axes' => 'ejes',
+        'restrictions' => 'restricciones',
     ],
 ];

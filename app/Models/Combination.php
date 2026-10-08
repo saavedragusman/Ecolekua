@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CatalogStatus;
 use Database\Factories\CombinationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -26,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property CatalogStatus $status
  * @property string $axis_signature
  * @property string|null $active_signature
+ * @property-read string|null $code
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Product $product
@@ -57,8 +59,18 @@ class Combination extends Model
     }
 
     /**
-     * Registry row that holds the code (DT-01). Named `catalogCode` so the accessor `code` can be
-     * added with the Actions that write it (Phase 10).
+     * The code as stored in the registry (DT-01), or null while the registry row does not exist.
+     *
+     * @return Attribute<string|null, never>
+     */
+    protected function code(): Attribute
+    {
+        return Attribute::get(fn (): ?string => $this->catalogCode?->code);
+    }
+
+    /**
+     * Registry row that holds the code (DT-01). Named `catalogCode` so it does not clash with the
+     * `code` accessor.
      *
      * @return HasOne<CatalogCode, $this>
      */
