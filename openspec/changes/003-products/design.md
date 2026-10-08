@@ -174,7 +174,7 @@ Spec §8 makes the attribute catalog screen visible with `products.catalog`; `pr
 - PRD-020 guard on detail locations: adding a location whose `svg_layer` is missing from any template of the product is rejected with the missing layer (spec PRD-020 last bullet).
 - **Cross-record edit guards (DEC-PRD-52, E-70)**, inside the same locked transaction, before any write, using `CatalogUsage`:
   - changing `business_line`, or `supply_mode` to `service`, of a product that is a `combo_components.product_id` → `ValidationException` on the changed field naming the combos ("Es componente de los combos «…»").
-  - changing `supply_mode` **away from** `service` while the product appears in `product_customizations.service_product_id` (admitted by other products) or `combination_customizations.service_product_id` (included by combinations) → `ValidationException` on `supply_mode` naming those products and combination codes. `DeleteProduct` applies the same lookup (Decision 17).
+  - changing `supply_mode` **away from** `service` while the product appears in `product_customizations.service_product_id` (admitted by other products) or `combination_customizations.service_product_id` (included by combinations) → `ValidationException` on `supply_mode` naming those products and each combination code with its product, e.g. "110-4 (Camisa corporativa)" (DEC-PRD-57). `DeleteProduct` applies the same lookup (Decision 17).
   - Combo and customization tables arrive in slices 13 and 11, so slice 8 ships both guards as empty hooks that those slices fill.
   - Removing a size from a product's allowed values is not an `UpdateProduct` edit; it goes through `SyncProductAttributes` (Decision 11).
 **Rationale**: PRD-003, PRD-007, PRD-008, PRD-009, PRD-012, DEC-PRD-08, DEC-PRD-19, DEC-PRD-34, DEC-PRD-46, DEC-PRD-47, DEC-PRD-52, E-01, E-02, E-20, E-64, E-66, E-68, E-70.
@@ -200,13 +200,13 @@ Spec §8 makes the attribute catalog screen visible with `products.catalog`; `pr
 - Rules (`CombinationRules` + Action checks, product locked):
   - every axis of the product has ≥ 1 value, each among the product's allowed values for that axis (E-10 → `axes.{attributeId}`); several values per axis allowed (DEC-PRD-33, E-47);
   - `restrictions` only for order attributes, each a non-empty subset of the product's allowed values (E-56 → `restrictions.{attributeId}`); not allowed for the color of a product with fabric (DEC-PRD-35/36);
-  - included customizations: products in mode `service`, independent of the admitted ones (DEC-PRD-47, E-67);
+  - included customizations: products in mode `service`, independent of the admitted ones (DEC-PRD-47, E-67). A customization being **added** (every one on create; only those not already included on update) must also be active; ones already included in the combination are kept even if the service was deactivated later (DEC-PRD-56);
   - code (Decision 4) and overlap (Decision 5).
 - New combinations are `active`. `UpdateCombination` keeps the private `ensureEditableWithoutHistory()` hook (empty in 003; 004/006/008 make code and axis values immutable with history, DEC-PRD-21).
 - **Duplicate** (spec §8): `GET /products/{product}/combinations/create?from={combination}` pre-fills axes, restrictions, description and included customizations with an empty code; saving is a normal create.
 - Descriptive name (spec §5): `ProductPresenter::descriptiveName(Product, axes)` → product name + axis values in axis order joined by " · ", several values joined by " o " (E-07).
 - Audit `products.combination_created` / `_updated` with code, description, axes and restrictions by name.
-**Rationale**: PRD-005, PRD-008, PRD-012, DEC-PRD-04, DEC-PRD-21, DEC-PRD-33, DEC-PRD-36, DEC-PRD-47, E-07..E-11, E-47, E-48, E-54..E-56, E-67, E-68.
+**Rationale**: PRD-005, PRD-008, PRD-012, DEC-PRD-04, DEC-PRD-21, DEC-PRD-33, DEC-PRD-36, DEC-PRD-47, DEC-PRD-56, E-07..E-11, E-47, E-48, E-54..E-56, E-67, E-68.
 
 ### Decision 13: Minimum stock without the 008 stock-item entity
 
