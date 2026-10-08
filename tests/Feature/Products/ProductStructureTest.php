@@ -8,10 +8,13 @@ use App\Models\AuditLog;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogCode;
 use App\Models\Combination;
+use App\Models\Combo;
+use App\Models\ComboComponent;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 
 function structureEditor(): User
@@ -506,6 +509,147 @@ it('E-57 only looks at the combinations of the same product', function () {
     putStructure($this, structureEditor(), $product, $entries)->assertRedirect();
 
     expect(currentStructure($product)[4]['values'])->not->toContain('XS');
+});
+
+// --- Allowed values restricted by a combo component (E-24, E-57, DEC-PRD-37, DEC-PRD-44) --------
+
+/**
+ * A diaper product with the E-05 structure and no combinations, so only the combo guard can stop a
+ * structure change.
+ *
+ * @return array{product: Product, catalog: array{attrs: array<string, CatalogAttribute>, vals: array<string, AttributeValue>}}
+ */
+function diaperWithStructure(): array
+{
+    $catalog = structureCatalog();
+    $product = Product::factory()->diapers()->create(['name' => 'Pañal antiderrame']);
+    declareStructure($product, fullStructure($catalog));
+
+    return ['product' => $product, 'catalog' => $catalog];
+}
+
+/**
+ * A combo with one component of the product that admits only the given values (by name).
+ *
+ * @param  list<string>  $valueNames
+ */
+function structureComboComponent(Product $product, array $catalog, string $comboName, string $code, array $valueNames): Combo
+{
+    $combo = Combo::factory()->create(['name' => $comboName]);
+    CatalogCode::factory()->forCombo($combo)->create(['code' => $code]);
+    $component = ComboComponent::factory()->for($combo)->for($product)->create();
+
+    foreach ($valueNames as $name) {
+        DB::table('combo_component_values')->insert([
+            'combo_component_id' => $component->id,
+            'catalog_attribute_id' => $catalog['vals'][$name]->catalog_attribute_id,
+            'attribute_value_id' => $catalog['vals'][$name]->id,
+        ]);
+    }
+
+    return $combo;
+}
+
+it('E-24 (combo) rejects removing a size that a combo component restricts and names the combo', function () {
+    ['product' => $product, 'catalog' => $catalog] = diaperWithStructure();
+    structureComboComponent($product, $catalog, 'Kit Oro antiderrame', 'K-ORO', ['XS', 'S']);
+    $before = currentStructure($product);
+
+    $entries = fullStructure($catalog);
+    $entries[4] = structureEntry($catalog, 'Talla', 'order', ['S', 'M', 'L', 'XL', '2XL', '3XL']);
+
+    $response = putStructure($this, structureEditor(), $product, $entries)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['attributes']);
+
+    expect($response->json('errors.attributes.0'))->toContain('«K-ORO (Kit Oro antiderrame)»')
+        ->and(currentStructure($product))->toBe($before)
+        ->and(structureAudit())->toHaveCount(0);
+
+    // A size no component restricts leaves without trouble.
+    $entries[4] = structureEntry($catalog, 'Talla', 'order', ['XS', 'S', 'M', 'L', 'XL', '2XL']);
+
+    putStructure($this, structureEditor(), $product, $entries)->assertRedirect();
+
+    expect(currentStructure($product)[4]['values'])->not->toContain('3XL');
+});
+
+it('E-24 (combo) rejects removing an axis value that a combo component restricts', function () {
+    ['product' => $product, 'catalog' => $catalog] = diaperWithStructure();
+    structureComboComponent($product, $catalog, 'Kit Plata', 'K-02', ['Microfibra']);
+    $before = currentStructure($product);
+
+    $entries = fullStructure($catalog);
+    $entries[0] = structureEntry($catalog, 'Tela', 'axis', ['Drill']);
+
+    $response = putStructure($this, structureEditor(), $product, $entries)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['attributes']);
+
+    expect($response->json('errors.attributes.0'))->toContain('«K-02 (Kit Plata)»')
+        ->and(currentStructure($product))->toBe($before);
+
+    // Drill is not restricted by the component.
+    $entries[0] = structureEntry($catalog, 'Tela', 'axis', ['Microfibra']);
+
+    putStructure($this, structureEditor(), $product, $entries)->assertRedirect();
+
+    expect(currentStructure($product)[0]['values'])->toBe(['Microfibra']);
+});
+
+it('E-57 (combo) rejects removing a whole order attribute whose values a combo component restricts', function () {
+    ['product' => $product, 'catalog' => $catalog] = diaperWithStructure();
+    structureComboComponent($product, $catalog, 'Kit Oro antiderrame', 'K-ORO', ['XS']);
+    $before = currentStructure($product);
+
+    $entries = array_values(array_filter(
+        fullStructure($catalog),
+        fn (array $entry): bool => $entry['attribute_id'] !== $catalog['attrs']['Talla']->id,
+    ));
+
+    $response = putStructure($this, structureEditor(), $product, $entries)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['attributes']);
+
+    expect($response->json('errors.attributes.0'))->toContain('«K-ORO (Kit Oro antiderrame)»')
+        ->and(currentStructure($product))->toBe($before);
+});
+
+it('E-57 (combo) rejects removing the color attribute of a fabric product when a component restricts the color', function () {
+    ['product' => $product, 'catalog' => $catalog] = diaperWithStructure();
+    // The color of a product with fabric has no allowed values of its own, so only the attribute is removed.
+    structureComboComponent($product, $catalog, 'Kit Oro antiderrame', 'K-ORO', ['Blanco']);
+    $before = currentStructure($product);
+
+    $entries = array_values(array_filter(
+        fullStructure($catalog),
+        fn (array $entry): bool => $entry['attribute_id'] !== $catalog['attrs']['Color']->id,
+    ));
+
+    $response = putStructure($this, structureEditor(), $product, $entries)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['attributes']);
+
+    expect($response->json('errors.attributes.0'))->toContain('«K-ORO (Kit Oro antiderrame)»')
+        ->and(currentStructure($product))->toBe($before);
+});
+
+it('E-24 (combo) names every combo that restricts the value, sorted, and only looks at components of the same product', function () {
+    ['product' => $product, 'catalog' => $catalog] = diaperWithStructure();
+    structureComboComponent($product, $catalog, 'Kit Plata', 'K-02', ['XS']);
+    structureComboComponent($product, $catalog, 'Kit Oro antiderrame', 'K-ORO', ['XS', 'S']);
+
+    $other = Product::factory()->diapers()->create(['name' => 'Absorbente']);
+    declareStructure($other, [structureEntry($catalog, 'Talla', 'order', ['XS', 'S'])]);
+    structureComboComponent($other, $catalog, 'Kit juvenil', 'K-JUV', ['XS']);
+
+    $entries = fullStructure($catalog);
+    $entries[4] = structureEntry($catalog, 'Talla', 'order', ['S', 'M', 'L', 'XL', '2XL', '3XL']);
+
+    $response = putStructure($this, structureEditor(), $product, $entries)->assertUnprocessable();
+
+    expect($response->json('errors.attributes.0'))->toContain('«K-02 (Kit Plata)», «K-ORO (Kit Oro antiderrame)»')
+        ->and($response->json('errors.attributes.0'))->not->toContain('Kit juvenil');
 });
 
 // --- Audit and authorization -----------------------------------------------------------------

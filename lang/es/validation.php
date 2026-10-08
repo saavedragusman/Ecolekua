@@ -100,6 +100,11 @@ return [
     'service_in_use_combinations' => 'No se puede sacar el producto del modo «Servicio»: lo incluyen las combinaciones :combinations.',
     'service_in_use_both' => 'No se puede sacar el producto del modo «Servicio»: lo admiten los productos :products y lo incluyen las combinaciones :combinations.',
 
+    // Combos (spec 003, PRD-010) and the edit guards that protect their components (DEC-PRD-52).
+    'product_in_combos_line' => 'No se puede cambiar la línea de negocio: el producto es componente de los combos :combos.',
+    'product_in_combos_service' => 'No se puede pasar el producto al modo «Servicio»: es componente de los combos :combos.',
+    'structure_value_in_combos' => 'No se puede retirar el valor ni el atributo admitido: lo restringen los componentes de los combos :combos.',
+
     // Own minimum stock per article (spec 003, PRD-009, DEC-PRD-46).
     'stock_minimum_mode' => 'El stock mínimo por artículo solo se admite en el modo «Stock con mínimo».',
     'stock_minimum_combination_foreign' => 'La combinación no pertenece a este producto.',

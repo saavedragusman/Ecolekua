@@ -113,13 +113,40 @@ class UpdateProduct
     }
 
     /**
-     * Hook for DEC-PRD-52 / E-70: changing the business line, or the mode to `service`, of a product
-     * that is a combo component is rejected naming the combos. The combo tables arrive in Phase 13,
-     * which fills this hook (task 13.6) with `CatalogUsage::combosUsingProduct()`.
+     * DEC-PRD-52 / E-70: changing the business line, or the mode to `service`, of a product that is
+     * a combo component is rejected naming the combos (combos hold diaper-line products that are not
+     * services, DEC-PRD-43 and E-22). Each changed field reports its own error. Runs before any
+     * write, under the product lock.
+     *
+     * @throws ValidationException on `business_line` and `supply_mode`
      */
     private function ensureNotComboComponentChange(Product $product, BusinessLine $line, SupplyMode $mode): void
     {
-        // Intentionally empty until task 13.6.
+        $lineChanges = $line !== $product->business_line;
+        $becomesService = $mode === SupplyMode::Service && $product->supply_mode !== SupplyMode::Service;
+
+        if (! $lineChanges && ! $becomesService) {
+            return;
+        }
+
+        $combos = CatalogUsage::combosUsingProduct($product->id);
+
+        if ($combos === []) {
+            return;
+        }
+
+        $replace = ['combos' => CatalogUsage::quote($combos)];
+        $errors = [];
+
+        if ($lineChanges) {
+            $errors['business_line'] = __('validation.product_in_combos_line', $replace);
+        }
+
+        if ($becomesService) {
+            $errors['supply_mode'] = __('validation.product_in_combos_service', $replace);
+        }
+
+        throw ValidationException::withMessages($errors);
     }
 
     /**
