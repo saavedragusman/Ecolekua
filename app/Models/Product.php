@@ -89,6 +89,16 @@ class Product extends Model
     }
 
     /**
+     * Commercial combinations of the product, any status (PRD-005).
+     *
+     * @return HasMany<Combination, $this>
+     */
+    public function combinations(): HasMany
+    {
+        return $this->hasMany(Combination::class);
+    }
+
+    /**
      * Detail locations the product admits (PRD-007).
      *
      * @return BelongsToMany<DetailLocation, $this>

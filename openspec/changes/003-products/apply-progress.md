@@ -272,3 +272,38 @@ Chain: PR 8, branch `feat/003-products-8-products`, targets `feat/003-products-7
 - The task 2.3 note (category cannot be deleted while referenced) is covered by the FK restrict test on `products.product_category_id`. Deactivating a category that has products is not restricted (the spec does not say so).
 - `product_attributes.catalog_attribute_id` and `product_attribute_values.attribute_value_id` use restrict; the composite FK to `(id, catalog_attribute_id)` is not used here (design reserves it for `combination_values` and `combo_component_values`).
 - Manual browser checks: none (no UI in this phase).
+
+## Phase 9: Product structure and attribute guards (COMPLETE, tasks 9.1-9.9)
+
+Chain: PR 9, branch `feat/003-products-9-structure`, targets `feat/003-products-8-products`. Resumed after a rate-limit interruption; the working tree was reconciled and the tests re-run before closing.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-----------|-------------|----------|
+| 9.1 | covered by 9.3 | schema | 959 tests green at Phase 8 | n/a (schema, test-backed by 9.3 and Phase 10) | `migrate:fresh`, `migrate:rollback --step=1`, `migrate`: DONE all three times | n/a | n/a |
+| 9.2/9.4 | `tests/Unit/Products/ProductRulesTest.php` | Unit | n/a (new) | 5 tests, 0 passed (class `ProductRules` not found) | 5/5 | fabric as order, color as axis, first offender wins, valid mix, free roles and empty list | None needed |
+| 9.3/9.4 | `tests/Feature/Products/ProductStructureTest.php` | Feature (HTTP) | n/a (new) | 28 tests, 1 passed (the unknown-product 404), 27 failed with 404 (route missing) | 28/28 (with the unit file: 33 tests, 128 assertions) | E-05, PRD-004 own color list, DEC-PRD-35, min one active value, no attributes, shape errors, E-06, foreign value, DEC-PRD-50 both roles, E-69 inactive attribute and value (kept when deactivated later), E-60 three freezes plus axis removal plus allowed edits plus pre-combination edit, E-24 removal, E-57 (restriction, whole attribute, other product, unused size), audit shape, no-op no audit, 403 audited, 404 | `phpstan` list typing in the Action and `CatalogUsage` |
+| 9.5/9.6 | `tests/Feature/Catalog/AttributeCatalogTest.php` (E-69) | Feature (HTTP) | 161 catalog tests green | 9 tests, 2 passed (rename and inactive no-op, unchanged behavior), 7 failed | 9/9 (with DEC-PRD-51: 11 tests, 58 assertions) | deactivate naming the product only, clear/change use, change presentation, assign use, rename allowed, inactive product, no-op, alphabetical names | None needed |
+| 9.7 | n/a | n/a | n/a | n/a | Two empty documented hooks in `SyncProductAttributes` (`ensureNoComboUsesRemovedValues` task 13.6, `ensureLayerGuard` task 22.7); call sites exercised by the structure tests | n/a | n/a |
+| 9.8 | n/a | n/a | n/a | n/a | Role rule already lives only in `ProductRules` | n/a | `composer types:check` 0 errors |
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Unit/Products/ProductRulesTest.php tests/Feature/Products/ProductStructureTest.php`: 33 passed; `sail pest --filter="E-69\|DEC-PRD-51"`: 11 passed |
+| Runtime harness | migration 3 round trip (fresh, rollback 1, migrate) DONE; route `products.attributes.update` exercised over HTTP |
+| Rollback boundary | migration 3, models `Combination`, `CatalogCode`, `StockMinimumOverride`, `Product::combinations()`, two factories, `ProductRules`, `CatalogUsage`, `SyncProductAttributes`, request, `ProductStructureController`, the route, validation strings, the two attribute-in-use guards, and the three test files |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass. `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1003 tests, 1002 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Errors: structure rules answer on `attributes` (freeze, values in use) or `attributes.{i}.attribute_id|role|allowed_value_ids`; attribute deactivation answers on `status`; presentation/use changes on their own field.
+- `Combination` exposes the code through `catalogCode()` (the `code` accessor arrives with the Phase 10 Actions). `catalog_codes.combo_id` has no FK yet (Phase 13).
+- Step 6 layer guard and the combo check of step 5 are hooks; step 7 (size cleanup, E-71) is Phase 12.
+- Redirect after the structure update is `back()` (the structure page arrives in Phase 14).
+- No UI in this phase; no manual checks.

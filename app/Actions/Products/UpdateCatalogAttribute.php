@@ -9,6 +9,7 @@ use App\Enums\AuditAction;
 use App\Models\CatalogAttribute;
 use App\Models\User;
 use App\Support\Products\CatalogRules;
+use App\Support\Products\CatalogUsage;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -98,15 +99,36 @@ class UpdateCatalogAttribute
     }
 
     /**
-     * Hook for DEC-PRD-51 / E-69: changing the presentation or the special use (assigning,
-     * changing or removing it) must be rejected while any product declares the attribute, naming
-     * the products on the offending field. The product tables arrive in Phase 8 and
-     * `CatalogUsage::productsDeclaring()` in Phase 9, which fills this hook (task 9.6).
+     * DEC-PRD-51 / E-69: changing the presentation or the special use (assigning, changing or
+     * removing it) is rejected while any product, active or not, declares the attribute. The error
+     * names the products on the offending field; a rename is not affected.
      *
      * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException
      */
     private function ensureNotDeclaredByProducts(CatalogAttribute $attribute, array $data): void
     {
-        // Intentionally empty until task 9.6.
+        $changed = [];
+
+        if ($data['presentation'] !== $attribute->presentation->value) {
+            $changed[] = 'presentation';
+        }
+
+        if (($data['special_use'] ?? null) !== $attribute->special_use?->value) {
+            $changed[] = 'special_use';
+        }
+
+        if ($changed === []) {
+            return;
+        }
+
+        $products = CatalogUsage::productsDeclaring($attribute);
+
+        if ($products !== []) {
+            $message = __('validation.attribute_in_use_change', ['products' => CatalogUsage::quote($products)]);
+
+            throw ValidationException::withMessages(array_fill_keys($changed, $message));
+        }
     }
 }
