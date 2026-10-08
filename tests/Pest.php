@@ -1,11 +1,23 @@
 <?php
 
+use App\Actions\Products\CreateCombo;
+use App\Enums\AuditAction;
 use App\Enums\PermissionName;
+use App\Models\AttributeValue;
+use App\Models\AuditLog;
+use App\Models\CatalogAttribute;
+use App\Models\CatalogCode;
+use App\Models\Combo;
+use App\Models\ComboComponent;
 use App\Models\Customer;
+use App\Models\Product;
+use App\Models\ProductAttribute;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Cookie\CookieValuePrefix;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -137,4 +149,161 @@ function requestWithSession(string $sessionCookie, string $method, string $uri, 
     $cookie = encrypt(CookieValuePrefix::create($name, app('encrypter')->getKey()).$sessionCookie, false);
 
     return test()->call($method, $uri, $data, [$name => $cookie]);
+}
+
+function comboCreator(): User
+{
+    return userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsCreate);
+}
+
+/**
+ * Diaper catalog of the "Kit Oro antiderrame" example (E-21). Value names are unique across the
+ * fixture, so tests address them by name. Fictitious data only.
+ *
+ * - Pañal antiderrame: size as axis (3XG, 4XG, 5XG). 2XG exists in the catalog but is not admitted.
+ * - Absorbente: size as order attribute (3XG, 4XG) and its own colors (Blanco, Azul).
+ * - Protector de cama: declares no attributes.
+ * - Pañal ecológico: fabric as axis (Microfibra offers Blanco, Algodón offers Blanco and Crema); its
+ *   color comes from the fabric. Azul exists but no fabric offers it.
+ * - Camisa corporativa (uniforms line) and Bordado pequeño (a diaper-line service) for the rejections.
+ *
+ * @return array{attrs: array<string, CatalogAttribute>, vals: array<string, AttributeValue>, products: array<string, Product>}
+ */
+function comboCatalog(): array
+{
+    $attrs = [
+        'Talla' => CatalogAttribute::factory()->size()->create(),
+        'Color' => CatalogAttribute::factory()->color()->create(),
+        'Tela' => CatalogAttribute::factory()->fabric()->create(),
+    ];
+
+    $vals = [];
+
+    foreach (['3XG', '4XG', '5XG', '2XG'] as $position => $name) {
+        $vals[$name] = AttributeValue::factory()->for($attrs['Talla'], 'catalogAttribute')->create(['name' => $name, 'sort_order' => $position + 1]);
+    }
+
+    foreach (['Blanco' => '#FFFFFF', 'Azul' => '#1F3A93', 'Crema' => '#F5F0DC'] as $name => $tone) {
+        $vals[$name] = AttributeValue::factory()->for($attrs['Color'], 'catalogAttribute')->withTone($tone)->create(['name' => $name]);
+    }
+
+    foreach (['Microfibra', 'Algodón'] as $name) {
+        $vals[$name] = AttributeValue::factory()->for($attrs['Tela'], 'catalogAttribute')->create(['name' => $name]);
+    }
+
+    $vals['Microfibra']->offeredColors()->attach([$vals['Blanco']->id]);
+    $vals['Algodón']->offeredColors()->attach([$vals['Blanco']->id, $vals['Crema']->id]);
+
+    $declare = function (Product $product, array $declared) use ($attrs, $vals): void {
+        $position = 0;
+
+        foreach ($declared as $attribute => [$role, $allowed]) {
+            $row = ProductAttribute::factory()->create([
+                'product_id' => $product->id,
+                'catalog_attribute_id' => $attrs[$attribute]->id,
+                'role' => $role,
+                'sort_order' => ++$position,
+            ]);
+            $row->allowedValues()->attach(array_map(fn (string $name): int => $vals[$name]->id, $allowed));
+        }
+    };
+
+    $products = [
+        'Pañal antiderrame' => Product::factory()->diapers()->create(['name' => 'Pañal antiderrame']),
+        'Absorbente' => Product::factory()->diapers()->create(['name' => 'Absorbente']),
+        'Protector de cama' => Product::factory()->diapers()->create(['name' => 'Protector de cama']),
+        'Pañal ecológico' => Product::factory()->diapers()->create(['name' => 'Pañal ecológico']),
+        'Camisa corporativa' => Product::factory()->create(['name' => 'Camisa corporativa']),
+        'Bordado pequeño' => Product::factory()->diapers()->service()->create(['name' => 'Bordado pequeño']),
+    ];
+
+    $declare($products['Pañal antiderrame'], ['Talla' => ['axis', ['3XG', '4XG', '5XG']]]);
+    $declare($products['Absorbente'], ['Talla' => ['order', ['3XG', '4XG']], 'Color' => ['order', ['Blanco', 'Azul']]]);
+    $declare($products['Pañal ecológico'], ['Tela' => ['axis', ['Microfibra', 'Algodón']], 'Color' => ['order', []]]);
+
+    return ['attrs' => $attrs, 'vals' => $vals, 'products' => $products];
+}
+
+/**
+ * Ids of the named values.
+ *
+ * @return list<int>
+ */
+function comboIds(array $catalog, string ...$names): array
+{
+    return array_map(fn (string $name): int => $catalog['vals'][$name]->id, $names);
+}
+
+/**
+ * One component of the payload. `$values` maps an attribute name to value names.
+ *
+ * @param  array<string, list<string>>  $values
+ * @return array{product_id: int, quantity: int, values: array<int, list<int>>}
+ */
+function comboComponent(array $catalog, string $product, int $quantity = 1, array $values = []): array
+{
+    $ids = [];
+
+    foreach ($values as $attribute => $names) {
+        $ids[$catalog['attrs'][$attribute]->id] = comboIds($catalog, ...$names);
+    }
+
+    return ['product_id' => $catalog['products'][$product]->id, 'quantity' => $quantity, 'values' => $ids];
+}
+
+/**
+ * `POST /combos` payload: the E-21 kit unless overridden.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function comboPayload(array $catalog, array $overrides = []): array
+{
+    return array_merge([
+        'name' => 'Kit Oro antiderrame',
+        'code' => 'K-ORO',
+        'components' => [
+            comboComponent($catalog, 'Pañal antiderrame', 2, ['Talla' => ['3XG', '4XG', '5XG']]),
+            comboComponent($catalog, 'Absorbente', 3),
+            comboComponent($catalog, 'Protector de cama', 1),
+        ],
+    ], $overrides);
+}
+
+function postCombo(mixed $test, User $actor, array $payload): TestResponse
+{
+    return $test->actingAs($actor)->postJson('/combos', $payload);
+}
+
+/**
+ * Creates the E-21 kit (or a variation) straight through the Action.
+ *
+ * @param  array<string, mixed>  $overrides
+ */
+function makeCombo(array $catalog, array $overrides = []): Combo
+{
+    return app(CreateCombo::class)->handle(comboPayload($catalog, $overrides), comboCreator());
+}
+
+/**
+ * @return Collection<int, AuditLog>
+ */
+function comboAudit(AuditAction ...$actions): Collection
+{
+    return AuditLog::query()
+        ->whereIn('action', array_map(fn (AuditAction $action): string => $action->value, $actions))
+        ->orderBy('id')
+        ->get();
+}
+
+/**
+ * Nothing was written: no combo, component, value or registry row of a combo, and no audit row.
+ */
+function expectNoComboWritten(): void
+{
+    expect(Combo::query()->count())->toBe(0)
+        ->and(ComboComponent::query()->count())->toBe(0)
+        ->and(DB::table('combo_component_values')->count())->toBe(0)
+        ->and(CatalogCode::query()->whereNotNull('combo_id')->count())->toBe(0)
+        ->and(comboAudit(AuditAction::ComboCreated))->toHaveCount(0);
 }

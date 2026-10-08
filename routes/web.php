@@ -14,6 +14,7 @@ use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Products\CombinationController;
+use App\Http\Controllers\Products\ComboController;
 use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Products\ProductStockMinimumController;
@@ -114,6 +115,10 @@ Route::scopeBindings()->group(function () {
     Route::post('/products/{product}/combinations/{combination}/activate', [CombinationController::class, 'activate'])->name('products.combinations.activate');
     Route::post('/products/{product}/combinations/{combination}/deactivate', [CombinationController::class, 'deactivate'])->name('products.combinations.deactivate');
 });
+
+// Combos (spec 003, PRD-010). Authorization lives in ComboPolicy. The read pages (`combos.index`,
+// `combos.show`, `combos.create`, `combos.edit`) are declared with their pages in Phase 20.
+Route::post('/combos', [ComboController::class, 'store'])->name('combos.store');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
