@@ -33,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property-read Product $product
  * @property-read CatalogCode|null $catalogCode
  * @property-read Collection<int, AttributeValue> $values
+ * @property-read Collection<int, Product> $customizations
  */
 #[Fillable(['product_id', 'description', 'status', 'axis_signature'])]
 class Combination extends Model
@@ -87,6 +88,17 @@ class Combination extends Model
     public function values(): BelongsToMany
     {
         return $this->belongsToMany(AttributeValue::class, 'combination_values')->withPivot('catalog_attribute_id');
+    }
+
+    /**
+     * Services (products of mode `service`) whose price the combination already covers (PRD-008,
+     * DEC-PRD-47). Independent of the customizations the product admits as extras.
+     *
+     * @return BelongsToMany<Product, $this>
+     */
+    public function customizations(): BelongsToMany
+    {
+        return $this->belongsToMany(Product::class, 'combination_customizations', 'combination_id', 'service_product_id');
     }
 
     /**

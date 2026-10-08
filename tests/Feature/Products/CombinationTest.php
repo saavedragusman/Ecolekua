@@ -194,6 +194,7 @@ it('E-07 creates a valid combination active with its code and descriptive name, 
             'description' => 'Camisa de oficina',
             'axes' => ['Tela' => ['ALG-OXF Pima'], 'Modelo' => ['Columbia especial'], 'Manga' => ['Manga corta'], 'Género' => ['Caballero']],
             'restrictions' => [],
+            'included_customizations' => [],
         ]);
 });
 
