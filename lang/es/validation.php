@@ -96,6 +96,9 @@ return [
     'detail_location_unavailable' => 'Elija ubicaciones de detalle activas.',
     'customization_unavailable' => 'Elija solo servicios activos que no sean el propio producto.',
     'included_customization_unavailable' => 'Elija solo productos activos en modo «Servicio».',
+    'service_in_use_products' => 'No se puede sacar el producto del modo «Servicio»: lo admiten los productos :products.',
+    'service_in_use_combinations' => 'No se puede sacar el producto del modo «Servicio»: lo incluyen las combinaciones :combinations.',
+    'service_in_use_both' => 'No se puede sacar el producto del modo «Servicio»: lo admiten los productos :products y lo incluyen las combinaciones :combinations.',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',

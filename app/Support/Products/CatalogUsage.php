@@ -5,6 +5,7 @@ namespace App\Support\Products;
 use App\Enums\CatalogStatus;
 use App\Models\CatalogAttribute;
 use App\Models\Product;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Cross-record "who uses this" queries (design Decisions 9, 10 and 11). They only read and return
@@ -29,6 +30,33 @@ final class CatalogUsage
             ->get();
 
         return array_values(array_map(fn (Product $product): string => $product->name, $products->all()));
+    }
+
+    /**
+     * Who uses a service product as a customization (DEC-PRD-52): the names of the products that
+     * admit it (any status) and the codes of the combinations that include it, both sorted.
+     *
+     * @return array{products: list<string>, combinations: list<string>}
+     */
+    public static function productsUsingService(int $serviceProductId): array
+    {
+        $products = DB::table('product_customizations')
+            ->join('products', 'products.id', '=', 'product_customizations.product_id')
+            ->where('product_customizations.service_product_id', $serviceProductId)
+            ->orderBy('products.name')
+            ->pluck('products.name')
+            ->map(fn (mixed $name): string => (string) $name)
+            ->all();
+
+        $combinations = DB::table('combination_customizations')
+            ->join('catalog_codes', 'catalog_codes.combination_id', '=', 'combination_customizations.combination_id')
+            ->where('combination_customizations.service_product_id', $serviceProductId)
+            ->orderBy('catalog_codes.code')
+            ->pluck('catalog_codes.code')
+            ->map(fn (mixed $code): string => (string) $code)
+            ->all();
+
+        return ['products' => array_values($products), 'combinations' => array_values($combinations)];
     }
 
     /**
