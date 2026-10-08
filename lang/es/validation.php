@@ -95,7 +95,7 @@ return [
     // Details, customizations and cross-record edit guards (spec 003, PRD-007, PRD-008, DEC-PRD-52).
     'detail_location_unavailable' => 'Elija ubicaciones de detalle activas.',
     'customization_unavailable' => 'Elija solo servicios activos que no sean el propio producto.',
-    'included_customization_unavailable' => 'Elija solo productos en modo «Servicio».',
+    'included_customization_unavailable' => 'Elija solo productos activos en modo «Servicio».',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',

@@ -24,7 +24,7 @@ class UpdateCombinationRequest extends FormRequest
     {
         $registryId = CatalogCode::query()->where('combination_id', $this->combination()->id)->value('id');
 
-        return CombinationRules::rules($registryId);
+        return CombinationRules::rules($registryId, $this->combination());
     }
 
     /**

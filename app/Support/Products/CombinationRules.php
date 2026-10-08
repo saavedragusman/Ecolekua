@@ -5,6 +5,7 @@ namespace App\Support\Products;
 use App\Enums\AttributePresentation;
 use App\Enums\AttributeRole;
 use App\Enums\AttributeSpecialUse;
+use App\Models\Combination;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -29,12 +30,15 @@ final class CombinationRules
      * Shape of the payload of a create or edit. The rules that need the structure of the product or
      * a lock (axes, restrictions, overlap) live in the Actions through `validate()`.
      * `$registryId` is the registry row of the combination being edited (null on creation), so a
-     * combination can keep its own code (DEC-PRD-01, E-08).
+     * combination can keep its own code (DEC-PRD-01, E-08). `$combination` is the one being edited:
+     * the services it already includes stay valid even if deactivated later (DEC-PRD-56).
      *
      * @return array<string, list<mixed>>
      */
-    public static function rules(?int $registryId): array
+    public static function rules(?int $registryId, ?Combination $combination = null): array
     {
+        $heldServices = $combination?->customizations()->pluck('products.id')->values()->all() ?? [];
+
         return [
             'code' => [
                 'required',
@@ -50,7 +54,7 @@ final class CombinationRules
             'restrictions' => ['sometimes', 'nullable', 'array'],
             'restrictions.*' => ['array'],
             'restrictions.*.*' => ['integer'],
-            ...CatalogRules::includedCustomizationRules(),
+            ...CatalogRules::includedCustomizationRules($heldServices),
         ];
     }
 
