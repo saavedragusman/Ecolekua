@@ -360,12 +360,12 @@ The phase commit (+834/-15) was split into three chained work-unit commits to re
 
 The Phase 11 text below describes the three slices together. The final tree of 11c equals the unsplit commit except for this table.
 
-**Decisions confirmed on 2026-10-08 (DEC-PRD-54..57)** resolved the interpretations listed in the Notes: an omitted list keeps what is stored while an empty list or `null` clears it (DEC-PRD-54); "active when added" is judged against what the product already holds (DEC-PRD-55); an included customization must be an active service when it is added and the ones already included are kept (DEC-PRD-56, behavior change); the E-70 rejection shows each combination as "code (product)" (DEC-PRD-57, behavior change). Three commits were added to the chain, one per branch:
+**Decisions confirmed on 2026-10-08 (DEC-PRD-54..57)** resolved the interpretations listed in the Notes: an omitted list keeps what is stored while an empty list or `null` clears it (DEC-PRD-54); "active when added" is judged against what the product already holds (DEC-PRD-55); an included customization must be an active service when it is added and the ones already included are kept (DEC-PRD-56, behavior change); the E-70 rejection shows each combination as "code (product)" (DEC-PRD-57, behavior change). Three commits were added to the chain. The 11b fix pushed that slice to 446 changed lines, so on the user's request it became its own slice `feat/003-products-11b2-active-service` (78 changed lines) between 11b and 11c:
 
 | Branch | Commit | Content |
 |---|---|---|
 | 11a | `docs(003): registrar decisiones de personalizaciones y mensaje E-70 [DEC-PRD-54..57]` | Spec §9 rows DEC-PRD-54..57 and design Decisions 12 and 11 (E-70 guard) |
-| 11b | `fix(003): exigir servicio activo al agregar una personalización incluida [PRD-008, DEC-PRD-56]` | `CatalogRules::includedCustomizationRules()` takes the services already included; `CombinationRules::rules()` receives the edited combination; 3 `DEC-PRD-56` tests |
+| 11b2 | `fix(003): exigir servicio activo al agregar una personalización incluida [PRD-008, DEC-PRD-56]` | `CatalogRules::includedCustomizationRules()` takes the services already included; `CombinationRules::rules()` receives the edited combination; 3 `DEC-PRD-56` tests |
 | 11c | `fix(003): mostrar el producto de cada código en el rechazo E-70 [E-70, DEC-PRD-57]` | `CatalogUsage::productsUsingService()` returns "code (product)"; E-70 tests tightened |
 
 ### TDD Cycle Evidence
