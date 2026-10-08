@@ -3,6 +3,7 @@
 use App\Actions\Products\ResolveSelection;
 use App\Enums\AttributeRole;
 use App\Enums\CatalogStatus;
+use App\Enums\SupplyMode;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogCode;
@@ -835,6 +836,27 @@ it('E-63 (resolve) rejects Azul for a component restricted to Blanco and accepts
 
     expect(resErrors($input('Azul')))->toBe(["components.$absorbent.order.{$catalog['attrs']['Color']->id}" => [resMessage('selection_component_restricted')]])
         ->and(resResolve($input('Blanco'))->toArray()['components'][0]['selection']['order'][1]['value'])->toBe('Blanco');
+});
+
+it('DEC-PRD-87 does not admit the custom color in a component, with or without a color restriction', function () {
+    $catalog = resKitCatalog();
+    // On its own the absorbent admits the custom color: on demand, option on, and it declares Color.
+    $catalog['products']['Absorbente']->update(['supply_mode' => SupplyMode::OnDemand, 'allows_custom_color' => true]);
+    $open = makeCombo($catalog, ['name' => 'Libre', 'code' => 'K-FREE', 'components' => [comboComponent($catalog, 'Absorbente')]]);
+    $restricted = makeCombo($catalog, ['name' => 'Blanco', 'code' => 'K-WHITE', 'components' => [comboComponent($catalog, 'Absorbente', 1, ['Color' => ['Blanco']])]]);
+    $color = $catalog['attrs']['Color']->id;
+    $withCustom = function (Combo $combo) use ($catalog, $color): array {
+        $input = resComboInput($catalog, $combo, ['Absorbente' => ['order' => ['Talla' => '3XG', 'Color' => 'Blanco']]]);
+        $id = resComponentId($catalog, $combo, 'Absorbente');
+        $input['components'][$id]['order'][$color] = 'custom';
+        $input['components'][$id]['custom_color'] = ['tone' => '#112233', 'note' => 'azul'];
+
+        return $input;
+    };
+
+    expect(resResolve(resComboInput($catalog, $open, ['Absorbente' => ['order' => ['Talla' => '3XG', 'Color' => 'Blanco']]]))->toArray()['kind'])->toBe('combo')
+        ->and(resErrors($withCustom($open)))->toBe(['components.'.resComponentId($catalog, $open, 'Absorbente').".order.$color" => [resMessage('selection_component_restricted')]])
+        ->and(resErrors($withCustom($restricted)))->toBe(['components.'.resComponentId($catalog, $restricted, 'Absorbente').".order.$color" => [resMessage('selection_component_restricted')]]);
 });
 
 it('E-63 (resolve) narrows the color of a product with fabric to the restriction of the component', function () {

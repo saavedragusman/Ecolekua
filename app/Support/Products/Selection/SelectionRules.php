@@ -58,7 +58,7 @@ final class SelectionRules
      * Values the client does not have to choose because the attribute is left with exactly one
      * admitted active value, after the optional component restriction (PRD-010). The color is left
      * to the client when the product offers the "Personalizado" option, which is a second choice,
-     * unless the component restricts the color: then only the listed colors are options.
+     * unless the values are those of a component of a combo, which never admits it (DEC-PRD-87).
      *
      * @param  array<int, list<int>>|null  $componentRestriction
      * @return array<int, int> attributeId => valueId
@@ -68,7 +68,7 @@ final class SelectionRules
         $applied = [];
 
         foreach ($snapshot->attributes as $attribute) {
-            if ($attribute->isColor() && $snapshot->admitsCustomColor && ! isset($componentRestriction[$attribute->id])) {
+            if ($attribute->isColor() && $snapshot->admitsCustomColor && $componentRestriction === null) {
                 continue;
             }
 
@@ -135,8 +135,8 @@ final class SelectionRules
 
     /**
      * Whether an order attribute offers at least one value under the component restriction. The
-     * color of a product with fabric is offered by the admitted fabrics (DEC-PRD-35), and the custom
-     * color is an option of its own unless the component restricts the color.
+     * color of a product with fabric is offered by the admitted fabrics (DEC-PRD-35). The custom
+     * color is never an option of a component (DEC-PRD-87).
      *
      * @param  array<int, list<int>>  $componentRestriction
      */
@@ -144,10 +144,6 @@ final class SelectionRules
     {
         $restricted = $componentRestriction[$attribute->id] ?? null;
         $fabric = self::fabricAttribute($snapshot);
-
-        if ($attribute->isColor() && $snapshot->admitsCustomColor && $restricted === null) {
-            return true;
-        }
 
         if (! $attribute->isColor() || $fabric === null) {
             return self::admittedValues($snapshot, $attribute, $attribute->allowed, $componentRestriction) !== [];
@@ -381,8 +377,9 @@ final class SelectionRules
         if ($input === self::CUSTOM_COLOR) {
             $custom = self::customColor($snapshot, $customColor);
 
-            // A component that lists its colors admits only those: the custom color is not one of them.
-            return is_array($custom) && isset($componentRestriction[$attribute->id]) ? 'selection_component_restricted' : $custom;
+            // A combo has a closed price: no component admits the custom color (DEC-PRD-87). The
+            // product's own error comes first, then the component's.
+            return is_array($custom) && $componentRestriction !== null ? 'selection_component_restricted' : $custom;
         }
 
         $valueId = self::id($input);

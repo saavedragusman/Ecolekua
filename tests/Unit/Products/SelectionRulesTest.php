@@ -405,14 +405,37 @@ it('E-63 validate rejects a value outside the component restriction on an order 
         ->and($validate(['order' => [3 => 99, 4 => 42]], [3 => [31]]))->toBe(['order.3' => 'selection_value_not_allowed']);
 });
 
-it('E-63 validate does not admit the custom color in a component that lists its colors', function () {
+it('DEC-PRD-87 validate does not admit the custom color in any component, restricted or not', function () {
     $snapshot = selSnapshot();
     $custom = selChoice(['order' => [3 => 32, 4 => 'custom'], 'custom_color' => ['tone' => '#112233']]);
 
     expect(SelectionRules::validate($snapshot, $custom, [], [4 => [42]]))->toBe(['order.4' => 'selection_component_restricted'])
-        ->and(SelectionRules::validate($snapshot, $custom, [], [3 => [32]]))->toBeInstanceOf(ResolvedSelection::class)
+        // A component without any color restriction does not admit it either.
+        ->and(SelectionRules::validate($snapshot, $custom, [], [3 => [32]]))->toBe(['order.4' => 'selection_component_restricted'])
+        ->and(SelectionRules::validate($snapshot, $custom, [], []))->toBe(['order.4' => 'selection_component_restricted'])
+        // The product alone keeps admitting it (E-49).
+        ->and(SelectionRules::validate($snapshot, $custom, selPalette()))->toBeInstanceOf(ResolvedSelection::class)
         // The error of the custom color itself comes first, whatever the component does.
+        ->and(SelectionRules::validate(selSnapshot(['admitsCustomColor' => false]), $custom, [], []))->toBe(['order.4' => 'selection_custom_color_not_admitted'])
         ->and(SelectionRules::validate(selSnapshot(['admitsCustomColor' => false]), $custom, [], [4 => [42]]))->toBe(['order.4' => 'selection_custom_color_not_admitted']);
+});
+
+it('DEC-PRD-87 autoApplied and componentOffered ignore the custom color of a component', function () {
+    $modelo = new AttributeSnapshot(2, 'Modelo', true, AttributeRole::Axis, 2, AttributePresentation::Text, null, [21]);
+    $own = new AttributeSnapshot(4, 'Color', true, AttributeRole::Order, 4, AttributePresentation::Color, null, [41]);
+    $snapshot = selSnapshot(['attributes' => [$modelo, $own], 'admitsCustomColor' => true, 'combinations' => [new CombinationSnapshot(1, 'M-1', [2 => [21]], [], [])]]);
+    $withoutColors = selSnapshot([
+        'attributes' => [$modelo, new AttributeSnapshot(4, 'Color', true, AttributeRole::Order, 4, AttributePresentation::Color, null, [])],
+        'admitsCustomColor' => true,
+        'combinations' => [new CombinationSnapshot(1, 'M-1', [2 => [21]], [], [])],
+    ]);
+
+    // The product alone keeps the color open for the "Personalizado" option; a component has its only color applied.
+    expect(SelectionRules::autoApplied($snapshot, null))->toBe([2 => 21])
+        ->and(SelectionRules::autoApplied($snapshot, []))->toBe([2 => 21, 4 => 41])
+        // A component whose product lists no color has nothing to choose, even if the product admits the custom one.
+        ->and(SelectionRules::componentOffered($snapshot, []))->toBeTrue()
+        ->and(SelectionRules::componentOffered($withoutColors, []))->toBeFalse();
 });
 
 it('PRD-010 validate applies the only admitted value of an attribute to a component and never to a product alone (DEC-PRD-81)', function () {
@@ -441,7 +464,7 @@ it('PRD-010 componentOffered is false when the product or the component is left 
         // A size the product does not admit, or a color no fabric offers, leaves nothing to choose.
         ->and(SelectionRules::componentOffered($snapshot, [3 => [99]]))->toBeFalse()
         ->and(SelectionRules::componentOffered($snapshot, [4 => [99]]))->toBeFalse()
-        // The custom color is an option of its own, unless the component lists the colors it admits.
+        // The custom color is never an option of a component (DEC-PRD-87).
         ->and(SelectionRules::componentOffered(selSnapshot(['admitsCustomColor' => true]), []))->toBeTrue()
         ->and(SelectionRules::componentOffered(selSnapshot(['admitsCustomColor' => true]), [4 => [99]]))->toBeFalse()
         ->and(SelectionRules::componentOffered(selSnapshot(['active' => false]), []))->toBeFalse()
