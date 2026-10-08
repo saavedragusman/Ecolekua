@@ -391,6 +391,63 @@ it('DT-02 keeps the rules and the snapshots pure: only the loader may touch the 
     }
 });
 
+it('E-63 validate rejects a value outside the component restriction on an order attribute, an axis and the color', function () {
+    $snapshot = selSnapshot(['admitsCustomColor' => false]);
+    $validate = fn (array $overrides, array $restriction): mixed => SelectionRules::validate($snapshot, selChoice($overrides), [], $restriction);
+
+    expect($validate([], [3 => [31, 32]]))->toBeInstanceOf(ResolvedSelection::class)
+        ->and($validate(['order' => [3 => 33, 4 => 42]], [3 => [31, 32]]))->toBe(['order.3' => 'selection_component_restricted'])
+        // The color of a product with fabric comes from the fabric and the restriction narrows it (DEC-PRD-65).
+        ->and($validate(['order' => [3 => 32, 4 => 41]], [4 => [42]]))->toBe(['order.4' => 'selection_component_restricted'])
+        ->and($validate([], [4 => [42]]))->toBeInstanceOf(ResolvedSelection::class)
+        ->and($validate(['axes' => [1 => 12, 2 => 21], 'order' => [3 => 32, 4 => 42]], [1 => [11]]))->toBe(['axes.1' => 'selection_component_restricted'])
+        // A value the product does not admit at all keeps the product's own reason.
+        ->and($validate(['order' => [3 => 99, 4 => 42]], [3 => [31]]))->toBe(['order.3' => 'selection_value_not_allowed']);
+});
+
+it('E-63 validate does not admit the custom color in a component that lists its colors', function () {
+    $snapshot = selSnapshot();
+    $custom = selChoice(['order' => [3 => 32, 4 => 'custom'], 'custom_color' => ['tone' => '#112233']]);
+
+    expect(SelectionRules::validate($snapshot, $custom, [], [4 => [42]]))->toBe(['order.4' => 'selection_component_restricted'])
+        ->and(SelectionRules::validate($snapshot, $custom, [], [3 => [32]]))->toBeInstanceOf(ResolvedSelection::class)
+        // The error of the custom color itself comes first, whatever the component does.
+        ->and(SelectionRules::validate(selSnapshot(['admitsCustomColor' => false]), $custom, [], [4 => [42]]))->toBe(['order.4' => 'selection_custom_color_not_admitted']);
+});
+
+it('PRD-010 validate applies the only admitted value of an attribute to a component and never to a product alone (DEC-PRD-81)', function () {
+    $snapshot = selSnapshot(['admitsCustomColor' => false]);
+    $choice = selChoice(['axes' => [], 'order' => [4 => 42]]);
+
+    // Fabric restricted to ALG-OXF, size to M, and Modelo has a single allowed value: nothing is chosen by the client.
+    $resolved = SelectionRules::validate($snapshot, $choice, [], [1 => [11], 3 => [32]]);
+
+    expect($resolved)->toBeInstanceOf(ResolvedSelection::class)
+        ->and($resolved->code)->toBe('110')
+        ->and($resolved->order[0]['value_id'])->toBe(32)
+        // Without a restriction (a product alone) nothing is applied: the client has to choose.
+        ->and(SelectionRules::validate($snapshot, $choice, []))->toBe(['axes.1' => 'selection_value_required', 'axes.2' => 'selection_value_required', 'order.3' => 'selection_value_required'])
+        // A value the client did send is validated, never replaced by the only admitted one.
+        ->and(SelectionRules::validate($snapshot, selChoice(['order' => [3 => 31, 4 => 42]]), [], [3 => [32]]))->toBe(['order.3' => 'selection_component_restricted']);
+});
+
+it('PRD-010 componentOffered is false when the product or the component is left with no option (DEC-PRD-64, DEC-PRD-70)', function () {
+    $snapshot = selSnapshot(['admitsCustomColor' => false]);
+
+    expect(SelectionRules::componentOffered($snapshot, []))->toBeTrue()
+        ->and(SelectionRules::componentOffered($snapshot, [4 => [42]]))->toBeTrue()
+        // The restriction admits only Microfibra, which is inactive.
+        ->and(SelectionRules::componentOffered($snapshot, [1 => [14]]))->toBeFalse()
+        // A size the product does not admit, or a color no fabric offers, leaves nothing to choose.
+        ->and(SelectionRules::componentOffered($snapshot, [3 => [99]]))->toBeFalse()
+        ->and(SelectionRules::componentOffered($snapshot, [4 => [99]]))->toBeFalse()
+        // The custom color is an option of its own, unless the component lists the colors it admits.
+        ->and(SelectionRules::componentOffered(selSnapshot(['admitsCustomColor' => true]), []))->toBeTrue()
+        ->and(SelectionRules::componentOffered(selSnapshot(['admitsCustomColor' => true]), [4 => [99]]))->toBeFalse()
+        ->and(SelectionRules::componentOffered(selSnapshot(['active' => false]), []))->toBeFalse()
+        ->and(SelectionRules::componentOffered(selSnapshot(['combinations' => []]), []))->toBeFalse();
+});
+
 it('PRD-011 validate ignores malformed ids instead of failing', function () {
     expect(SelectionRules::validate(selSnapshot(), selChoice(['axes' => [1 => 'x', 2 => [21]], 'order' => [3 => '32', 4 => 42.5]]), selPalette()))
         ->toBe(['axes.1' => 'selection_value_not_allowed', 'axes.2' => 'selection_value_not_allowed', 'order.4' => 'selection_color_not_offered'])
