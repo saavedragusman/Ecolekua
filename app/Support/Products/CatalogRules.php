@@ -4,10 +4,15 @@ namespace App\Support\Products;
 
 use App\Enums\AttributePresentation;
 use App\Enums\AttributeSpecialUse;
+use App\Enums\BusinessLine;
+use App\Enums\CatalogStatus;
+use App\Enums\SupplyMode;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
 use App\Models\DetailLocation;
+use App\Models\Product;
 use Closure;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\Rule;
 
@@ -111,6 +116,66 @@ final class CatalogRules
         return [
             'name' => ['required', 'string', 'max:100', Rule::unique('detail_locations', 'name')->ignore($location?->id)],
             'svg_layer' => self::layerRules($location === null ? [] : ['sometimes']),
+        ];
+    }
+
+    /** Upper bound of the default minimum stock (technical limit, design "Technical limits"). */
+    public const MIN_STOCK_MAX = 9999;
+
+    /**
+     * Rules of the general data of a product (PRD-003, PRD-009, design Decision 10), shared by
+     * `StoreProductRequest` and `UpdateProductRequest`. `$product` is the row being edited (null on
+     * creation); `$supplyMode` is the submitted mode, which decides whether the default minimum is
+     * mandatory (DEC-PRD-46, E-20) or not admitted, and whether custom color is admitted (DEC-PRD-34).
+     * The category must be active, except that an edited product keeps its own category even if it was
+     * deactivated afterwards.
+     *
+     * @return array<string, list<mixed>>
+     */
+    public static function productRules(?Product $product, mixed $supplyMode): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:150', Rule::unique('products', 'name')->ignore($product?->id)],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'product_category_id' => [
+                'required',
+                'integer',
+                // Nested so the `or` stays inside the group, next to the rule's own `id = ?`.
+                Rule::exists('product_categories', 'id')->where(fn (Builder $query) => $query->where(
+                    fn (Builder $group) => $group
+                        ->where('status', CatalogStatus::Active->value)
+                        ->when($product !== null, fn (Builder $inner) => $inner->orWhere('id', $product?->product_category_id)),
+                )),
+            ],
+            'business_line' => ['required', Rule::enum(BusinessLine::class)],
+            'supply_mode' => ['required', Rule::enum(SupplyMode::class)],
+            'min_stock_default' => $supplyMode === SupplyMode::StockWithMinimum->value
+                ? ['required', 'integer', 'between:0,'.self::MIN_STOCK_MAX]
+                : ['prohibited'],
+            'allows_custom_color' => [
+                'nullable',
+                'boolean',
+                function (string $field, mixed $value, Closure $fail) use ($supplyMode): void {
+                    if (filter_var($value, FILTER_VALIDATE_BOOLEAN) && $supplyMode !== SupplyMode::OnDemand->value) {
+                        $fail(__('validation.product_custom_color_not_allowed'));
+                    }
+                },
+            ],
+            'portal_visible' => ['nullable', 'boolean'],
+        ];
+    }
+
+    /**
+     * Messages of `productRules()` that differ from the generic ones.
+     *
+     * @return array<string, string>
+     */
+    public static function productMessages(): array
+    {
+        return [
+            'name.unique' => __('validation.product_name_unique'),
+            'product_category_id.exists' => __('validation.product_category_unavailable'),
+            'min_stock_default.prohibited' => __('validation.product_min_stock_not_allowed'),
         ];
     }
 

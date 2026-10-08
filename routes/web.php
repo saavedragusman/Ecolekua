@@ -13,6 +13,8 @@ use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Products\ProductController;
+use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
 use App\Http\Controllers\Users\UserController;
@@ -90,6 +92,14 @@ Route::post('/catalog/detail-locations', [DetailLocationController::class, 'stor
 Route::put('/catalog/detail-locations/{location}', [DetailLocationController::class, 'update'])->name('catalog.detail-locations.update');
 Route::post('/catalog/detail-locations/{location}/activate', [DetailLocationController::class, 'activate'])->name('catalog.detail-locations.activate');
 Route::post('/catalog/detail-locations/{location}/deactivate', [DetailLocationController::class, 'deactivate'])->name('catalog.detail-locations.deactivate');
+
+// Products (spec 003, PRD-003). Authorization lives in ProductPolicy. The read pages (`products.index`,
+// `products.show`, `products.create`, `products.edit`) are declared with their pages in Phases 17-18;
+// `/create` routes go before `/{product}` routes when they arrive.
+Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+Route::post('/products/{product}/activate', [ProductStatusController::class, 'activate'])->name('products.activate');
+Route::post('/products/{product}/deactivate', [ProductStatusController::class, 'deactivate'])->name('products.deactivate');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
