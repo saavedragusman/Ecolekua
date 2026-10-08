@@ -58,6 +58,10 @@ class Product extends Model
     protected function casts(): array
     {
         return [
+            // Integer casts keep UpdateProduct's before/after snapshot comparison type-stable when a
+            // form sends numbers as strings (no spurious products.updated audit row).
+            'product_category_id' => 'integer',
+            'min_stock_default' => 'integer',
             'business_line' => BusinessLine::class,
             'supply_mode' => SupplyMode::class,
             'allows_custom_color' => 'boolean',

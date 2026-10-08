@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Products\CreateProduct;
+use App\Actions\Products\UpdateProduct;
 use App\Enums\AuditAction;
 use App\Enums\BusinessLine;
 use App\Enums\CatalogStatus;
@@ -10,6 +12,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Validation\ValidationException;
 
 function productCreator(): User
 {
@@ -360,6 +363,39 @@ it('E-68 (product) writes no audit row when nothing changed', function () {
         ->assertRedirect("/products/{$product->id}");
 
     expect(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(0);
+});
+
+it('E-68 (product) writes no audit row when unchanged numeric fields arrive as strings', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->stockWithMinimum(6)->create(['description' => null]);
+
+    $this->actingAs(productEditor())
+        ->put("/products/{$product->id}", productPayload($category, [
+            'name' => $product->name,
+            'product_category_id' => (string) $category->id,
+            'supply_mode' => 'stock_with_minimum',
+            'min_stock_default' => '6',
+        ]))
+        ->assertRedirect("/products/{$product->id}");
+
+    expect(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(0)
+        ->and($product->fresh()->min_stock_default)->toBe(6)
+        ->and($product->fresh()->product_category_id)->toBe($category->id);
+});
+
+it('PRD-003 turns a concurrent duplicate name into a name error in both write Actions', function () {
+    $actor = productEditor();
+    $category = ProductCategory::factory()->create();
+    Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Pantalón industrial']);
+
+    expect(fn () => app(CreateProduct::class)->handle(productPayload($category), $actor))
+        ->toThrow(ValidationException::class);
+    expect(fn () => app(UpdateProduct::class)->handle($product, productPayload($category, ['name' => 'camisa corporativa']), $actor))
+        ->toThrow(fn (ValidationException $exception) => expect($exception->errors())->toHaveKey('name'));
+
+    expect($product->fresh()->name)->toBe('Pantalón industrial')
+        ->and(Product::query()->count())->toBe(2);
 });
 
 it('E-68 (product) rejects a duplicate name on edit and changes nothing', function () {
