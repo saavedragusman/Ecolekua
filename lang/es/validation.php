@@ -27,6 +27,7 @@ return [
     ],
     'not_empty_array' => 'El campo :attribute no puede estar vacío; envíe null para quitarlo.',
     'not_current_password' => 'La nueva contraseña debe ser distinta de la actual.',
+    'prohibited' => 'El campo :attribute no se admite.',
     'prohibited_unless' => 'El campo :attribute solo se admite cuando :other es :values.',
     'required' => 'El campo :attribute es obligatorio.',
     'required_with' => 'El campo :attribute es obligatorio cuando se indica :values.',
@@ -57,6 +58,12 @@ return [
     'offered_colors_not_fabric' => 'Solo los valores del atributo de tela tienen colores ofrecidos.',
     'offered_colors_invalid' => 'Solo se pueden elegir valores del atributo de color.',
     'offered_colors_inactive' => 'No se puede ofrecer un color inactivo.',
+
+    // Products (spec 003).
+    'product_name_unique' => 'Ya existe un producto con ese nombre.',
+    'product_category_unavailable' => 'Elija una categoría activa.',
+    'product_min_stock_not_allowed' => 'El stock mínimo solo se admite en el modo «Stock con mínimo».',
+    'product_custom_color_not_allowed' => 'El color personalizado solo se admite en el modo «Bajo pedido».',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
@@ -109,5 +116,11 @@ return [
         'svg_layer' => 'capa SVG',
         'color_ids' => 'colores ofrecidos',
         'direction' => 'dirección',
+        'product_category_id' => 'categoría',
+        'business_line' => 'línea de negocio',
+        'supply_mode' => 'modo de abastecimiento',
+        'min_stock_default' => 'stock mínimo',
+        'allows_custom_color' => 'color personalizado',
+        'portal_visible' => 'visibilidad en el portal',
     ],
 ];
