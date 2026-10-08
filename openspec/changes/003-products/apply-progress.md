@@ -443,3 +443,72 @@ RED run: `sail pest tests/Feature/Products/StockMinimumTest.php tests/Unit/Produ
 - Interpretations confirmed by the user on 2026-10-08 and recorded in spec section 9 as DEC-PRD-58..62: (58) a non-empty list outside `stock_with_minimum` is rejected on `overrides`, an empty list is accepted as a no-op; (59) overrides are allowed on active and inactive combinations; (60) without the size as an order attribute the override has no size and a size is rejected; (61) the minimum range is 0 to 9999; (62) audit key `stock_minimum_overrides` with `{code, size, minimum}` rows, one event per origin. (Full replace by delete and insert is a technical choice.)
 - Hook `SyncProductAttributes::ensureNoStockForRemovedSizes()` is empty (spec 008, spec section 10).
 - No UI in this phase; no manual checks.
+
+## Phase 13: Combos (COMPLETE, tasks 13.1-13.7)
+
+Chain: PR 13, branch `feat/003-products-13-combos` (from 12b, `92cdd56`). One phase commit (see Slices for the proposed split). Committed with the user's per-phase authorization; no push.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 13.1/13.2 | `tests/Feature/Products/CatalogSchemaTest.php` (combos part) | Feature (DB) | `sail pest tests/Feature/Products tests/Unit/Products`: 264 passed | 28 tests, 23 passed (existing), 5 errors (`testing.combos` missing; `App\Models\Combo` not found) | 28/28 (94 assertions) | E-28 restrict then delete after the combo, DEC-PRD-45 case-insensitive name and significant accent, composite FK (value of another attribute rejected, repeated value rejected, value delete restricted, cascade with the component), E-08 registry (one code per combo, shared space case-insensitive, no owner / two owners / missing combo rejected, cascade with the combo), models and factories smoke | An index name over 64 characters failed the first GREEN run; named explicitly |
+| 13.3/13.4 | `tests/Feature/Products/ComboTest.php` | Feature (HTTP + Action) | N/A (new) | 51 tests, 1 passed (the unknown-combo 404 passes before the routes exist), 28 failed (404 / 405), 22 errors (`CreateCombo` not found) | 52/52 (330 assertions; one test added after the first GREEN) | E-21 (create + audit shape, stored restrictions, N-3 same product twice, inactive product accepted at first; replaced by DEC-PRD-64 tests in the follow-up commit), E-22 (11 cases: quantity 0 / 1000 / 2.5 / missing, service, unknown product, value not admitted, value of another attribute, attribute not declared, color no fabric offers, color outside own list; fabric colors accepted by union; several components at once; empty / not a list / not an object), E-62 (create and edit, combo unchanged), E-64 (case, accent, own-name case change, missing / blank / 151 chars, duplicate-key backstop for name and code), E-08 both directions and case, DT-01 (space, blank, 31 chars, trim), PRD-012 (full replace + audit, rename + visibility, no-op without audit, portal visibility kept, failing edit changes nothing), PRD-013 (toggle audit, no-ops), PRD-016 (3 denials audited, ComboPolicy 6 abilities), 404 | `phpstan`: `array_values()` on a mapped collection |
+| 13.5 | `tests/Feature/Products/ProductCrossReferenceTest.php` (E-70 line) | Feature (HTTP) | 18 existing tests in the file green | 5 tests, 1 passed (the "other fields" triangulation test passes before the guard exists), 3 failed (302 instead of 422), 1 error (`combosUsingProduct` undefined) | 23/23 in the file | line change, mode to service, both at once, sorted names without duplicates (two components, inactive combo), unrelated edits and products outside combos | None needed |
+| 13.6 | `tests/Feature/Products/ProductStructureTest.php` (E-24 / E-57 combo) | Feature (HTTP) | 28 existing tests in the file green | 5 tests failed (302 instead of 422) | 33/33 in the file | size order value, fabric axis value, whole order attribute, color attribute of a fabric product (no allowed values), names sorted and other products ignored; each case also removes an unrestricted value and succeeds | None needed |
+
+RED runs: `sail pest tests/Feature/Products/CatalogSchemaTest.php` (28 tests, 23 passed, 5 errors); `sail pest tests/Feature/Products/ComboTest.php` (51 tests, 1 passed, 28 failed, 22 errors); `sail pest tests/Feature/Products/ProductCrossReferenceTest.php` (23 tests, 19 passed, 3 failed, 1 error); `sail pest tests/Feature/Products/ProductStructureTest.php` (33 tests, 28 passed, 5 failed). GREEN runs: same commands, 28 / 52 / 23 / 33 passed; `sail pest tests/Feature/Products/ProductCrossReferenceTest.php tests/Feature/Products/ProductStructureTest.php`: 56 passed, 265 assertions.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Products/CatalogSchemaTest.php tests/Feature/Products/ComboTest.php tests/Feature/Products/ProductCrossReferenceTest.php tests/Feature/Products/ProductStructureTest.php`: all green (28 + 52 + 23 + 33) |
+| Runtime harness | `sail artisan migrate`, `migrate:rollback --step=1`, `migrate`: migration `2026_10_07_000004_create_combos_tables` DONE all three times; the 4 new routes (`combos.store|update|activate|deactivate`) are exercised over HTTP by `ComboTest` |
+| Rollback boundary | Migration 4, `Combo`, `ComboComponent`, `CatalogCode::combo()`, `ComboFactory`, `ComboComponentFactory`, `CatalogCodeFactory::forCombo()`, `ComboRules`, `ComboComponents`, `ComboAudit`, `ComboPolicy`, 4 combo Actions, 2 requests, `ComboController`, the `/combos` routes block, `CombinationRules::codeRules()` (and `normalize()` made public), the `combo_*`, `product_in_combos_*` and `structure_value_in_combos` strings, `CatalogUsage::combosUsingProduct()/combosRestricting()`, the filled `UpdateProduct::ensureNotComboComponentChange()` and `SyncProductAttributes::ensureNoComboUsesRemovedValues()` (now with the removed attribute ids), and the new tests in the 4 test files |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (72 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1184 tests, 1183 passed, 1 skipped (pre-existing).
+
+### Slices
+
+The phase was far above the 400-line budget (see Notes), so it was split into four chained branches (feature-branch-chain), each from the previous one, each with its own tests and green on its own. `feat/003-products-13-combos` (`1fc3232`) is kept as the unsplit backup.
+
+| Slice | Branch | Tasks | Commits | Content | Authored lines (added / removed) |
+|---|---|---|---|---|---|
+| 13a | `feat/003-products-13a-combos-schema` (from 12b, `92cdd56`) | 13.1-13.2 | `121a792` docs DEC-PRD-63..70; `8a082ff` schema | Migration 4, `Combo`, `ComboComponent`, `CatalogCode::combo()`, the 3 factories, schema tests | 461 / 6 (the whole branch, docs included) |
+| 13b | `feat/003-products-13b-combo-guards` | 13.5-13.6 | `e380d92` | `CatalogUsage` lookups, `UpdateProduct` and `SyncProductAttributes` guards, their lang strings and tests | 385 / 14 |
+| 13cd | `feat/003-products-13cd-combo-create` | 13.3-13.4 (create) | `076d290` | `ComboRules`, `ComboComponents`, `ComboAudit`, `ComboPolicy`, `CreateCombo`, `StoreComboRequest`, `CombinationRules` changes, `ComboController::store` and its route, create and validation lang strings, shared combo test helpers in `tests/Pest.php`, `ComboTest` (create and validation tests) | 1,061 / 8 (`size:exception` accepted by the user on 2026-10-08) |
+| 13ef | `feat/003-products-13ef-combo-lifecycle` | 13.3-13.4 (edit, lifecycle), 13.7 | this commit | `UpdateCombo`, `ActivateCombo`, `DeactivateCombo`, `UpdateComboRequest`, the other 3 controller actions and routes, `ComboLifecycleTest`, tasks and progress notes | about 590 / 7 (`size:exception` accepted by the user on 2026-10-08) |
+
+`ComboTest` of `1fc3232` was split by whole `it(...)` blocks, with names, bodies and assertions unchanged: create and validation tests stay in `ComboTest.php` (13cd); edit, activate, deactivate, policy mapping and 404 tests, plus the tests that edit a combo (`DEC-PRD-64` held and new-inactive cases, `E-62` and `E-64` on edit, `E-08` own code), moved to `ComboLifecycleTest.php` (13ef). The helpers (`comboCreator`, `comboEditor`, `comboDeactivator`, `comboCatalog`, `comboIds`, `comboComponent`, `comboPayload`, `postCombo`, `putCombo`, `makeCombo`, `comboAudit`, `expectNoComboWritten`) moved unchanged to `tests/Pest.php`, the repository's place for shared test helpers (Pest global functions cannot be declared twice); `comboEditor`, `comboDeactivator` and `putCombo` arrive with 13ef, which first needs them.
+
+### Notes
+
+- Authored lines: about 2,430 added/removed in one commit (production about 1,280 including docblocks; tests about 1,130). The forecast of about 480 undercounted the tests (`ComboTest` alone is 736 lines for 52 cases) and the docblocks; nothing was compressed. `size:exception` or the split above is the parent's call.
+- Payload: `POST /combos` and `PUT /combos/{combo}` take `name`, `code`, `portal_visible` (optional, default true on create, kept on edit when not sent) and `components: [{product_id, quantity, values: {attributeId: [valueIds]}}]`. `PUT` replaces the components in full, but keeps the stored rows (and their ids) when the new ones are equal. Errors: `name`, `code`, `components`, `components.{i}.quantity|product_id|values.{attributeId}`.
+- Audit: `products.combo_created|updated|activated|deactivated`; snapshot `{code, name, portal_visible, components[{product, quantity, values: {attribute: [value names]}}]}`; update carries only the changed keys; `status` is audited only by the lifecycle actions.
+- Locking: the Actions lock the component products in id order (create) and the combo first (edit) inside the transaction, so product edits (line, mode, structure) serialize with the combo writes.
+- `E-08` "combo code equals a combination code" is covered in both directions through the shared registry; the Phase 10 clause is now complete.
+- Redirects: `store` and `update` go to the path `/combos/{id}` (the `combos.show` route arrives in Phase 20); activate and deactivate go back.
+- Interpretations: all resolved by the user on 2026-10-08 (DEC-PRD-63..70 in `docs/specs/003-products.md` section 9):
+  1. Combos named in the E-70 and structure guards appear as "code (name)" (DEC-PRD-63). Behavior changed in the follow-up commit below.
+  2. A component product must be active when added; existing components are kept if the product is deactivated later (DEC-PRD-64). Behavior changed in the follow-up commit below.
+  3. Restriction values only need to be admitted by the product, active or not; for the color of a fabric product, any color offered by any admitted fabric (DEC-PRD-65). Already implemented.
+  4. Removing the attribute itself from a product is rejected, naming the combo, when a component restricts it (DEC-PRD-66). Already implemented.
+  5. `portal_visible` is optional: visible by default on create, kept on edit when not sent (DEC-PRD-67). Already implemented.
+  6. A value used by both a combination and a combo reports the combination error first (DEC-PRD-68). Already implemented.
+  7. Quantity 1 to 999 (DEC-PRD-69). Already implemented.
+  8. Retiring a fabric, or a color from a fabric, that a component restricts is not blocked; the combo resolves fewer options and stops being offered if none remain (DEC-PRD-70). No rule needed.
+
+### Follow-up commit: DEC-PRD-63 and DEC-PRD-64
+
+Docs commit `docs(003): registrar decisiones de combos [DEC-PRD-63..70]` records the decisions (and the matching wording of design Decisions 10, 11 and 15). The fix commit `fix(003): componentes activos al agregarse y combos como «código (nombre)» [PRD-010, E-70, DEC-PRD-63, DEC-PRD-64]` changes:
+
+- `CatalogUsage::combosUsingProduct()/combosRestricting()` return "code (name)" sorted by code (shared private `comboLabels()`), so the E-70 line/mode guard and the structure guard name each combo that way.
+- `ComboRules::validateComponents()` takes the products already held by the combo; a product that is not active is rejected on `components.{i}.product_id` (`validation.combo_component_inactive`) unless the combo already has it. `CreateCombo` holds none; `UpdateCombo` passes the stored components' products.
+- The test "PRD-010 accepts an inactive product as a component" (interpretation 2) is replaced by three `DEC-PRD-64` tests (create rejected, held kept on edit, new inactive on edit rejected).
+- RED (8 tightened expectations plus the 2 new rejections): `sail artisan test --filter='DEC-PRD-64|E-70|E-24 \(combo\)|E-57 \(combo\)'`: 17 tests, 7 passed, 10 failed (messages without codes, sort by name, inactive products accepted with 302). GREEN: `sail artisan test --filter='Combo|E-70|E-24|E-57|CrossReference|ProductStructure'`: 120 passed.
+- `ComboMembership` and the combo deletion (E-28 with `DeleteProduct`, E-61, PRD-014) belong to Phase 16; only the database restrict (E-28 DB clause) exists here.
+- No UI in this phase; no manual checks.
