@@ -343,3 +343,61 @@ Chain: PR 10, branch `feat/003-products-10-combinations`, targets `feat/003-prod
 - `ensureEditableWithoutHistory()` hook is empty in `UpdateCombination` (DEC-PRD-21, 004/006/008).
 - Redirect after store/update goes to `/products/{id}` (R-3 precedent); activate/deactivate go back.
 - No UI in this phase; no manual checks.
+
+## Phase 11: Product details and customizations (COMPLETE, tasks 11.1-11.3)
+
+Chain: PR 11, branch `feat/003-products-11-details`, targets `feat/003-products-10-combinations`. Committed with the user's per-phase authorization; no push.
+
+### Slices
+
+The phase commit (+834/-15) was split into three chained work-unit commits to respect the 400-line review budget. `feat/003-products-11-details` is kept as the unsplit backup.
+
+| Slice | Branch (builds on the previous) | Authored changed lines | Content |
+|---|---|---|---|
+| 11a | `feat/003-products-11a-detail-locations` (from `feat/003-products-10-combinations` plus the docs commit) | 237 added, 6 removed | Detail locations: `PUT /products/{id}` `detail_location_ids`, request rules and messages, name-list audit, empty layer-gap hook |
+| 11b | `feat/003-products-11b-customizations` | 360 added, 18 removed | Admitted `customization_ids`, combination `included_customization_ids` (E-67 save), `Combination::customizations()`, `included_customizations` audit key |
+| 11c | `feat/003-products-11c-service-guard` | about 270 including this table | `CatalogUsage::productsUsingService()`, filled `ensureNotServiceReferenced()` (E-70), messages, tasks 11.1-11.3 marked, this section |
+
+The Phase 11 text below describes the three slices together. The final tree of 11c equals the unsplit commit except for this table.
+
+**Decisions confirmed on 2026-10-08 (DEC-PRD-54..57)** resolved the interpretations listed in the Notes: an omitted list keeps what is stored while an empty list or `null` clears it (DEC-PRD-54); "active when added" is judged against what the product already holds (DEC-PRD-55); an included customization must be an active service when it is added and the ones already included are kept (DEC-PRD-56, behavior change); the E-70 rejection shows each combination as "code (product)" (DEC-PRD-57, behavior change). Three commits were added to the chain. The 11b fix pushed that slice to 446 changed lines, so on the user's request it became its own slice `feat/003-products-11b2-active-service` (78 changed lines) between 11b and 11c:
+
+| Branch | Commit | Content |
+|---|---|---|
+| 11a | `docs(003): registrar decisiones de personalizaciones y mensaje E-70 [DEC-PRD-54..57]` | Spec §9 rows DEC-PRD-54..57 and design Decisions 12 and 11 (E-70 guard) |
+| 11b2 | `fix(003): exigir servicio activo al agregar una personalización incluida [PRD-008, DEC-PRD-56]` | `CatalogRules::includedCustomizationRules()` takes the services already included; `CombinationRules::rules()` receives the edited combination; 3 `DEC-PRD-56` tests |
+| 11c | `fix(003): mostrar el producto de cada código en el rechazo E-70 [E-70, DEC-PRD-57]` | `CatalogUsage::productsUsingService()` returns "code (product)"; E-70 tests tightened |
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 11.1/11.2 (details, admitted customizations) | `tests/Feature/Products/ProductWriteTest.php` | Feature (HTTP) | `sail pest tests/Feature/Products tests/Unit/Products`: 204 passed | 9 tests added, 7 failed (422 expected, 302 received; relation not replaced), 2 passed trivially (denied edit, omitted field keeps) | all green | replace with name-list audit, empty list clears, omitted keeps, inactive/unknown location rejected with a held inactive one kept, same set in another order or repeated writes no audit, customization rejected for non-service / inactive / itself / unknown, held deactivated service kept, malformed arrays, 403 | None needed |
+| 11.1/11.2 (included customizations, E-67) | `tests/Feature/Products/ProductCrossReferenceTest.php` | Feature (HTTP) | same | new file: 5 tests failed with `Combination::customizations()` undefined, 4 failed with 302 instead of 422 | all green | E-67 (139-1 with vinyl while the product admits none), no ids sent audits `[]`, non-service and unknown id rejected on create and edit, malformed payload, edit with previous/new name lists, omitted keeps and `[]` clears | None needed |
+| 11.1/11.2 (E-70 leaving service) | same | Feature (HTTP) + support | same | `CatalogUsage::productsUsingService()` undefined; the guard hook was empty so the 422 tests got 302 | all green | admitting product plus including combination, products only, combinations only, unreferenced service changes mode, referenced service keeps mode while other fields are edited, sorted lookup, 403, a non-service product unaffected | Message built with `match` (no `implode` of translator output: PHPStan) |
+
+RED run: `sail pest tests/Feature/Products/ProductCrossReferenceTest.php tests/Feature/Products/ProductWriteTest.php`: 76 tests, 53 passed, 23 failed (14 failures + 9 errors). GREEN run: `sail pest tests/Feature/Products tests/Unit/Products tests/Feature/Catalog`: 402 passed, 2017 assertions.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Products tests/Unit/Products tests/Feature/Catalog`: 402 passed, 2017 assertions |
+| Runtime harness | N/A for a new route: no route was added; the new payload keys travel over the existing `PUT /products/{id}` and `POST|PUT /products/{id}/combinations` endpoints, all exercised over HTTP by the new tests |
+| Rollback boundary | `UpdateProduct` (relations, E-70 guard, layer-gap hook), `CatalogRules::productRelationRules()/includedCustomizationRules()/relationMessages()`, `UpdateProductRequest`, `Combination::customizations()`, `CatalogUsage::productsUsingService()`, `ProductCombinations::syncCustomizations()`, `CombinationAudit` key `included_customizations`, `CombinationRules::rules()/messages()`, `CreateCombination`/`UpdateCombination` sync lines, the Phase 11 strings in `lang/es/validation.php`, `ProductCrossReferenceTest`, the 9 new `ProductWriteTest` tests and the one-line `CombinationTest` expectation |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (72 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1085 tests, 1084 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Payload keys: `PUT /products/{id}` accepts `detail_location_ids` and `customization_ids`; combination create and edit accept `included_customization_ids`. Each list replaces the stored set when sent (empty list or `null` clears) and keeps it when the key is omitted (same PATCH-like semantics as `description`, Phase 8). Duplicate ids are collapsed.
+- Interpretations raised during apply, resolved by the user on 2026-10-08 as DEC-PRD-54..57 (points 2 and 3 below were changed: included customizations must be active when added, and the E-70 message shows each code with its product): (1) "active when added" is evaluated against the set the product already holds, so a location or service deactivated after being admitted can be resubmitted (same precedent as offered colors and the category); (2) included customizations require mode `service` only, as Decision 12 says, not active status; (3) the E-70 message names products and combination codes (codes are globally unique), not the product that owns each combination.
+- Audit: `products.updated` carries `detail_locations` and `customizations` as name lists (sorted, case-insensitive) only when they changed; `products.combination_*` snapshots now always carry `included_customizations` (name list), so the Phase 10 E-07 expectation gained `included_customizations => []`.
+- Validation of the lists lives in `CatalogRules` (rules on the form requests), the project precedent for the category. The `UpdateProduct` Action trusts the validated ids; a concurrent change of mode of a chosen service between validation and the write is not guarded (the restrict FKs only protect deletions).
+- Hooks: `UpdateProduct::ensureNoDetailLocationLayerGap()` is added empty and called with the newly added location ids (filled in task 22.7, PRD-020). `ensureNotServiceReferenced()` is filled. `ProductPresenter` was not changed: nothing reads the new data until the pages of Phases 17 and 19.
+- `CreateProduct` does not accept the lists: tasks 11.1/11.2 define them for the edit only.
+- Authored lines: about 690 across 14 tracked files and the new test file (production about 230, tests about 540 including the 349-line `ProductCrossReferenceTest`). Over the 400 advisory because the slice has three behaviors (details, admitted and included customizations, E-70) with triangulated tests; no `size:exception` requested.
+- Process deviation: the first block of 9 tests was appended to `ProductWriteTest.php` with a shell heredoc and its import was added with `sed`, against the "Edit/Write only" rule; all later edits used Edit/Write. The content is reviewed and committed as is.
+- No UI in this phase; no manual checks.
