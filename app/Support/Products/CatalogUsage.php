@@ -34,7 +34,7 @@ final class CatalogUsage
 
     /**
      * Who uses a service product as a customization (DEC-PRD-52): the names of the products that
-     * admit it (any status) and the codes of the combinations that include it, both sorted.
+     * admit it (any status) and the combinations that include it as "code (product name)" (DEC-PRD-57), both sorted.
      *
      * @return array{products: list<string>, combinations: list<string>}
      */
@@ -50,10 +50,12 @@ final class CatalogUsage
 
         $combinations = DB::table('combination_customizations')
             ->join('catalog_codes', 'catalog_codes.combination_id', '=', 'combination_customizations.combination_id')
+            ->join('combinations', 'combinations.id', '=', 'combination_customizations.combination_id')
+            ->join('products', 'products.id', '=', 'combinations.product_id')
             ->where('combination_customizations.service_product_id', $serviceProductId)
             ->orderBy('catalog_codes.code')
-            ->pluck('catalog_codes.code')
-            ->map(fn (mixed $code): string => (string) $code)
+            ->get(['catalog_codes.code', 'products.name'])
+            ->map(fn (object $row): string => "{$row->code} ({$row->name})")
             ->all();
 
         return ['products' => array_values($products), 'combinations' => array_values($combinations)];

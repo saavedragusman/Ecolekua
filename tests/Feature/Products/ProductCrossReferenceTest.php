@@ -281,7 +281,7 @@ it('E-70 (leaving service) rejects taking "Bordado pequeño" out of mode service
     $message = $response->json('errors.supply_mode.0');
 
     expect($message)->toContain('«Camisa corporativa»')
-        ->and($message)->toContain('«158-4»')
+        ->and($message)->toContain('«158-4 (Mono escolar)»')
         ->and($service->fresh()->supply_mode->value)->toBe('service')
         ->and($shirt->customizations()->count())->toBe(1)
         ->and($combination->customizations()->count())->toBe(1)
@@ -313,7 +313,7 @@ it('E-70 (leaving service) names only the admitting products when no combination
         ->assertUnprocessable()
         ->json('errors.supply_mode.0');
 
-    expect($message)->toContain('«139-1»')
+    expect($message)->toContain('«139-1 (Mono escolar)»')
         ->and($message)->not->toContain('«Camisa corporativa»');
 });
 
@@ -376,7 +376,7 @@ it('DEC-PRD-52 productsUsingService lists admitting products and including combi
     $usage = CatalogUsage::productsUsingService($service->id);
 
     expect($usage['products'])->toBe(['Camisa corporativa', 'Pantalón escolar'])
-        ->and($usage['combinations'])->toBe(['119', '139-1'])
+        ->and($usage['combinations'])->toBe(['119 (Mono escolar)', '139-1 (Mono escolar)'])
         ->and(CatalogUsage::productsUsingService($other->id))->toBe(['products' => [], 'combinations' => []]);
 });
 
