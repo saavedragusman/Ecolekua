@@ -8,6 +8,7 @@ use App\Enums\CatalogStatus;
 use App\Enums\PermissionName;
 use App\Enums\SupplyMode;
 use App\Models\AuditLog;
+use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
@@ -576,4 +577,135 @@ it('PRD-003 returns 404 for an unknown product on edit', function () {
     $this->actingAs(productEditor())
         ->putJson('/products/999999', productPayload($category))
         ->assertNotFound();
+});
+
+// --- Details (PRD-007, design Decision 10) ------------------------------------------------------
+
+/**
+ * Names of the detail locations or customizations a product holds, sorted, for readable assertions.
+ *
+ * @return list<string>
+ */
+function productRelationNames(Product $product, string $relation): array
+{
+    $names = $product->fresh()->{$relation}()->pluck('name')->all();
+    sort($names);
+
+    return array_values($names);
+}
+
+it('PRD-007 replaces the admitted detail locations and audits the previous and new name lists', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    [$pechera, $manga, $cuello] = [
+        DetailLocation::factory()->create(['name' => 'Pechera']),
+        DetailLocation::factory()->create(['name' => 'Orilla de mangas']),
+        DetailLocation::factory()->create(['name' => 'Pie de cuello']),
+    ];
+    $product->detailLocations()->attach([$pechera->id, $manga->id]);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, [
+            'name' => $product->name,
+            'detail_location_ids' => [$manga->id, $cuello->id],
+        ]))
+        ->assertRedirect();
+
+    $audit = productAuditRows(AuditAction::ProductUpdated)->sole();
+
+    expect(productRelationNames($product, 'detailLocations'))->toBe(['Orilla de mangas', 'Pie de cuello'])
+        ->and($audit->old_values)->toBe(['detail_locations' => ['Orilla de mangas', 'Pechera']])
+        ->and($audit->new_values)->toBe(['detail_locations' => ['Orilla de mangas', 'Pie de cuello']]);
+});
+
+it('PRD-007 clears the detail locations with an empty list and keeps them when the field is not sent', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    $pechera = DetailLocation::factory()->create(['name' => 'Pechera']);
+    $product->detailLocations()->attach($pechera->id);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'description' => 'Con texto']))
+        ->assertRedirect();
+
+    expect(productRelationNames($product, 'detailLocations'))->toBe(['Pechera']);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'detail_location_ids' => []]))
+        ->assertRedirect();
+
+    expect(productRelationNames($product, 'detailLocations'))->toBe([])
+        ->and(productAuditRows(AuditAction::ProductUpdated)->last()->old_values)->toBe(['detail_locations' => ['Pechera']]);
+});
+
+it('PRD-007 rejects adding an inactive or unknown location but accepts resubmitting one that was deactivated afterwards', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    $inactive = DetailLocation::factory()->inactive()->create(['name' => 'Pechera']);
+    $active = DetailLocation::factory()->create(['name' => 'Orilla de mangas']);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'detail_location_ids' => [$active->id, $inactive->id]]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['detail_location_ids.1']);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'detail_location_ids' => [999999]]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['detail_location_ids.0']);
+
+    expect(productRelationNames($product, 'detailLocations'))->toBe([])
+        ->and(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(0);
+
+    // The location was admitted while active and deactivated later: the product keeps it.
+    $product->detailLocations()->attach($active->id);
+    $active->forceFill(['status' => CatalogStatus::Inactive])->save();
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'detail_location_ids' => [$active->id]]))
+        ->assertRedirect();
+
+    expect(productRelationNames($product, 'detailLocations'))->toBe(['Orilla de mangas'])
+        ->and(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(0);
+});
+
+it('PRD-007 writes no audit row when the same locations arrive in another order or repeated', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    [$pechera, $manga] = [DetailLocation::factory()->create(), DetailLocation::factory()->create()];
+    $product->detailLocations()->attach([$pechera->id, $manga->id]);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, [
+            'name' => $product->name,
+            'detail_location_ids' => [$manga->id, $pechera->id, $manga->id],
+        ]))
+        ->assertRedirect();
+
+    expect($product->detailLocations()->count())->toBe(2)
+        ->and(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(0);
+});
+
+it('PRD-007 rejects malformed relation payloads', function (string $field, mixed $value) {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, $field => $value]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors([$field]);
+})->with([
+    'locations not an array' => ['detail_location_ids', 'abc'],
+]);
+
+it('PRD-007 denies editing details to a user without products.update and changes nothing', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    $location = DetailLocation::factory()->create();
+
+    $this->actingAs(userWithPermissions(PermissionName::ProductsView))
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'detail_location_ids' => [$location->id]]))
+        ->assertForbidden();
+
+    expect($product->detailLocations()->count())->toBe(0);
 });

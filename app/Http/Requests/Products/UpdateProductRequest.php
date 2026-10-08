@@ -21,7 +21,10 @@ class UpdateProductRequest extends FormRequest
      */
     public function rules(): array
     {
-        return CatalogRules::productRules($this->product(), $this->input('supply_mode'));
+        return [
+            ...CatalogRules::productRules($this->product(), $this->input('supply_mode')),
+            ...CatalogRules::productRelationRules($this->product()),
+        ];
     }
 
     /**
@@ -29,7 +32,7 @@ class UpdateProductRequest extends FormRequest
      */
     public function messages(): array
     {
-        return CatalogRules::productMessages();
+        return [...CatalogRules::productMessages(), ...CatalogRules::relationMessages()];
     }
 
     private function product(): Product
