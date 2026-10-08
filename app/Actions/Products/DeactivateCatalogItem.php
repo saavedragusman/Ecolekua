@@ -7,14 +7,15 @@ use App\Enums\AuditAction;
 use App\Enums\CatalogStatus;
 use App\Models\CatalogAttribute;
 use App\Models\User;
+use App\Support\Products\CatalogUsage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Deactivates a catalog row (category, attribute, value or detail location). Only `status`
  * changes; catalog rows are never deleted (PRD-001, PRD-002). An already inactive row is a no-op
- * with no audit row. The in-use guard for attributes declared by products is an empty hook
- * until Phase 9 (E-69).
+ * with no audit row. An attribute declared by an active product cannot be deactivated (E-69).
  */
 class DeactivateCatalogItem
 {
@@ -54,12 +55,19 @@ class DeactivateCatalogItem
     }
 
     /**
-     * Hook for DEC-PRD-51 / E-69: an attribute declared by an active product cannot be deactivated,
-     * and the error names the products. The product tables arrive in Phase 8 and
-     * `CatalogUsage::productsDeclaring()` in Phase 9, which fills this hook (task 9.6).
+     * DEC-PRD-51 / E-69: an attribute declared by an active product cannot be deactivated, and the
+     * error names the products. Inactive products do not count: their attribute may go inactive.
+     *
+     * @throws ValidationException
      */
     private function ensureNotDeclaredByProducts(CatalogAttribute $attribute): void
     {
-        // Intentionally empty until task 9.6.
+        $products = CatalogUsage::productsDeclaring($attribute, activeOnly: true);
+
+        if ($products !== []) {
+            throw ValidationException::withMessages([
+                'status' => __('validation.attribute_in_use_deactivate', ['products' => CatalogUsage::quote($products)]),
+            ]);
+        }
     }
 }
