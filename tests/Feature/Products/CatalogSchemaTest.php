@@ -7,6 +7,10 @@ use App\Enums\CatalogStatus;
 use App\Enums\SupplyMode;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
+use App\Models\CatalogCode;
+use App\Models\Combination;
+use App\Models\Combo;
+use App\Models\ComboComponent;
 use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductAttribute;
@@ -374,4 +378,142 @@ it('DEC-PRD-34 computes the effective custom color from mode, flag and the decla
 
     expect($product->fresh()->admitsCustomColor())->toBeTrue()
         ->and(Product::factory()->for($category, 'category')->onDemand()->create(['allows_custom_color' => false])->admitsCustomColor())->toBeFalse();
+});
+
+// --- Combos (task 13.1, design Decisions 3, 4 and 15) -----------------------------------------
+
+/**
+ * Raw combo insert, so the guarantees of the combo tables are tested without the models.
+ *
+ * @param  array<string, mixed>  $overrides
+ */
+function schemaComboRow(array $overrides = []): int
+{
+    return DB::table('combos')->insertGetId(array_merge([
+        'name' => 'Kit Oro antiderrame',
+        'portal_visible' => 1,
+        'status' => 'active',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ], $overrides));
+}
+
+/**
+ * @param  array<string, mixed>  $overrides
+ */
+function schemaComponentRow(int $comboId, int $productId, array $overrides = []): int
+{
+    return DB::table('combo_components')->insertGetId(array_merge([
+        'combo_id' => $comboId,
+        'product_id' => $productId,
+        'quantity' => 2,
+        'sort_order' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ], $overrides));
+}
+
+it('E-28 (DB) restricts deleting a product that is a combo component', function () {
+    $product = schemaProductRow(schemaCategoryRow(), ['name' => 'Pañal antiderrame', 'business_line' => 'diapers']);
+    $combo = schemaComboRow();
+    schemaComponentRow($combo, $product);
+
+    expect(fn () => DB::table('products')->where('id', $product)->delete())->toThrow(QueryException::class)
+        ->and(DB::table('products')->where('id', $product)->exists())->toBeTrue();
+
+    // Deleting the combo takes its components with it, and the product can be deleted afterwards.
+    DB::table('combos')->where('id', $combo)->delete();
+
+    expect(DB::table('combo_components')->count())->toBe(0);
+
+    DB::table('products')->where('id', $product)->delete();
+
+    expect(DB::table('products')->where('id', $product)->exists())->toBeFalse();
+});
+
+it('DEC-PRD-45 (DB) compares combo names without regard to letter case', function () {
+    schemaComboRow(['name' => 'Kit Oro antiderrame']);
+
+    expect(fn () => schemaComboRow(['name' => 'KIT ORO ANTIDERRAME']))->toThrow(UniqueConstraintViolationException::class);
+
+    // Accents stay significant, as for every other name (DEC-PRD-45).
+    schemaComboRow(['name' => 'Kít Oro antiderrame']);
+
+    expect(DB::table('combos')->count())->toBe(2);
+});
+
+it('Decision 15 (DB) ties a component value to its attribute with a composite foreign key and cascades it with the component', function () {
+    $product = schemaProductRow(schemaCategoryRow(), ['business_line' => 'diapers']);
+    $size = schemaAttributeRow(['name' => 'Talla', 'special_use' => 'size']);
+    $color = schemaAttributeRow(['name' => 'Color', 'presentation' => 'color']);
+    $xxxl = schemaValueRow($size, ['name' => '3XG']);
+    $white = schemaValueRow($color, ['name' => 'Blanco']);
+    $component = schemaComponentRow(schemaComboRow(), $product);
+
+    $row = fn (int $attributeId, int $valueId): array => [
+        'combo_component_id' => $component,
+        'catalog_attribute_id' => $attributeId,
+        'attribute_value_id' => $valueId,
+    ];
+
+    // 3XG belongs to the size attribute, not to the color attribute.
+    expect(fn () => DB::table('combo_component_values')->insert($row($color, $xxxl)))->toThrow(QueryException::class);
+
+    DB::table('combo_component_values')->insert($row($size, $xxxl));
+    DB::table('combo_component_values')->insert($row($color, $white));
+
+    expect(fn () => DB::table('combo_component_values')->insert($row($size, $xxxl)))->toThrow(UniqueConstraintViolationException::class)
+        ->and(fn () => DB::table('attribute_values')->where('id', $xxxl)->delete())->toThrow(QueryException::class)
+        ->and(DB::table('combo_component_values')->where('combo_component_id', $component)->count())->toBe(2);
+
+    DB::table('combo_components')->where('id', $component)->delete();
+
+    expect(DB::table('combo_component_values')->count())->toBe(0);
+});
+
+it('E-08 (DB) gives a combo code to the shared registry: unique with combination codes, one owner, foreign key and cascade', function () {
+    $combo = schemaComboRow();
+    $registry = fn (array $overrides = []): array => array_merge([
+        'code' => 'K-01',
+        'combination_id' => null,
+        'combo_id' => $combo,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ], $overrides);
+
+    DB::table('catalog_codes')->insert($registry());
+
+    // The combo owns exactly one code, and the code space is shared with the combinations (case-insensitive).
+    expect(fn () => DB::table('catalog_codes')->insert($registry(['code' => 'K-02'])))->toThrow(UniqueConstraintViolationException::class)
+        ->and(fn () => DB::table('catalog_codes')->insert($registry(['code' => 'k-01', 'combo_id' => schemaComboRow(['name' => 'Otro kit'])])))->toThrow(UniqueConstraintViolationException::class);
+
+    // A code without owner, with two owners or with a combo that does not exist is rejected.
+    $combination = Combination::factory()->create();
+
+    expect(fn () => DB::table('catalog_codes')->insert($registry(['code' => 'K-03', 'combo_id' => null])))->toThrow(QueryException::class)
+        ->and(fn () => DB::table('catalog_codes')->insert($registry(['code' => 'K-04', 'combo_id' => schemaComboRow(['name' => 'Kit tres']), 'combination_id' => $combination->id])))->toThrow(QueryException::class)
+        ->and(fn () => DB::table('catalog_codes')->insert($registry(['code' => 'K-05', 'combo_id' => 999_999])))->toThrow(QueryException::class);
+
+    // The code goes with the combo.
+    DB::table('combos')->where('id', $combo)->delete();
+
+    expect(DB::table('catalog_codes')->where('code', 'K-01')->exists())->toBeFalse();
+});
+
+it('Decision 15 builds combo models and factories with their relations and enum casts', function () {
+    $product = Product::factory()->diapers()->create();
+    $combo = Combo::factory()->inactive()->create(['name' => 'Kit Oro antiderrame']);
+    $component = ComboComponent::factory()->for($combo)->for($product)->create(['quantity' => 3]);
+    $code = CatalogCode::factory()->forCombo($combo)->create(['code' => 'K-01']);
+
+    expect($combo->fresh()->status)->toBe(CatalogStatus::Inactive)
+        ->and($combo->fresh()->portal_visible)->toBeTrue()
+        ->and($combo->catalogCode->is($code))->toBeTrue()
+        ->and($combo->code)->toBe('K-01')
+        ->and($combo->components)->toHaveCount(1)
+        ->and($component->fresh()->quantity)->toBe(3)
+        ->and($component->product->is($product))->toBeTrue()
+        ->and($component->combo->is($combo))->toBeTrue()
+        ->and($code->combo?->is($combo))->toBeTrue()
+        ->and($code->combination_id)->toBeNull();
 });
