@@ -192,3 +192,54 @@ it('PRD-008 rejects a non-service included customization on edit and changes not
     expect($combination->customizations()->pluck('products.id')->all())->toBe([$vinyl->id])
         ->and(xrefAudit(AuditAction::CombinationUpdated))->toHaveCount(0);
 });
+
+it('DEC-PRD-56 rejects adding an inactive service as included customization on create and saves nothing', function () {
+    $fixture = xrefProduct();
+    $inactive = Product::factory()->service()->inactive()->create(['name' => 'Vinil']);
+
+    $this->actingAs(xrefCreator())
+        ->postJson("/products/{$fixture['product']->id}/combinations", xrefCombinationPayload($fixture, '139-1', ['included_customization_ids' => [$inactive->id]]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['included_customization_ids.0']);
+
+    expect(Combination::query()->count())->toBe(0)
+        ->and(CatalogCode::query()->count())->toBe(0);
+});
+
+it('DEC-PRD-56 keeps an included customization whose service was deactivated later when the edit resubmits it', function () {
+    $fixture = xrefProduct();
+    $vinyl = Product::factory()->service()->create(['name' => 'Vinil']);
+
+    $this->actingAs(xrefCreator())
+        ->postJson("/products/{$fixture['product']->id}/combinations", xrefCombinationPayload($fixture, '139-1', ['included_customization_ids' => [$vinyl->id]]))
+        ->assertRedirect();
+
+    $vinyl->forceFill(['status' => 'inactive'])->save();
+    $combination = Combination::query()->sole();
+
+    $this->actingAs(xrefEditor())
+        ->putJson("/products/{$fixture['product']->id}/combinations/{$combination->id}", xrefCombinationPayload($fixture, '139-1', ['description' => 'Con vinil', 'included_customization_ids' => [$vinyl->id]]))
+        ->assertRedirect();
+
+    expect($combination->customizations()->pluck('products.id')->all())->toBe([$vinyl->id]);
+});
+
+it('DEC-PRD-56 rejects adding a newly inactive service as included customization on edit and changes nothing', function () {
+    $fixture = xrefProduct();
+    $vinyl = Product::factory()->service()->create(['name' => 'Vinil']);
+    $inactive = Product::factory()->service()->inactive()->create(['name' => 'Bordado grande']);
+
+    $this->actingAs(xrefCreator())
+        ->postJson("/products/{$fixture['product']->id}/combinations", xrefCombinationPayload($fixture, '139-1', ['included_customization_ids' => [$vinyl->id]]))
+        ->assertRedirect();
+
+    $combination = Combination::query()->sole();
+
+    $this->actingAs(xrefEditor())
+        ->putJson("/products/{$fixture['product']->id}/combinations/{$combination->id}", xrefCombinationPayload($fixture, '139-1', ['included_customization_ids' => [$vinyl->id, $inactive->id]]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['included_customization_ids.1']);
+
+    expect($combination->customizations()->pluck('products.id')->all())->toBe([$vinyl->id])
+        ->and(xrefAudit(AuditAction::CombinationUpdated))->toHaveCount(0);
+});
