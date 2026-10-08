@@ -92,6 +92,9 @@ return [
     'combination_overlap' => 'Coincide con la combinación activa «:code» en todos sus ejes.',
     'combination_axes_duplicate' => 'Ya existe una combinación activa con esos mismos valores de eje.',
 
+    // Details, customizations and cross-record edit guards (spec 003, PRD-007, PRD-008, DEC-PRD-52).
+    'detail_location_unavailable' => 'Elija ubicaciones de detalle activas.',
+
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
         'mixed' => 'El campo :attribute debe contener al menos una mayúscula y una minúscula.',
@@ -156,5 +159,6 @@ return [
         'code' => 'código',
         'axes' => 'ejes',
         'restrictions' => 'restricciones',
+        'detail_location_ids' => 'ubicaciones de detalle',
     ],
 ];

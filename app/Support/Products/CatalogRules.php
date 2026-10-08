@@ -166,6 +166,42 @@ final class CatalogRules
     }
 
     /**
+     * Rules of the detail locations of an edited product (PRD-007, design Decision 10). The list
+     * replaces the stored set when it is sent. A location must be active when it is added, but the
+     * product keeps the ones it already holds if they were deactivated afterwards.
+     *
+     * @return array<string, list<mixed>>
+     */
+    public static function productRelationRules(Product $product): array
+    {
+        $heldLocations = $product->detailLocations()->pluck('detail_locations.id')->all();
+
+        return [
+            'detail_location_ids' => ['sometimes', 'nullable', 'array'],
+            'detail_location_ids.*' => [
+                'integer',
+                Rule::exists('detail_locations', 'id')->where(fn (Builder $query) => $query->where(
+                    fn (Builder $group) => $group
+                        ->where('status', CatalogStatus::Active->value)
+                        ->orWhereIn('id', $heldLocations),
+                )),
+            ],
+        ];
+    }
+
+    /**
+     * Messages of `productRelationRules()`.
+     *
+     * @return array<string, string>
+     */
+    public static function relationMessages(): array
+    {
+        return [
+            'detail_location_ids.*.exists' => __('validation.detail_location_unavailable'),
+        ];
+    }
+
+    /**
      * Messages of `productRules()` that differ from the generic ones.
      *
      * @return array<string, string>
