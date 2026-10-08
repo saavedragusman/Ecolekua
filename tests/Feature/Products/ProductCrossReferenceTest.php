@@ -9,6 +9,8 @@ use App\Models\AuditLog;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogCode;
 use App\Models\Combination;
+use App\Models\Combo;
+use App\Models\ComboComponent;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
@@ -397,4 +399,115 @@ it('PRD-008 keeps a deactivated product visible in the lookup as long as it is r
     $shirt->customizations()->attach($service->id);
 
     expect(CatalogUsage::productsUsingService($service->id)['products'])->toBe(['Camisa corporativa']);
+});
+
+// --- Combo components (DEC-PRD-52, E-70) -------------------------------------------------------
+
+/**
+ * A combo whose components are the given products (one component each), with a registry code.
+ *
+ * @param  array<string, mixed>  $overrides
+ */
+function xrefCombo(string $name, string $code, array $products, array $overrides = []): Combo
+{
+    $combo = Combo::factory()->create(['name' => $name, ...$overrides]);
+    CatalogCode::factory()->forCombo($combo)->create(['code' => $code]);
+
+    foreach ($products as $position => $product) {
+        ComboComponent::factory()->for($combo)->for($product)->create(['sort_order' => $position + 1]);
+    }
+
+    return $combo;
+}
+
+it('E-70 (line) rejects moving a combo component to the uniforms line and names the combo', function () {
+    $diaper = Product::factory()->diapers()->create(['name' => 'Pañal antiderrame']);
+    xrefCombo('Kit Oro antiderrame', 'K-ORO', [$diaper]);
+
+    $response = $this->actingAs(xrefEditor())
+        ->putJson("/products/{$diaper->id}", xrefProductPayload($diaper, ['business_line' => 'uniforms']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['business_line'])
+        ->assertJsonMissingValidationErrors(['supply_mode']);
+
+    expect($response->json('errors.business_line.0'))->toContain('«K-ORO (Kit Oro antiderrame)»') // DEC-PRD-63
+        ->and($diaper->fresh()->business_line->value)->toBe('diapers')
+        ->and(xrefAudit(AuditAction::ProductUpdated))->toHaveCount(0);
+});
+
+it('E-70 (line) rejects switching a combo component to the service mode and names the combo', function () {
+    $diaper = Product::factory()->diapers()->create(['name' => 'Pañal antiderrame']);
+    xrefCombo('Kit Oro antiderrame', 'K-ORO', [$diaper]);
+
+    $response = $this->actingAs(xrefEditor())
+        ->putJson("/products/{$diaper->id}", xrefProductPayload($diaper, ['supply_mode' => 'service', 'allows_custom_color' => false]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['supply_mode'])
+        ->assertJsonMissingValidationErrors(['business_line']);
+
+    expect($response->json('errors.supply_mode.0'))->toContain('«K-ORO (Kit Oro antiderrame)»') // DEC-PRD-63
+        ->and($diaper->fresh()->supply_mode->value)->toBe('on_demand')
+        ->and(xrefAudit(AuditAction::ProductUpdated))->toHaveCount(0);
+});
+
+it('E-70 (line) reports both fields when the line and the mode change together and writes nothing', function () {
+    $diaper = Product::factory()->diapers()->create(['name' => 'Pañal antiderrame']);
+    xrefCombo('Kit Oro antiderrame', 'K-ORO', [$diaper]);
+
+    $this->actingAs(xrefEditor())
+        ->putJson("/products/{$diaper->id}", xrefProductPayload($diaper, ['business_line' => 'uniforms', 'supply_mode' => 'service', 'allows_custom_color' => false, 'name' => 'Otro nombre']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['business_line', 'supply_mode']);
+
+    $fresh = $diaper->fresh();
+
+    expect($fresh->name)->toBe('Pañal antiderrame')
+        ->and($fresh->business_line->value)->toBe('diapers')
+        ->and($fresh->supply_mode->value)->toBe('on_demand');
+});
+
+it('E-70 (line) names each combo once, sorted, whatever their status or how many components use the product', function () {
+    $diaper = Product::factory()->diapers()->create(['name' => 'Pañal antiderrame']);
+    $absorbent = Product::factory()->diapers()->create(['name' => 'Absorbente']);
+    $lookup = fn (Product $product): array => CatalogUsage::combosUsingProduct($product->id);
+
+    // Same product in two components of one combo (N-3), plus an inactive combo and an unrelated one.
+    xrefCombo('Kit Plata', 'K-02', [$diaper, $diaper]);
+    xrefCombo('Kit Oro antiderrame', 'K-ORO', [$diaper, $absorbent], ['status' => CatalogStatus::Inactive]);
+    xrefCombo('Kit juvenil', 'K-JUV', [$absorbent]);
+
+    // "code (name)" sorted by code (DEC-PRD-63).
+    expect($lookup($diaper))->toBe(['K-02 (Kit Plata)', 'K-ORO (Kit Oro antiderrame)'])
+        ->and($lookup($absorbent))->toBe(['K-JUV (Kit juvenil)', 'K-ORO (Kit Oro antiderrame)'])
+        ->and($lookup(Product::factory()->diapers()->create()))->toBe([]);
+
+    $response = $this->actingAs(xrefEditor())
+        ->putJson("/products/{$diaper->id}", xrefProductPayload($diaper, ['business_line' => 'uniforms']))
+        ->assertUnprocessable();
+
+    expect($response->json('errors.business_line.0'))->toContain('«K-02 (Kit Plata)», «K-ORO (Kit Oro antiderrame)»');
+});
+
+it('E-70 (line) lets a combo component change its other fields and a product outside any combo change line and mode', function () {
+    $diaper = Product::factory()->diapers()->create(['name' => 'Pañal antiderrame']);
+    xrefCombo('Kit Oro antiderrame', 'K-ORO', [$diaper]);
+    $free = Product::factory()->diapers()->create(['name' => 'Pañal libre']);
+
+    $this->actingAs(xrefEditor())
+        ->putJson("/products/{$diaper->id}", xrefProductPayload($diaper, ['name' => 'Pañal antiderrame plus', 'supply_mode' => 'stock_depletable', 'allows_custom_color' => false]))
+        ->assertRedirect();
+
+    $this->actingAs(xrefEditor())
+        ->putJson("/products/{$free->id}", xrefProductPayload($free, ['business_line' => 'uniforms']))
+        ->assertRedirect();
+
+    $this->actingAs(xrefEditor())
+        ->putJson("/products/{$free->id}", xrefProductPayload($free->fresh(), ['supply_mode' => 'service', 'allows_custom_color' => false]))
+        ->assertRedirect();
+
+    expect($diaper->fresh()->name)->toBe('Pañal antiderrame plus')
+        ->and($diaper->fresh()->supply_mode->value)->toBe('stock_depletable')
+        ->and($diaper->fresh()->business_line->value)->toBe('diapers')
+        ->and($free->fresh()->business_line->value)->toBe('uniforms')
+        ->and($free->fresh()->supply_mode->value)->toBe('service');
 });
