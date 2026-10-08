@@ -401,3 +401,45 @@ RED run: `sail pest tests/Feature/Products/ProductCrossReferenceTest.php tests/F
 - Authored lines: about 690 across 14 tracked files and the new test file (production about 230, tests about 540 including the 349-line `ProductCrossReferenceTest`). Over the 400 advisory because the slice has three behaviors (details, admitted and included customizations, E-70) with triangulated tests; no `size:exception` requested.
 - Process deviation: the first block of 9 tests was appended to `ProductWriteTest.php` with a shell heredoc and its import was added with `sed`, against the "Edit/Write only" rule; all later edits used Edit/Write. The content is reviewed and committed as is.
 - No UI in this phase; no manual checks.
+
+## Phase 12: Stock minimum overrides (COMPLETE, tasks 12.1-12.3)
+
+Chain: PR 12a then PR 12b, from 11c (`8e5849f`); see Slices. Committed with the user's per-phase authorization; no push.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 12.1/12.2 | `tests/Unit/Products/StockMinimumTest.php`, `tests/Feature/Products/StockMinimumTest.php` | Unit (DB) + Feature (HTTP) | 1088 tests green at Phase 11 close (1087 passed, 1 skipped) | 29 tests, 2 passed (E-65 default required on `PUT /products/{id}` and the unknown-product 404: both pass before the route exists), 24 failed (404 route / no deletion), 3 errors (`StockMinimum` not found) | 29/29 (118 assertions) | E-65 (own value 4 on 38, default 2 on 40 and on the restricted combination), E-65 default required, E-20 (3 modes reject, 6 accepted), replace set + audit rows `{code, size, minimum}`, empty list clears and same set writes no audit, size missing / not allowed / outside restriction / unexpected without size attribute, foreign combination, repeated article, 4 invalid minimums, list required, 403 audited, 404, E-66 (delete + audit old/new + new default on return), E-66 staying in mode keeps overrides, E-71 (delete + audit old_values; restriction rejects first and the override survives), N-6 whole attribute removal, structure edit without removal leaves overrides | A `match`-based data set replaced an unreadable nested-ternary mapping before GREEN |
+
+RED run: `sail pest tests/Feature/Products/StockMinimumTest.php tests/Unit/Products/StockMinimumTest.php`: 29 tests, 2 passed, 24 failed, 3 errors. GREEN run: same command, 29 passed, 118 assertions.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Products/StockMinimumTest.php tests/Unit/Products/StockMinimumTest.php`: 29 passed, 118 assertions |
+| Runtime harness | New route `PUT /products/{product}/stock-minimums` (`products.stock-minimums.update`) exercised over HTTP by the Feature tests; mode change and size removal exercised through the existing `PUT /products/{id}` and `PUT /products/{id}/attributes` |
+| Rollback boundary | `StockMinimum`, `SyncStockMinimumOverrides`, `SyncStockMinimumsRequest`, `ProductStockMinimumController`, the route and the `stock_minimum_*` strings in `lang/es/validation.php`; the override deletion and the `stock_minimum_overrides` snapshot key in `UpdateProduct`; step 7 and the `ensureNoStockForRemovedSizes()` hook in `SyncProductAttributes`; the 2 new test files |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (72 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1117 tests, 1116 passed, 1 skipped (pre-existing).
+
+### Notes
+
+- Authored lines: about 755 added and 7 removed in the single commit `31f42cf` (production about 340, tests 421), over the 400 advisory, so it was split into the slices below. `feat/003-products-12-stock-minimums` stays at `31f42cf` as a backup.
+
+### Slices
+
+| Slice | Branch | Commits | Content | Lines |
+|---|---|---|---|---|
+| 12a | `feat/003-products-12a-overrides-core` (from `8e5849f`) | `ba90671` docs DEC-PRD-58..62; `a51e8cf` cleanup of overrides | `StockMinimum`, mode-change deletion (E-66), size-removal cleanup (E-71, N-6), unit and feature tests that seed overrides directly; audit action asserted per case | +403/-7 against `8e5849f` (docs 5, code and tests the rest); slightly over 400, not compressed |
+| 12b | `feat/003-products-12b-overrides-endpoint` (from 12a) | `7d60ca2` endpoint | `SyncStockMinimumOverrides`, request, controller, route, lang, endpoint tests (E-20, E-65, validation, 403, `products.stock_minimums_updated`), tasks and this record | +428/-25 against 12a; about 380 are endpoint tests |
+
+`size:exception` accepted by the user on 2026-10-08 for 12a (10 lines over, 5 of them docs) and 12b (mostly the endpoint's own tests; separating them would leave code without its tests).
+- Payload: `PUT /products/{id}/stock-minimums` with `overrides: [{combination_id, size_value_id, minimum}]`, a full replace. `minimum` is an integer 0 to 9999. Errors: `overrides` (mode), `overrides.{i}.combination_id|size_value_id|minimum`.
+- Audit: `products.stock_minimums_updated`, `products.updated` (mode change) and `products.attributes_updated` (size removal) use the key `stock_minimum_overrides` with rows `{code, size, minimum}` sorted by code and size (`size` null for an article without size). The `products.updated` snapshot now holds that key, so it shows (old = deleted rows, new = `[]`) only when the set changed.
+- Interpretations confirmed by the user on 2026-10-08 and recorded in spec section 9 as DEC-PRD-58..62: (58) a non-empty list outside `stock_with_minimum` is rejected on `overrides`, an empty list is accepted as a no-op; (59) overrides are allowed on active and inactive combinations; (60) without the size as an order attribute the override has no size and a size is rejected; (61) the minimum range is 0 to 9999; (62) audit key `stock_minimum_overrides` with `{code, size, minimum}` rows, one event per origin. (Full replace by delete and insert is a technical choice.)
+- Hook `SyncProductAttributes::ensureNoStockForRemovedSizes()` is empty (spec 008, spec section 10).
+- No UI in this phase; no manual checks.
