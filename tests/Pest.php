@@ -1,15 +1,19 @@
 <?php
 
 use App\Actions\Products\CreateCombo;
+use App\Enums\AttributeRole;
 use App\Enums\AuditAction;
+use App\Enums\CatalogStatus;
 use App\Enums\PermissionName;
 use App\Models\AttributeValue;
 use App\Models\AuditLog;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogCode;
+use App\Models\Combination;
 use App\Models\Combo;
 use App\Models\ComboComponent;
 use App\Models\Customer;
+use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\Role;
@@ -321,4 +325,267 @@ function expectNoComboWritten(): void
         ->and(DB::table('combo_component_values')->count())->toBe(0)
         ->and(CatalogCode::query()->whereNotNull('combo_id')->count())->toBe(0)
         ->and(comboAudit(AuditAction::ComboCreated))->toHaveCount(0);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Selection engine fixtures (PRD-011, PRD-019)
+|--------------------------------------------------------------------------
+|
+| Fictitious catalog shared by the resolution and the options tests: a corporate shirt, a pair of
+| trousers, a cap and a polo (`resCatalog()`), and the diaper kit of E-21 (`resKitCatalog()`).
+|
+*/
+
+/**
+ * Declares attributes for a product. `$declared` maps an attribute name to its role and the names of
+ * the admitted values (an empty list for the color of a product with fabric, DEC-PRD-35).
+ *
+ * @param  array{attrs: array<string, CatalogAttribute>, vals: array<string, AttributeValue>}  $catalog
+ * @param  array<string, array{0: string, 1: list<string>}>  $declared
+ */
+function resDeclare(array $catalog, Product $product, array $declared): void
+{
+    $position = 0;
+
+    foreach ($declared as $attribute => [$role, $allowed]) {
+        $row = ProductAttribute::factory()->create([
+            'product_id' => $product->id,
+            'catalog_attribute_id' => $catalog['attrs'][$attribute]->id,
+            'role' => AttributeRole::from($role),
+            'sort_order' => ++$position,
+        ]);
+        $row->allowedValues()->attach(array_map(fn (string $name): int => $catalog['vals'][$name]->id, $allowed));
+    }
+}
+
+/**
+ * An active combination with its code. `$axes` and `$restrictions` map an attribute name to value
+ * names; `$included` are service names the price already covers.
+ *
+ * @param  array<string, mixed>  $catalog
+ * @param  array<string, list<string>>  $axes
+ * @param  array<string, list<string>>  $restrictions
+ * @param  list<string>  $included
+ */
+function resCombination(array $catalog, Product $product, string $code, array $axes, array $restrictions = [], array $included = [], bool $active = true): Combination
+{
+    $combination = Combination::factory()->create([
+        'product_id' => $product->id,
+        'status' => $active ? CatalogStatus::Active : CatalogStatus::Inactive,
+    ]);
+    CatalogCode::factory()->create(['code' => $code, 'combination_id' => $combination->id]);
+
+    $pivot = [];
+
+    foreach ([$axes, $restrictions] as $map) {
+        foreach ($map as $attribute => $names) {
+            foreach ($names as $name) {
+                $pivot[$catalog['vals'][$name]->id] = ['catalog_attribute_id' => $catalog['attrs'][$attribute]->id];
+            }
+        }
+    }
+
+    $combination->values()->sync($pivot);
+    $combination->customizations()->sync(array_map(fn (string $name): int => $catalog['services'][$name]->id, $included));
+
+    return $combination;
+}
+
+/**
+ * Axes of the shirt combinations by code (the first value of each axis).
+ *
+ * @return array<string, string>
+ */
+function resAxesOf(string $code): array
+{
+    $base = ['Tela' => 'ALG-OXF Pima', 'Modelo' => 'Columbia especial', 'Manga' => 'Manga corta', 'Género' => 'Dama'];
+
+    return match ($code) {
+        '110-1' => $base,
+        '110' => [...$base, 'Género' => 'Caballero'],
+        '110-2' => [...$base, 'Manga' => 'Manga larga'],
+        '110-4' => [...$base, 'Tela' => 'Microfibra'],
+        '159-1' => ['Tela' => 'Gabardina', 'Modelo' => 'Clásico', 'Manga' => 'Manga larga', 'Género' => 'Caballero'],
+        default => [],
+    };
+}
+
+/**
+ * @return array{attrs: array<string, CatalogAttribute>, vals: array<string, AttributeValue>, services: array<string, Product>, locations: array<string, DetailLocation>, camisa: Product, pantalon: Product, gorra: Product, polo: Product, combos: array<string, Combination>}
+ */
+function resCatalog(): array
+{
+    $attrs = [
+        'Tela' => CatalogAttribute::factory()->fabric()->create(),
+        'Modelo' => CatalogAttribute::factory()->create(['name' => 'Modelo']),
+        'Manga' => CatalogAttribute::factory()->create(['name' => 'Manga']),
+        'Género' => CatalogAttribute::factory()->gender()->create(),
+        'Talla' => CatalogAttribute::factory()->size()->create(),
+        'Color' => CatalogAttribute::factory()->color()->create(),
+    ];
+
+    $names = [
+        'Tela' => ['ALG-OXF Pima', 'Drill', 'Gabardina', 'Microfibra'],
+        'Modelo' => ['Columbia especial', 'Clásico'],
+        'Manga' => ['Manga corta', 'Manga larga'],
+        'Género' => ['Dama', 'Caballero'],
+        'Talla' => ['S', 'M', 'L', 'XL', '2XL', '28', '38', '44', '46'],
+    ];
+    $vals = [];
+
+    foreach ($names as $attribute => $valueNames) {
+        foreach ($valueNames as $name) {
+            $vals[$name] = AttributeValue::factory()->for($attrs[$attribute], 'catalogAttribute')->create(['name' => $name, 'sort_order' => count($vals) + 1]);
+        }
+    }
+
+    $colors = ['Azul marino' => '#1F2A44', 'Blanco' => '#FFFFFF', 'Verde' => '#2E7D32', 'Rojo' => '#C62828', 'Gris perla' => '#BFC5CC', 'Negro' => '#111111'];
+
+    foreach ($colors as $name => $tone) {
+        $vals[$name] = AttributeValue::factory()->for($attrs['Color'], 'catalogAttribute')->withTone($tone)->create(['name' => $name, 'sort_order' => count($vals) + 1]);
+    }
+
+    $vals['Fucsia'] = AttributeValue::factory()->for($attrs['Color'], 'catalogAttribute')->withTone('#FF00FF')->inactive()->create(['name' => 'Fucsia', 'sort_order' => count($vals) + 1]);
+
+    // Colors the team offers in each fabric (DEC-PRD-32): ALG-OXF Pima in three, Gabardina in two.
+    $offered = ['ALG-OXF Pima' => ['Azul marino', 'Blanco', 'Verde'], 'Drill' => ['Blanco'], 'Gabardina' => ['Negro', 'Blanco'], 'Microfibra' => ['Blanco']];
+
+    foreach ($offered as $fabric => $colorNames) {
+        $vals[$fabric]->offeredColors()->attach(array_map(fn (string $name): int => $vals[$name]->id, $colorNames));
+    }
+
+    $services = [
+        'Bordado pequeño' => Product::factory()->service()->create(['name' => 'Bordado pequeño']),
+        'Vinil' => Product::factory()->service()->create(['name' => 'Vinil']),
+        'Estampado' => Product::factory()->service()->create(['name' => 'Estampado']),
+    ];
+
+    $locations = [
+        'Pechera' => DetailLocation::factory()->create(['name' => 'Pechera']),
+        'Orilla de mangas' => DetailLocation::factory()->create(['name' => 'Orilla de mangas', 'status' => CatalogStatus::Inactive]),
+        'Pie de cuello' => DetailLocation::factory()->create(['name' => 'Pie de cuello']),
+    ];
+
+    $catalog = ['attrs' => $attrs, 'vals' => $vals, 'services' => $services, 'locations' => $locations];
+
+    $camisa = Product::factory()->create(['name' => 'Camisa corporativa']);
+    resDeclare($catalog, $camisa, [
+        'Tela' => ['axis', ['ALG-OXF Pima', 'Drill', 'Gabardina', 'Microfibra']],
+        'Modelo' => ['axis', ['Columbia especial', 'Clásico']],
+        'Manga' => ['axis', ['Manga corta', 'Manga larga']],
+        'Género' => ['axis', ['Dama', 'Caballero']],
+        'Talla' => ['order', ['S', 'M', 'L', 'XL', '2XL']],
+        'Color' => ['order', []],
+    ]);
+    $camisa->detailLocations()->attach([$locations['Pechera']->id, $locations['Orilla de mangas']->id]);
+    $camisa->customizations()->attach([$services['Bordado pequeño']->id]);
+
+    $pantalon = Product::factory()->create(['name' => 'Pantalón de trabajo']);
+    resDeclare($catalog, $pantalon, ['Talla' => ['order', ['28', '38', '44']]]);
+
+    $gorra = Product::factory()->stockWithMinimum()->create(['name' => 'Gorra dryfit']);
+    resDeclare($catalog, $gorra, ['Color' => ['order', ['Negro', 'Blanco']]]);
+
+    $polo = Product::factory()->onDemand()->create(['name' => 'Polo sin personalizado', 'allows_custom_color' => false]);
+    resDeclare($catalog, $polo, ['Color' => ['order', ['Negro']]]);
+
+    $combos = [];
+
+    foreach (['110-1', '110', '110-4', '159-1'] as $code) {
+        $axes = array_map(fn (string $name): array => [$name], resAxesOf($code));
+        $combos[$code] = resCombination($catalog, $camisa, $code, $code === '159-1' ? [...$axes, 'Tela' => ['Drill', 'Gabardina']] : $axes);
+    }
+
+    // 110-2 restricts the size to S-XL (E-54) and includes vinil, which the shirt does not admit as an extra (E-67).
+    $combos['110-2'] = resCombination($catalog, $camisa, '110-2', array_map(fn (string $name): array => [$name], resAxesOf('110-2')), ['Talla' => ['S', 'M', 'L', 'XL']], ['Vinil']);
+    $combos['184'] = resCombination($catalog, $pantalon, '184', []);
+    $combos['G-01'] = resCombination($catalog, $gorra, 'G-01', []);
+    $combos['P-01'] = resCombination($catalog, $polo, 'P-01', []);
+
+    return [...$catalog, 'camisa' => $camisa, 'pantalon' => $pantalon, 'gorra' => $gorra, 'polo' => $polo, 'combos' => $combos];
+}
+
+/**
+ * A shirt with `$count` active combinations over a fabric, model, sleeve and gender axis (32 at
+ * most), every fifth one including a service.
+ *
+ * @param  array<string, mixed>  $catalog
+ */
+function resBulkProduct(array $catalog, string $name, int $count): Product
+{
+    $product = Product::factory()->create(['name' => $name]);
+    resDeclare($catalog, $product, [
+        'Tela' => ['axis', ['ALG-OXF Pima', 'Drill', 'Gabardina', 'Microfibra']],
+        'Modelo' => ['axis', ['Columbia especial', 'Clásico']],
+        'Manga' => ['axis', ['Manga corta', 'Manga larga']],
+        'Género' => ['axis', ['Dama', 'Caballero']],
+        'Talla' => ['order', ['S', 'M', 'L']],
+        'Color' => ['order', []],
+    ]);
+
+    $index = 0;
+
+    foreach (['ALG-OXF Pima', 'Drill', 'Gabardina', 'Microfibra'] as $fabric) {
+        foreach (['Columbia especial', 'Clásico'] as $model) {
+            foreach (['Manga corta', 'Manga larga'] as $sleeve) {
+                foreach (['Dama', 'Caballero'] as $gender) {
+                    if ($index === $count) {
+                        return $product;
+                    }
+
+                    resCombination($catalog, $product, "$name-".++$index, ['Tela' => [$fabric], 'Modelo' => [$model], 'Manga' => [$sleeve], 'Género' => [$gender]], [], $index % 5 === 0 ? ['Vinil'] : []);
+                }
+            }
+        }
+    }
+
+    return $product;
+}
+
+/**
+ * Number of queries that `$callback` runs.
+ */
+function resQueryCount(Closure $callback): int
+{
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    $callback();
+    DB::disableQueryLog();
+
+    return count(DB::getQueryLog());
+}
+
+/**
+ * The diaper catalog of the E-21 kit with an active combination per sellable item: the diaper per
+ * size (3XG `10`, 4XG `11`, 5XG `12`), the absorbent `20`, the bed protector `30` and the eco diaper
+ * per fabric (Microfibra `40`, Algodón `41`). Combos are created on top with `makeCombo()`.
+ *
+ * @return array<string, mixed>
+ */
+function resKitCatalog(): array
+{
+    $catalog = comboCatalog();
+    $catalog['services'] = [];
+
+    foreach (['3XG' => '10', '4XG' => '11', '5XG' => '12'] as $size => $code) {
+        resCombination($catalog, $catalog['products']['Pañal antiderrame'], $code, ['Talla' => [$size]]);
+    }
+
+    resCombination($catalog, $catalog['products']['Absorbente'], '20', []);
+    resCombination($catalog, $catalog['products']['Protector de cama'], '30', []);
+    resCombination($catalog, $catalog['products']['Pañal ecológico'], '40', ['Tela' => ['Microfibra']]);
+    resCombination($catalog, $catalog['products']['Pañal ecológico'], '41', ['Tela' => ['Algodón']]);
+
+    return $catalog;
+}
+
+/**
+ * Id of the component of `$combo` that holds `$product` (the `$position`-th one when it repeats).
+ *
+ * @param  array<string, mixed>  $catalog
+ */
+function resComponentId(array $catalog, Combo $combo, string $product, int $position = 0): int
+{
+    return $combo->components()->where('product_id', $catalog['products'][$product]->id)->get()->values()[$position]->id;
 }

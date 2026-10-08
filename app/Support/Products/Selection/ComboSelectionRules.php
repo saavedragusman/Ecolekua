@@ -2,6 +2,8 @@
 
 namespace App\Support\Products\Selection;
 
+use Closure;
+
 /**
  * Pure rules for the selection of a combo (PRD-010, PRD-011 rule 5, design Decision 14): the combo
  * must be offered and each component is validated with the rules of its product plus its own
@@ -27,6 +29,30 @@ final class ComboSelectionRules
         }
 
         return true;
+    }
+
+    /**
+     * Options for the partial selection of one component of a combo (PRD-019, DEC-PRD-44): the rules
+     * of its product narrowed by the component's restriction. The combo must be offered and the
+     * component must belong to it; keys are those of a product (`axes.{attributeId}`).
+     *
+     * @param  array<string, mixed>  $selection  `axes` of the component
+     * @param  Closure(): list<ValueSnapshot>  $palette
+     * @return SelectionOptions|array<string, string>
+     */
+    public static function options(ComboSnapshot $combo, mixed $componentId, array $selection, Closure $palette): SelectionOptions|array
+    {
+        if (! self::isOffered($combo)) {
+            return ['combo' => 'selection_unavailable'];
+        }
+
+        foreach ($combo->components as $component) {
+            if ($component->id === $componentId) {
+                return SelectionRules::options($component->product, $selection, $palette, $component->restriction);
+            }
+        }
+
+        return ['component_id' => 'selection_component_not_in_combo'];
     }
 
     /**
