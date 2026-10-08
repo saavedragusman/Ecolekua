@@ -83,6 +83,10 @@ class UpdateCombination
 
         ProductCombinations::syncValues($combination, $axes, $restrictions);
 
+        if (array_key_exists('included_customization_ids', $data)) {
+            ProductCombinations::syncCustomizations($combination, $data['included_customization_ids']);
+        }
+
         $after = CombinationAudit::snapshot($combination);
         $changed = array_keys(array_filter($after, fn (mixed $value, string $field): bool => $value !== $before[$field], ARRAY_FILTER_USE_BOTH));
 

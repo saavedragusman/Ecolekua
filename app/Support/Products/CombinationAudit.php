@@ -9,14 +9,15 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Audit form of a combination (design "Audit payloads"): code, description and the axis values and
- * order restrictions by attribute and value name, in the display order of the product. So
+ * order restrictions by attribute and value name, in the display order of the product, and the
+ * included customizations by name (PRD-008). So
  * `products.combination_created` carries every field and `products.combination_updated` the
  * previous and new values of the fields that changed.
  */
 final class CombinationAudit
 {
     /**
-     * @return array{code: string|null, description: string|null, axes: array<string, list<string>>, restrictions: array<string, list<string>>}
+     * @return array{code: string|null, description: string|null, axes: array<string, list<string>>, restrictions: array<string, list<string>>, included_customizations: list<string>}
      */
     public static function snapshot(Combination $combination): array
     {
@@ -54,11 +55,15 @@ final class CombinationAudit
             }
         }
 
+        $included = $combination->customizations()->pluck('products.name')->map(fn (mixed $name): string => (string) $name)->all();
+        sort($included);
+
         return [
             'code' => $combination->catalogCode?->code,
             'description' => $combination->description,
             'axes' => $axes,
             'restrictions' => $restrictions,
+            'included_customizations' => $included,
         ];
     }
 }

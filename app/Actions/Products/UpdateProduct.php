@@ -16,8 +16,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Edits the general data of a product (PRD-012, design Decision 10): name, category, business
  * line, supply mode, minimum stock, custom color and portal visibility, plus the admitted detail
- * locations (PRD-007), which replace the stored set when sent. Status has its own Actions;
- * structure, customizations and minimum overrides arrive in later phases.
+ * locations and customizations (PRD-007, PRD-008), which replace the stored set when sent. Status
+ * has its own Actions; structure and minimum overrides arrive in later phases.
  *
  * Mode changes keep the supply mode rules (PRD-009, DEC-PRD-46, DEC-PRD-34): leaving
  * `stock_with_minimum` clears the default minimum (the audit row carries the previous value) and
@@ -127,9 +127,9 @@ class UpdateProduct
     }
 
     /**
-     * Full replace of the detail locations (PRD-007) when the request sends them; an omitted list
-     * keeps the stored set, like `description`. The ids were validated by
-     * `CatalogRules::productRelationRules()`.
+     * Full replace of the detail locations (PRD-007) and admitted customizations (PRD-008) when the
+     * request sends them; an omitted list keeps the stored set, like `description`. The ids were
+     * validated by `CatalogRules::productRelationRules()`.
      *
      * @param  array<string, mixed>  $data
      */
@@ -139,6 +139,10 @@ class UpdateProduct
             $ids = $this->ids($data['detail_location_ids']);
             $this->ensureNoDetailLocationLayerGap($product, array_values(array_diff($ids, $product->detailLocations()->pluck('detail_locations.id')->all())));
             $product->detailLocations()->sync($ids);
+        }
+
+        if (array_key_exists('customization_ids', $data)) {
+            $product->customizations()->sync($this->ids($data['customization_ids']));
         }
     }
 
@@ -163,19 +167,24 @@ class UpdateProduct
     }
 
     /**
-     * Audit form of the product: the general data plus the detail locations as a sorted name list
-     * (design "Audit payloads").
+     * Audit form of the product: the general data plus the detail locations and customizations as
+     * sorted name lists (design "Audit payloads").
      *
      * @return array<string, mixed>
      */
     private function snapshot(Product $product): array
     {
-        $locations = $product->detailLocations()->pluck('detail_locations.name')->map(fn (mixed $name): string => (string) $name)->all();
-        sort($locations, SORT_STRING | SORT_FLAG_CASE);
+        $names = function (string $relation) use ($product): array {
+            $names = $product->{$relation}()->pluck($relation === 'customizations' ? 'products.name' : 'detail_locations.name')->map(fn (mixed $name): string => (string) $name)->all();
+            sort($names, SORT_STRING | SORT_FLAG_CASE);
+
+            return $names;
+        };
 
         return [
             ...ProductAudit::snapshot($product),
-            'detail_locations' => $locations,
+            'detail_locations' => $names('detailLocations'),
+            'customizations' => $names('customizations'),
         ];
     }
 }
