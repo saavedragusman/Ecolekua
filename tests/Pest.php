@@ -156,6 +156,16 @@ function comboCreator(): User
     return userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsCreate);
 }
 
+function comboEditor(): User
+{
+    return userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsUpdate);
+}
+
+function comboDeactivator(): User
+{
+    return userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsDeactivate);
+}
+
 /**
  * Diaper catalog of the "Kit Oro antiderrame" example (E-21). Value names are unique across the
  * fixture, so tests address them by name. Fictitious data only.
@@ -273,6 +283,11 @@ function comboPayload(array $catalog, array $overrides = []): array
 function postCombo(mixed $test, User $actor, array $payload): TestResponse
 {
     return $test->actingAs($actor)->postJson('/combos', $payload);
+}
+
+function putCombo(mixed $test, User $actor, Combo $combo, array $payload): TestResponse
+{
+    return $test->actingAs($actor)->putJson("/combos/{$combo->id}", $payload);
 }
 
 /**
