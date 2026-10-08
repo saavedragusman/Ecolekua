@@ -948,6 +948,11 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | DEC-PRD-55 | "Activa al agregarse" en ubicaciones y personalizaciones admitidas | A) Solo se exige estado activo a lo que se agrega; lo ya admitido se conserva y puede reenviarse aunque se haya desactivado después · B) Todo lo enviado debe estar activo | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-56 | Estado del servicio en las personalizaciones incluidas | A) Al agregarla, el servicio debe estar en modo servicio y activo; las ya incluidas en la combinación se conservan aunque el servicio se desactive después (igual que DEC-PRD-55) · B) Basta con el modo servicio | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-57 | Mensaje del rechazo por servicio en uso (E-70) | A) Nombra los productos y cada código de combinación con su producto, p. ej. "110-4 (Camisa corporativa)" · B) Solo los códigos | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-58 | Mínimos propios fuera del modo stock con mínimo | A) Una lista con elementos se rechaza en `overrides`; una lista vacía se acepta sin efecto · B) Cualquier lista se rechaza | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-59 | Estado de la combinación con mínimo propio | A) Se admiten mínimos propios en combinaciones activas e inactivas · B) Solo en combinaciones activas | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-60 | Talla del mínimo propio cuando el producto no declara la talla como atributo de pedido | A) El mínimo propio va sin talla; si se envía una talla, se rechaza · B) La talla se ignora | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-61 | Rango del mínimo propio | A) De 0 a 9999, igual que el mínimo por defecto · B) Rango propio | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-62 | Auditoría de los mínimos propios | A) Clave `stock_minimum_overrides` con filas {código, talla, mínimo}; el evento distingue la edición (`products.stock_minimums_updated`), el borrado por cambio de modo (`products.updated`) y el borrado por talla retirada (`products.attributes_updated`) · B) Un evento único | **Confirmada** (2026-10-08): **A** | — |
 
 ### Decisiones técnicas
 

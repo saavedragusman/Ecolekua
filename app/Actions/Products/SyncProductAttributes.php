@@ -16,6 +16,7 @@ use App\Models\ProductAttribute;
 use App\Models\User;
 use App\Support\Products\CatalogUsage;
 use App\Support\Products\ProductRules;
+use App\Support\Products\StockMinimum;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,9 +33,9 @@ use Illuminate\Validation\ValidationException;
  * 4. freeze while combinations exist (DEC-PRD-41, E-60);
  * 5. no admitted value (or order attribute) used by a combination can be removed (DEC-PRD-37, E-24, E-57);
  * 6. layer guard and combo in-use check: empty hooks, filled in Phases 22 and 13;
- * 8. audit with the full previous and new structure.
- *
- * Step 7 (cleanup of the minimum overrides of a removed size, E-71) belongs to Phase 12.
+ * 7. the own minimum stock of a removed size is deleted (DEC-PRD-52, E-71), after the empty hook
+ *    `ensureNoStockForRemovedSizes()` that spec 008 fills;
+ * 8. audit with the full previous and new structure; the deleted minimums go in `old_values`.
  */
 class SyncProductAttributes
 {
@@ -70,6 +71,11 @@ class SyncProductAttributes
             $this->ensureRemovedValuesNotUsedByCombinations($product, $removedValueIds);
             $this->ensureNoComboUsesRemovedValues($product, $removedValueIds);
             $this->ensureLayerGuard($product, $declared, $current);
+            $this->ensureNoStockForRemovedSizes($product, $removedValueIds);
+
+            // Step 7 (DEC-PRD-52, E-71): the own minimums keyed by a removed size go with it. Values
+            // used by a restriction were rejected above, so only unrestricted sizes reach this point.
+            $deletedOverrides = StockMinimum::deleteOverrides($product, $removedValueIds);
 
             $this->persist($product, $declared, $current);
 
@@ -80,7 +86,7 @@ class SyncProductAttributes
                     AuditAction::ProductAttributesUpdated,
                     $actor,
                     $product,
-                    oldValues: ['attributes' => $before],
+                    oldValues: ['attributes' => $before] + ($deletedOverrides === [] ? [] : ['stock_minimum_overrides' => $deletedOverrides]),
                     newValues: ['attributes' => $after],
                 );
             }
@@ -332,6 +338,17 @@ class SyncProductAttributes
     private function ensureLayerGuard(Product $product, array $declared, Collection $current): void
     {
         // Intentionally empty until task 22.7.
+    }
+
+    /**
+     * Hook for DEC-PRD-52 / spec 003 section 10: spec 008 blocks removing a size while stock of that
+     * size exists. There is no stock yet, so nothing is checked.
+     *
+     * @param  list<int>  $removedValueIds
+     */
+    private function ensureNoStockForRemovedSizes(Product $product, array $removedValueIds): void
+    {
+        // Intentionally empty until spec 008.
     }
 
     /**
