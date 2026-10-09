@@ -4,6 +4,7 @@ import { index as attributesIndex } from '@/routes/catalog/attributes';
 import { index as categoriesIndex } from '@/routes/catalog/categories';
 import { index as locationsIndex } from '@/routes/catalog/detail-locations';
 import { index as customersIndex } from '@/routes/customers';
+import { index as productsIndex } from '@/routes/products';
 import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
 
@@ -62,6 +63,15 @@ export const NAV_ENTRIES: NavEntry[] = [
         permission: 'customers.view',
         group: 'Comercial',
         priority: 10,
+    },
+    {
+        key: 'products',
+        label: 'Productos',
+        icon: 'inventory_2',
+        href: productsIndex.url(),
+        permission: 'products.view',
+        group: 'Comercial',
+        priority: 20,
     },
     {
         // Entry point of the catalog (spec 003): lands on categories; the other sections are
