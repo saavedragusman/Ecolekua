@@ -140,6 +140,7 @@ return [
     'selection_customization_repeated' => 'Esta personalización ya fue elegida.',
     'selection_component_restricted' => 'El valor elegido no está admitido por este componente del combo.',
     'selection_component_not_in_combo' => 'El componente no pertenece al combo.',
+    'selection_axis_out_of_order' => 'Elija los ejes en el orden del producto.',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
