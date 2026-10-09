@@ -158,12 +158,17 @@ it('E-28 rejects deleting a product that is a combo component, names the combo a
 it('E-28 shows the rejection as an error flash when the request is not JSON', function () {
     $catalog = comboCatalog();
     makeCombo($catalog);
+    $absorbent = $catalog['products']['Absorbente'];
 
     $this->actingAs(deleter())
         ->from('/products')
-        ->delete("/products/{$catalog['products']['Absorbente']->id}")
+        ->delete("/products/{$absorbent->id}")
         ->assertRedirect('/products')
-        ->assertInertiaFlash('type', 'error');
+        ->assertInertiaFlash('type', 'error')
+        ->assertInertiaFlash('message', 'No se puede eliminar el producto: es componente de los combos «K-ORO (Kit Oro antiderrame)». Puede desactivarlo.');
+
+    expect(Product::query()->whereKey($absorbent->id)->exists())->toBeTrue()
+        ->and(comboAudit(AuditAction::ProductDeleted))->toHaveCount(0);
 });
 
 it('E-70 (delete) rejects deleting a service that a product admits and a combination includes, naming both', function () {
@@ -247,14 +252,25 @@ it('E-61 rejects every combination of a product whose component restricts nothin
         'components' => [comboComponent($catalog, 'Absorbente por talla', 1), comboComponent($catalog, 'Protector de cama')],
     ]);
     // The first combo admits only 2XG; this one admits both sizes, so the 3XG combination is part of a combo too.
+    $productId = $fixture['product']->id;
+    $actor = deleter();
 
-    $response = $this->actingAs(deleter())
-        ->deleteJson("/products/{$fixture['product']->id}/combinations/{$fixture['three']->id}")
+    $three = $this->actingAs($actor)
+        ->deleteJson("/products/{$productId}/combinations/{$fixture['three']->id}")
         ->assertUnprocessable();
 
-    expect($response->json('message'))->toContain('«K-OPEN (Kit abierto)»')->not->toContain('K-ORO')
-        ->and(Combination::query()->whereKey($fixture['three']->id)->exists())->toBeTrue()
-        ->and($combo->exists)->toBeTrue();
+    expect($three->json('message'))->toContain('«K-OPEN (Kit abierto)»')->not->toContain('K-ORO')
+        ->and(Combination::query()->whereKey($fixture['three']->id)->exists())->toBeTrue();
+
+    $two = $this->actingAs($actor)
+        ->deleteJson("/products/{$productId}/combinations/{$fixture['two']->id}")
+        ->assertUnprocessable();
+
+    expect($two->json('message'))->toContain('«K-ORO (Kit Oro antiderrame)»')->toContain('«K-OPEN (Kit abierto)»')
+        ->and(Combination::query()->whereKey($fixture['two']->id)->exists())->toBeTrue()
+        ->and(Combo::query()->whereKey($combo->id)->exists())->toBeTrue()
+        ->and(ComboComponent::query()->where('combo_id', $combo->id)->count())->toBe(2)
+        ->and(comboAudit(AuditAction::CombinationDeleted))->toHaveCount(0);
 });
 
 it('PRD-014 keeps the own minimums of a deleted combination in the audit copy', function () {
