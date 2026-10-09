@@ -274,6 +274,79 @@ it('E-63 (options) returns only Blanco for the component restricted to Blanco an
         ->and(optOrderGroup($alone, 'Color')['allows_custom_color'])->toBeTrue();
 });
 
+it('DEC-PRD-94 marks a group as auto applied only when exactly one value is admitted, and lists that value anyway', function () {
+    $catalog = resCatalog();
+
+    $several = optRun(['product_id' => $catalog['pantalon']->id]);
+    $catalog['vals']['28']->update(['status' => CatalogStatus::Inactive]);
+    $catalog['vals']['38']->update(['status' => CatalogStatus::Inactive]);
+    $single = optRun(['product_id' => $catalog['pantalon']->id]);
+
+    expect(optOrderNames($several, 'Talla'))->toBe(['28', '38', '44'])
+        ->and(optOrderGroup($several, 'Talla')['auto_applied'])->toBeFalse()
+        ->and(optOrderNames($single, 'Talla'))->toBe(['44'])
+        ->and(optOrderGroup($single, 'Talla')['auto_applied'])->toBeTrue();
+});
+
+it('DEC-PRD-94 leaves the color open when the product offers the custom option, even with one color listed', function () {
+    $catalog = resCatalog();
+    $catalog['vals']['Blanco']->update(['status' => CatalogStatus::Inactive]);
+    $withoutCustom = optRun(['product_id' => $catalog['gorra']->id]);
+    $catalog['gorra']->update(['supply_mode' => SupplyMode::OnDemand, 'min_stock_default' => null, 'allows_custom_color' => true]);
+    $withCustom = optRun(['product_id' => $catalog['gorra']->id]);
+
+    expect(optOrderNames($withoutCustom, 'Color'))->toBe(['Negro'])
+        ->and(optOrderGroup($withoutCustom, 'Color')['auto_applied'])->toBeTrue()
+        ->and(optOrderNames($withCustom, 'Color'))->toBe(['Negro'])
+        ->and(optOrderGroup($withCustom, 'Color')['allows_custom_color'])->toBeTrue()
+        ->and(optOrderGroup($withCustom, 'Color')['auto_applied'])->toBeFalse();
+});
+
+it('DEC-PRD-94 marks the size as auto applied when the combination restricts it to one value', function () {
+    $catalog = resCatalog();
+    $open = optRun(['product_id' => $catalog['pantalon']->id]);
+    $catalog['combos']['184']->values()->sync([$catalog['vals']['38']->id => ['catalog_attribute_id' => $catalog['attrs']['Talla']->id]]);
+    $restricted = optRun(['product_id' => $catalog['pantalon']->id]);
+
+    expect(optOrderNames($open, 'Talla'))->toBe(['28', '38', '44'])
+        ->and(optOrderGroup($open, 'Talla')['auto_applied'])->toBeFalse()
+        ->and(optOrderNames($restricted, 'Talla'))->toBe(['38'])
+        ->and(optOrderGroup($restricted, 'Talla')['auto_applied'])->toBeTrue();
+});
+
+it('DEC-PRD-94 marks the color of a fabric that offers one color as auto applied, unless the custom option is offered', function () {
+    $catalog = resCatalog();
+    // Microfibra offers only Blanco (DEC-PRD-35).
+    $catalog['camisa']->update(['allows_custom_color' => false]);
+    $withoutCustom = optRun(optInput($catalog, 'camisa', '110-4'));
+    $catalog['camisa']->update(['allows_custom_color' => true]);
+    $withCustom = optRun(optInput($catalog, 'camisa', '110-4'));
+    $several = optRun(optInput($catalog, 'camisa', '110-1'));
+
+    expect(optOrderNames($withoutCustom, 'Color'))->toBe(['Blanco'])
+        ->and(optOrderGroup($withoutCustom, 'Color')['auto_applied'])->toBeTrue()
+        ->and(optOrderNames($withCustom, 'Color'))->toBe(['Blanco'])
+        ->and(optOrderGroup($withCustom, 'Color')['auto_applied'])->toBeFalse()
+        ->and(optOrderNames($several, 'Color'))->toEqualCanonicalizing(['Azul marino', 'Blanco', 'Verde'])
+        ->and(optOrderGroup($several, 'Color')['auto_applied'])->toBeFalse();
+});
+
+it('DEC-PRD-94 E-63 marks the color of a component restricted to Blanco as auto applied, and an open component as not', function () {
+    $catalog = resKitCatalog();
+    $catalog['products']['Absorbente']->update(['supply_mode' => SupplyMode::OnDemand, 'min_stock_default' => null, 'allows_custom_color' => true]);
+    $restricted = makeCombo($catalog, ['name' => 'Blanco', 'code' => 'K-WHITE', 'components' => [comboComponent($catalog, 'Absorbente', 1, ['Color' => ['Blanco']])]]);
+    $open = makeCombo($catalog, ['name' => 'Libre', 'code' => 'K-FREE', 'components' => [comboComponent($catalog, 'Absorbente')]]);
+
+    $white = optRun(['combo_id' => $restricted->id, 'component_id' => resComponentId($catalog, $restricted, 'Absorbente')]);
+    $free = optRun(['combo_id' => $open->id, 'component_id' => resComponentId($catalog, $open, 'Absorbente')]);
+    $alone = optRun(['product_id' => $catalog['products']['Absorbente']->id]);
+
+    expect(optOrderNames($white, 'Color'))->toBe(['Blanco'])
+        ->and(optOrderGroup($white, 'Color')['auto_applied'])->toBeTrue()
+        ->and(optOrderGroup($free, 'Color')['auto_applied'])->toBeFalse()
+        ->and(optOrderGroup($alone, 'Color')['auto_applied'])->toBeFalse();
+});
+
 it('E-63 (options) narrows the axes and the colors of a component with fabric to what the component admits', function () {
     $catalog = resKitCatalog();
     $restricted = makeCombo($catalog, ['name' => 'Algodón crema', 'code' => 'K-ALG', 'components' => [comboComponent($catalog, 'Pañal ecológico', 1, ['Tela' => ['Algodón'], 'Color' => ['Crema']])]]);

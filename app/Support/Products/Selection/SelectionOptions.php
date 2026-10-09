@@ -15,7 +15,7 @@ final readonly class SelectionOptions
 {
     /**
      * @param  list<ValueSnapshot>  $axisValues
-     * @param  list<array{attribute: AttributeSnapshot, values: list<ValueSnapshot>, allowsCustomColor: bool}>  $order
+     * @param  list<array{attribute: AttributeSnapshot, values: list<ValueSnapshot>, allowsCustomColor: bool, autoApplied: bool}>  $order
      * @param  list<LocationSnapshot>  $locations
      * @param  list<ValueSnapshot>  $palette
      * @param  list<ServiceSnapshot>  $customizations
@@ -40,7 +40,7 @@ final readonly class SelectionOptions
     }
 
     /**
-     * @param  list<array{attribute: AttributeSnapshot, values: list<ValueSnapshot>, allowsCustomColor: bool}>  $order
+     * @param  list<array{attribute: AttributeSnapshot, values: list<ValueSnapshot>, allowsCustomColor: bool, autoApplied: bool}>  $order
      * @param  list<LocationSnapshot>  $locations
      * @param  list<ValueSnapshot>  $palette
      * @param  list<ServiceSnapshot>  $customizations
@@ -75,6 +75,7 @@ final readonly class SelectionOptions
                 'attribute' => $group['attribute']->name,
                 'options' => array_map(self::option(...), $group['values']),
                 'allows_custom_color' => $group['allowsCustomColor'],
+                'auto_applied' => $group['autoApplied'],
             ], $this->order),
             'detail_locations' => array_map(fn (LocationSnapshot $location): array => [
                 'id' => $location->id, 'name' => $location->name, 'layer' => $location->layer, 'image_urls' => [],

@@ -56,23 +56,19 @@ final class SelectionRules
     }
 
     /**
-     * Values the client does not have to choose because the attribute is left with exactly one
-     * admitted active value, after the optional component restriction (PRD-010). The color is left
-     * to the client when the product offers the "Personalizado" option, which is a second choice,
-     * unless the values are those of a component of a combo, which never admits it (DEC-PRD-87).
+     * Axes the client does not have to choose because the axis is left with exactly one admitted
+     * active value, after the optional component restriction (PRD-010, DEC-PRD-81). Order attributes
+     * are not part of it: their criterion needs the resolved combination and the chosen fabric, and
+     * is `singleListedValue()` over the listed values (DEC-PRD-94).
      *
      * @param  array<int, list<int>>|null  $componentRestriction
      * @return array<int, int> attributeId => valueId
      */
-    public static function autoApplied(ProductSnapshot $snapshot, ?array $componentRestriction): array
+    public static function autoAppliedAxes(ProductSnapshot $snapshot, ?array $componentRestriction): array
     {
         $applied = [];
 
-        foreach ($snapshot->attributes as $attribute) {
-            if ($attribute->isColor() && $snapshot->admitsCustomColor && $componentRestriction === null) {
-                continue;
-            }
-
+        foreach (self::attributesWithRole($snapshot, AttributeRole::Axis) as $attribute) {
             $candidates = self::admittedValues($snapshot, $attribute, $attribute->allowed, $componentRestriction);
 
             if (count($candidates) === 1) {
@@ -81,6 +77,21 @@ final class SelectionRules
         }
 
         return $applied;
+    }
+
+    /**
+     * Criterion of DEC-PRD-94, shared by the options (`auto_applied`) and the resolution so they can
+     * never disagree: an order group whose listed values are exactly one is applied automatically,
+     * except the color group when the custom color is offered, because the client then chooses
+     * between that color and "Personalizado" (DEC-PRD-34).
+     *
+     * @param  array<array-key, int>  $listedValueIds
+     */
+    public static function singleListedValue(array $listedValueIds, bool $customColorOffered): ?int
+    {
+        $values = array_values(array_unique($listedValueIds));
+
+        return count($values) === 1 && ! $customColorOffered ? $values[0] : null;
     }
 
     /**
@@ -185,41 +196,72 @@ final class SelectionRules
      * values the product admits and the combination restricts (DEC-PRD-36), narrowed by the
      * component. The color of a product with fabric comes from the chosen fabric (DEC-PRD-35) and
      * the combination does not restrict it. "Personalizado" is offered when the product admits it
-     * and never for a component of a combo (DEC-PRD-87).
+     * and never for a component of a combo (DEC-PRD-87). `autoApplied` is the criterion of
+     * `singleListedValue()` over the listed values (DEC-PRD-94): the quoter shows the group as fixed,
+     * as resolution fills it in.
      *
      * @param  array<int, int>  $chosenAxes  attributeId => valueId
      * @param  array<int, list<int>>|null  $componentRestriction
-     * @return list<array{attribute: AttributeSnapshot, values: list<ValueSnapshot>, allowsCustomColor: bool}>
+     * @return list<array{attribute: AttributeSnapshot, values: list<ValueSnapshot>, allowsCustomColor: bool, autoApplied: bool}>
      */
     public static function orderOptions(ProductSnapshot $snapshot, CombinationSnapshot $combination, array $chosenAxes, ?array $componentRestriction = null): array
     {
-        $fabric = self::fabricAttribute($snapshot);
         $groups = [];
 
         foreach (self::attributesWithRole($snapshot, AttributeRole::Order) as $attribute) {
-            $restricted = $componentRestriction[$attribute->id] ?? null;
-
-            if ($attribute->isColor() && $fabric !== null) {
-                $valueIds = array_filter(
-                    $snapshot->fabricColors[$chosenAxes[$fabric->id] ?? 0] ?? [],
-                    fn (int $valueId): bool => ($snapshot->values[$valueId]->active ?? false) && ($restricted === null || in_array($valueId, $restricted, true)),
-                );
-            } else {
-                $byCombination = $combination->restrictions[$attribute->id] ?? null;
-                $valueIds = array_filter(
-                    self::admittedValues($snapshot, $attribute, $attribute->allowed, $componentRestriction),
-                    fn (int $valueId): bool => $byCombination === null || in_array($valueId, $byCombination, true),
-                );
-            }
+            $valueIds = self::listedOrderValues($snapshot, $attribute, $combination, $chosenAxes, $componentRestriction);
+            $customColor = self::customColorOffered($snapshot, $attribute, $componentRestriction);
 
             $groups[] = [
                 'attribute' => $attribute,
                 'values' => self::sortedValues($snapshot, $valueIds),
-                'allowsCustomColor' => $attribute->isColor() && $snapshot->admitsCustomColor && $componentRestriction === null,
+                'allowsCustomColor' => $customColor,
+                'autoApplied' => self::singleListedValue($valueIds, $customColor) !== null,
             ];
         }
 
         return $groups;
+    }
+
+    /**
+     * The value ids an order attribute lists for a resolved combination: what the product admits,
+     * the combination restricts (DEC-PRD-36) and the component narrows (PRD-010); for the color of a
+     * product with fabric, the colors of the chosen fabric (DEC-PRD-35). It is the one source of
+     * `orderOptions()` and of the automatic application in `validate()` (DEC-PRD-94).
+     *
+     * @param  array<int, int>  $chosenAxes  attributeId => valueId
+     * @param  array<int, list<int>>|null  $componentRestriction
+     * @return list<int>
+     */
+    private static function listedOrderValues(ProductSnapshot $snapshot, AttributeSnapshot $attribute, CombinationSnapshot $combination, array $chosenAxes, ?array $componentRestriction): array
+    {
+        $fabric = self::fabricAttribute($snapshot);
+        $restricted = $componentRestriction[$attribute->id] ?? null;
+
+        if ($attribute->isColor() && $fabric !== null) {
+            return array_values(array_filter(
+                $snapshot->fabricColors[$chosenAxes[$fabric->id] ?? 0] ?? [],
+                fn (int $valueId): bool => ($snapshot->values[$valueId]->active ?? false) && ($restricted === null || in_array($valueId, $restricted, true)),
+            ));
+        }
+
+        $byCombination = $combination->restrictions[$attribute->id] ?? null;
+
+        return array_values(array_filter(
+            self::admittedValues($snapshot, $attribute, $attribute->allowed, $componentRestriction),
+            fn (int $valueId): bool => $byCombination === null || in_array($valueId, $byCombination, true),
+        ));
+    }
+
+    /**
+     * Whether the group offers the "Personalizado" option: the color of a product that admits it,
+     * never in a component of a combo (DEC-PRD-87).
+     *
+     * @param  array<int, list<int>>|null  $componentRestriction
+     */
+    private static function customColorOffered(ProductSnapshot $snapshot, AttributeSnapshot $attribute, ?array $componentRestriction): bool
+    {
+        return $attribute->isColor() && $snapshot->admitsCustomColor && $componentRestriction === null;
     }
 
     /**
@@ -275,32 +317,24 @@ final class SelectionRules
     }
 
     /**
-     * The client sends nothing for an attribute left with exactly one admitted value (PRD-010):
-     * fill it in unless the client sent something, which is validated as usual.
+     * The client sends nothing for an axis of a component left with exactly one admitted value
+     * (PRD-010): fill it in unless the client sent something, which is validated as usual.
      *
      * @param  array<array-key, mixed>  $axes
-     * @param  array<array-key, mixed>  $order
      * @param  array<int, list<int>>  $componentRestriction
-     * @return array{0: array<array-key, mixed>, 1: array<array-key, mixed>}
+     * @return array<array-key, mixed>
      */
-    private static function withAutoApplied(ProductSnapshot $snapshot, array $axes, array $order, array $componentRestriction): array
+    private static function withAutoAppliedAxes(ProductSnapshot $snapshot, array $axes, array $componentRestriction): array
     {
-        foreach (self::autoApplied($snapshot, $componentRestriction) as $attributeId => $valueId) {
-            $isAxis = count(array_filter($snapshot->attributes, fn (AttributeSnapshot $attribute): bool => $attribute->id === $attributeId && $attribute->role === AttributeRole::Axis)) === 1;
-            $sent = $isAxis ? ($axes[$attributeId] ?? null) : ($order[$attributeId] ?? null);
+        foreach (self::autoAppliedAxes($snapshot, $componentRestriction) as $attributeId => $valueId) {
+            $sent = $axes[$attributeId] ?? null;
 
-            if ($sent !== null && $sent !== '') {
-                continue;
-            }
-
-            if ($isAxis) {
+            if ($sent === null || $sent === '') {
                 $axes[$attributeId] = $valueId;
-            } else {
-                $order[$attributeId] = $valueId;
             }
         }
 
-        return [$axes, $order];
+        return $axes;
     }
 
     /**
@@ -338,8 +372,9 @@ final class SelectionRules
      * @param  array<string, mixed>  $selection  `axes`, `order`, `custom_color`, `details`, `customizations`
      * @param  list<ValueSnapshot>  $palette  active values of the color attribute, for the details
      * @param  array<int, list<int>>|null  $componentRestriction  set for a component of a combo (PRD-010): the values
-     *                                                            it admits per attribute, and the only admitted value of an attribute is applied
-     *                                                            when the client sends none (DEC-PRD-81); null for a product alone
+     *                                                            it admits per attribute, and the only admitted value of an axis is applied
+     *                                                            when the client sends none (DEC-PRD-81); null for a product alone.
+     *                                                            An order attribute that lists a single value is applied in both cases (DEC-PRD-94)
      * @return ResolvedSelection|array<string, string>
      */
     public static function validate(ProductSnapshot $snapshot, array $selection, array $palette = [], ?array $componentRestriction = null): ResolvedSelection|array
@@ -353,27 +388,58 @@ final class SelectionRules
         $orderInput = self::map($selection['order'] ?? null);
 
         if ($componentRestriction !== null) {
-            [$axesInput, $orderInput] = self::withAutoApplied($snapshot, $axesInput, $orderInput, $componentRestriction);
+            $axesInput = self::withAutoAppliedAxes($snapshot, $axesInput, $componentRestriction);
         }
 
         $fabric = self::fabricAttribute($snapshot);
+        $axes = self::attributesWithRole($snapshot, AttributeRole::Axis);
         $axisValues = [];
+        $axisErrors = [];
         $orderChoices = [];
+
+        foreach ($axes as $attribute) {
+            $choice = self::plainValue($snapshot, $attribute, $axesInput[$attribute->id] ?? null, $componentRestriction);
+
+            if (is_int($choice)) {
+                $axisValues[$attribute->id] = $choice;
+            } else {
+                $axisErrors[$attribute->id] = $choice;
+            }
+        }
+
+        // The combination comes before the order attributes: the options an omitted one lists depend on it (DEC-PRD-94).
+        $combination = null;
+        $combinationError = null;
+
+        if (count($axisValues) === count($axes)) {
+            $reachable = self::reachableCombinations($snapshot, $axisValues, $componentRestriction);
+
+            if (count($reachable) === 1) {
+                $combination = $reachable[0];
+            } else {
+                $combinationError = $reachable === [] ? 'selection_unavailable' : 'selection_ambiguous';
+            }
+        }
 
         foreach ($snapshot->attributes as $attribute) {
             if ($attribute->role === AttributeRole::Axis) {
-                $choice = self::plainValue($snapshot, $attribute, $axesInput[$attribute->id] ?? null, $componentRestriction);
-
-                if (is_int($choice)) {
-                    $axisValues[$attribute->id] = $choice;
-                } else {
-                    $errors['axes.'.$attribute->id] = $choice;
+                if (isset($axisErrors[$attribute->id])) {
+                    $errors['axes.'.$attribute->id] = $axisErrors[$attribute->id];
                 }
 
                 continue;
             }
 
             $input = $orderInput[$attribute->id] ?? null;
+
+            // DEC-PRD-94: what the client omits is the only value the group lists, when it lists just one.
+            if (($input === null || $input === '') && $combination !== null) {
+                $input = self::singleListedValue(
+                    self::listedOrderValues($snapshot, $attribute, $combination, $axisValues, $componentRestriction),
+                    self::customColorOffered($snapshot, $attribute, $componentRestriction),
+                );
+            }
+
             $fabricValue = $fabric === null ? null : ($axisValues[$fabric->id] ?? null);
             $choice = $attribute->isColor()
                 ? self::colorChoice($snapshot, $attribute, $input, $selection['custom_color'] ?? null, $fabric !== null, $fabricValue, $componentRestriction)
@@ -389,16 +455,8 @@ final class SelectionRules
         // DEC-PRD-77: an attribute the product does not declare in that role is an error, never ignored.
         $errors = [...$errors, ...self::undeclared($snapshot, 'axes', $axesInput, AttributeRole::Axis), ...self::undeclared($snapshot, 'order', $orderInput, AttributeRole::Order)];
 
-        $combination = null;
-
-        if (count($axisValues) === count(self::attributesWithRole($snapshot, AttributeRole::Axis))) {
-            $reachable = self::reachableCombinations($snapshot, $axisValues, $componentRestriction);
-
-            if (count($reachable) === 1) {
-                $combination = $reachable[0];
-            } else {
-                $errors['product'] = $reachable === [] ? 'selection_unavailable' : 'selection_ambiguous';
-            }
+        if ($combinationError !== null) {
+            $errors['product'] = $combinationError;
         }
 
         if ($combination !== null) {

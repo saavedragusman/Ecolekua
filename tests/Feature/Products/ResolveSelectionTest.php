@@ -631,6 +631,53 @@ it('PRD-010 applies the only admitted value of an axis or order attribute, so th
     expect(resErrors($input))->toBe(['components.'.resComponentId($catalog, $combo, 'Pañal antiderrame').".axes.{$catalog['attrs']['Talla']->id}" => [resMessage('selection_component_restricted')]]);
 });
 
+it('DEC-PRD-94 resolves an omitted size that the combination restricts to one value', function () {
+    $catalog = resCatalog();
+    $size = $catalog['attrs']['Talla']->id;
+    $catalog['combos']['184']->values()->sync([$catalog['vals']['38']->id => ['catalog_attribute_id' => $size]]);
+
+    $result = resResolve(resInput($catalog, 'pantalon', '184'))->toArray();
+
+    expect($result['code'])->toBe('184')
+        ->and($result['order'])->toBe([['attribute_id' => $size, 'attribute' => 'Talla', 'value_id' => $catalog['vals']['38']->id, 'value' => '38']])
+        // A value the client sends is validated, never replaced.
+        ->and(resErrors(resInput($catalog, 'pantalon', '184', ['Talla' => '28'])))->toBe(["order.$size" => [resMessage('selection_value_restricted')]]);
+});
+
+it('DEC-PRD-94 resolves an omitted color that the fabric offers alone, unless the custom option is offered', function () {
+    $catalog = resCatalog();
+    $color = $catalog['attrs']['Color']->id;
+    // Microfibra offers only Blanco (DEC-PRD-35).
+    $catalog['camisa']->update(['allows_custom_color' => false]);
+
+    $result = resResolve(resInput($catalog, 'camisa', '110-4', ['Talla' => 'M']))->toArray();
+
+    expect(array_column($result['order'], 'value'))->toBe(['M', 'Blanco'])
+        ->and(resErrors(resInput($catalog, 'camisa', '110-4', ['Talla' => 'M', 'Color' => 'Azul marino'])))->toBe(["order.$color" => [resMessage('selection_color_not_offered')]]);
+
+    // With "Personalizado" the client chooses between Blanco and the custom color: nothing is applied.
+    $catalog['camisa']->update(['allows_custom_color' => true]);
+
+    expect(resErrors(resInput($catalog, 'camisa', '110-4', ['Talla' => 'M'])))->toBe(["order.$color" => [resMessage('selection_value_required')]]);
+});
+
+it('DEC-PRD-94 applies the only color a component of a combo lists, with fabric or without it', function () {
+    $catalog = resKitCatalog();
+    $catalog['products']['Absorbente']->update(['supply_mode' => SupplyMode::OnDemand, 'min_stock_default' => null, 'allows_custom_color' => true]);
+    $combo = makeCombo($catalog, ['components' => [
+        comboComponent($catalog, 'Absorbente', 1, ['Color' => ['Blanco']]),
+        comboComponent($catalog, 'Pañal ecológico', 1, ['Color' => ['Crema']]),
+    ]]);
+    $input = resComboInput($catalog, $combo, ['Absorbente' => ['order' => ['Talla' => '3XG']], 'Pañal ecológico' => ['axes' => ['Tela' => 'Algodón']]]);
+
+    $selections = array_column(resResolve($input)->toArray()['components'], 'selection');
+
+    // The custom color is never admitted in a component (DEC-PRD-87), so its only color is not a choice.
+    expect(array_column($selections[0]['order'], 'value'))->toBe(['3XG', 'Blanco'])
+        ->and($selections[1]['code'])->toBe('41')
+        ->and(array_column($selections[1]['order'], 'value'))->toBe(['Crema']);
+});
+
 it('PRD-010 does not offer a combo that is inactive or has a component that cannot be resolved (DEC-PRD-64)', function () {
     $catalog = resKitCatalog();
     $combo = makeCombo($catalog, ['components' => [comboComponent($catalog, 'Pañal antiderrame'), comboComponent($catalog, 'Protector de cama')]]);
