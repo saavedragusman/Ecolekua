@@ -57,7 +57,8 @@ final class SelectionRules
     /**
      * Values the client does not have to choose because the attribute is left with exactly one
      * admitted active value, after the optional component restriction (PRD-010). The color is left
-     * to the client when the product offers the "Personalizado" option, which is a second choice.
+     * to the client when the product offers the "Personalizado" option, which is a second choice,
+     * unless the values are those of a component of a combo, which never admits it (DEC-PRD-87).
      *
      * @param  array<int, list<int>>|null  $componentRestriction
      * @return array<int, int> attributeId => valueId
@@ -67,7 +68,7 @@ final class SelectionRules
         $applied = [];
 
         foreach ($snapshot->attributes as $attribute) {
-            if ($attribute->isColor() && $snapshot->admitsCustomColor) {
+            if ($attribute->isColor() && $snapshot->admitsCustomColor && $componentRestriction === null) {
                 continue;
             }
 
@@ -82,15 +83,96 @@ final class SelectionRules
     }
 
     /**
+     * Whether a component of a combo can still be resolved: its product is available, an active
+     * combination is reachable under the restriction and every order attribute keeps at least one
+     * option. A component that fails makes the combo not offered (PRD-010, DEC-PRD-64, DEC-PRD-70).
+     *
+     * @param  array<int, list<int>>  $componentRestriction
+     */
+    public static function componentOffered(ProductSnapshot $snapshot, array $componentRestriction): bool
+    {
+        if (! self::isAvailable($snapshot) || self::reachableCombinations($snapshot, [], $componentRestriction) === []) {
+            return false;
+        }
+
+        foreach (self::attributesWithRole($snapshot, AttributeRole::Order) as $attribute) {
+            if (! self::hasOptions($snapshot, $attribute, $componentRestriction)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The client sends nothing for an attribute left with exactly one admitted value (PRD-010):
+     * fill it in unless the client sent something, which is validated as usual.
+     *
+     * @param  array<array-key, mixed>  $axes
+     * @param  array<array-key, mixed>  $order
+     * @param  array<int, list<int>>  $componentRestriction
+     * @return array{0: array<array-key, mixed>, 1: array<array-key, mixed>}
+     */
+    private static function withAutoApplied(ProductSnapshot $snapshot, array $axes, array $order, array $componentRestriction): array
+    {
+        foreach (self::autoApplied($snapshot, $componentRestriction) as $attributeId => $valueId) {
+            $isAxis = count(array_filter($snapshot->attributes, fn (AttributeSnapshot $attribute): bool => $attribute->id === $attributeId && $attribute->role === AttributeRole::Axis)) === 1;
+            $sent = $isAxis ? ($axes[$attributeId] ?? null) : ($order[$attributeId] ?? null);
+
+            if ($sent !== null && $sent !== '') {
+                continue;
+            }
+
+            if ($isAxis) {
+                $axes[$attributeId] = $valueId;
+            } else {
+                $order[$attributeId] = $valueId;
+            }
+        }
+
+        return [$axes, $order];
+    }
+
+    /**
+     * Whether an order attribute offers at least one value under the component restriction. The
+     * color of a product with fabric is offered by the admitted fabrics (DEC-PRD-35). The custom
+     * color is never an option of a component (DEC-PRD-87).
+     *
+     * @param  array<int, list<int>>  $componentRestriction
+     */
+    private static function hasOptions(ProductSnapshot $snapshot, AttributeSnapshot $attribute, array $componentRestriction): bool
+    {
+        $restricted = $componentRestriction[$attribute->id] ?? null;
+        $fabric = self::fabricAttribute($snapshot);
+
+        if (! $attribute->isColor() || $fabric === null) {
+            return self::admittedValues($snapshot, $attribute, $attribute->allowed, $componentRestriction) !== [];
+        }
+
+        foreach (self::admittedValues($snapshot, $fabric, $fabric->allowed, $componentRestriction) as $fabricValue) {
+            foreach ($snapshot->fabricColors[$fabricValue] ?? [] as $colorId) {
+                if (($snapshot->values[$colorId]->active ?? false) && ($restricted === null || in_array($colorId, $restricted, true))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Validates a complete selection (PRD-011 rules 1 to 4) and resolves it to its combination.
      * Returns the resolved selection, or the reason codes by field key when it is not valid. The
      * product must be available first (rule 1); the rest of the problems are reported together.
      *
      * @param  array<string, mixed>  $selection  `axes`, `order`, `custom_color`, `details`, `customizations`
      * @param  list<ValueSnapshot>  $palette  active values of the color attribute, for the details
+     * @param  array<int, list<int>>|null  $componentRestriction  set for a component of a combo (PRD-010): the values
+     *                                                            it admits per attribute, and the only admitted value of an attribute is applied
+     *                                                            when the client sends none (DEC-PRD-81); null for a product alone
      * @return ResolvedSelection|array<string, string>
      */
-    public static function validate(ProductSnapshot $snapshot, array $selection, array $palette = []): ResolvedSelection|array
+    public static function validate(ProductSnapshot $snapshot, array $selection, array $palette = [], ?array $componentRestriction = null): ResolvedSelection|array
     {
         if (! self::isAvailable($snapshot)) {
             return ['product' => 'selection_unavailable'];
@@ -99,13 +181,18 @@ final class SelectionRules
         $errors = [];
         $axesInput = self::map($selection['axes'] ?? null);
         $orderInput = self::map($selection['order'] ?? null);
+
+        if ($componentRestriction !== null) {
+            [$axesInput, $orderInput] = self::withAutoApplied($snapshot, $axesInput, $orderInput, $componentRestriction);
+        }
+
         $fabric = self::fabricAttribute($snapshot);
         $axisValues = [];
         $orderChoices = [];
 
         foreach ($snapshot->attributes as $attribute) {
             if ($attribute->role === AttributeRole::Axis) {
-                $choice = self::plainValue($snapshot, $attribute, $axesInput[$attribute->id] ?? null);
+                $choice = self::plainValue($snapshot, $attribute, $axesInput[$attribute->id] ?? null, $componentRestriction);
 
                 if (is_int($choice)) {
                     $axisValues[$attribute->id] = $choice;
@@ -119,8 +206,8 @@ final class SelectionRules
             $input = $orderInput[$attribute->id] ?? null;
             $fabricValue = $fabric === null ? null : ($axisValues[$fabric->id] ?? null);
             $choice = $attribute->isColor()
-                ? self::colorChoice($snapshot, $attribute, $input, $selection['custom_color'] ?? null, $fabric !== null, $fabricValue)
-                : self::plainValue($snapshot, $attribute, $input);
+                ? self::colorChoice($snapshot, $attribute, $input, $selection['custom_color'] ?? null, $fabric !== null, $fabricValue, $componentRestriction)
+                : self::plainValue($snapshot, $attribute, $input, $componentRestriction);
 
             if (is_string($choice)) {
                 $errors['order.'.$attribute->id] = $choice;
@@ -135,7 +222,7 @@ final class SelectionRules
         $combination = null;
 
         if (count($axisValues) === count(self::attributesWithRole($snapshot, AttributeRole::Axis))) {
-            $reachable = self::reachableCombinations($snapshot, $axisValues);
+            $reachable = self::reachableCombinations($snapshot, $axisValues, $componentRestriction);
 
             if (count($reachable) === 1) {
                 $combination = $reachable[0];
@@ -251,9 +338,12 @@ final class SelectionRules
 
     /**
      * A value of an axis or of an order attribute other than the color: present, admitted by the
-     * product and active. Returns its id, or the reason code.
+     * product and active, and inside the component restriction when there is one. Returns its id,
+     * or the reason code.
+     *
+     * @param  array<int, list<int>>|null  $componentRestriction
      */
-    private static function plainValue(ProductSnapshot $snapshot, AttributeSnapshot $attribute, mixed $input): int|string
+    private static function plainValue(ProductSnapshot $snapshot, AttributeSnapshot $attribute, mixed $input, ?array $componentRestriction): int|string
     {
         if ($input === null || $input === '') {
             return 'selection_value_required';
@@ -261,27 +351,35 @@ final class SelectionRules
 
         $valueId = self::id($input);
 
-        return $valueId !== null && self::admittedValues($snapshot, $attribute, [$valueId], null) !== []
-            ? $valueId
-            : 'selection_value_not_allowed';
+        if ($valueId === null || self::admittedValues($snapshot, $attribute, [$valueId], null) === []) {
+            return 'selection_value_not_allowed';
+        }
+
+        return self::admittedValues($snapshot, $attribute, [$valueId], $componentRestriction) === [] ? 'selection_component_restricted' : $valueId;
     }
 
     /**
      * The color of the garment: one offered by the chosen fabric or, without fabric, one of the
      * product, or the custom color when the product admits it (PRD-004, E-43, E-44, E-49, E-50).
      * Returns the value id, the custom color as `{tone, note}`, or the reason code. When the fabric
-     * itself is invalid its own error stands and the offered colors cannot be checked.
+     * itself is invalid its own error stands and the offered colors cannot be checked. A component
+     * of a combo narrows the colors further, with or without fabric (DEC-PRD-44, DEC-PRD-65).
      *
+     * @param  array<int, list<int>>|null  $componentRestriction
      * @return int|string|array{tone: string, note: string|null}
      */
-    private static function colorChoice(ProductSnapshot $snapshot, AttributeSnapshot $attribute, mixed $input, mixed $customColor, bool $declaresFabric, ?int $fabricValue): int|string|array
+    private static function colorChoice(ProductSnapshot $snapshot, AttributeSnapshot $attribute, mixed $input, mixed $customColor, bool $declaresFabric, ?int $fabricValue, ?array $componentRestriction): int|string|array
     {
         if ($input === null || $input === '') {
             return 'selection_value_required';
         }
 
         if ($input === self::CUSTOM_COLOR) {
-            return self::customColor($snapshot, $customColor);
+            $custom = self::customColor($snapshot, $customColor);
+
+            // A combo has a closed price: no component admits the custom color (DEC-PRD-87). The
+            // product's own error comes first, then the component's.
+            return is_array($custom) && $componentRestriction !== null ? 'selection_component_restricted' : $custom;
         }
 
         $valueId = self::id($input);
@@ -291,13 +389,17 @@ final class SelectionRules
             return 'selection_color_not_offered';
         }
 
-        if ($declaresFabric) {
-            return $fabricValue === null || in_array($valueId, $snapshot->fabricColors[$fabricValue] ?? [], true)
-                ? $valueId
-                : 'selection_color_not_offered';
+        $offered = $declaresFabric
+            ? $fabricValue === null || in_array($valueId, $snapshot->fabricColors[$fabricValue] ?? [], true)
+            : in_array($valueId, $attribute->allowed, true);
+
+        if (! $offered) {
+            return 'selection_color_not_offered';
         }
 
-        return in_array($valueId, $attribute->allowed, true) ? $valueId : 'selection_color_not_offered';
+        $restricted = $componentRestriction[$attribute->id] ?? null;
+
+        return $restricted === null || in_array($valueId, $restricted, true) ? $valueId : 'selection_component_restricted';
     }
 
     /**

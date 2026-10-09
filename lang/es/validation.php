@@ -138,6 +138,8 @@ return [
     'selection_attribute_not_declared' => 'El producto no tiene este atributo.',
     'selection_location_repeated' => 'Esta ubicación ya fue elegida.',
     'selection_customization_repeated' => 'Esta personalización ya fue elegida.',
+    'selection_component_restricted' => 'El valor elegido no está admitido por este componente del combo.',
+    'selection_component_not_in_combo' => 'El componente no pertenece al combo.',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
