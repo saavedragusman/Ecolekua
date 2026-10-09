@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import CatalogSections from '@/components/catalog/CatalogSections.vue';
@@ -11,6 +11,7 @@ import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
 import IconButton from '@/components/IconButton.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { useScrollToForm } from '@/composables/useScrollToForm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { index } from '@/routes/catalog/attributes';
 import { activate, deactivate, move } from '@/routes/catalog/values';
@@ -51,6 +52,10 @@ const columns = computed<DataTableColumn[]>(() => [
 const formOpen = ref(false);
 const editing = ref<CatalogAttributeValue | null>(null);
 const editingColors = ref<CatalogAttributeValue | null>(null);
+const valueForm = useTemplateRef('valueForm');
+const colorsEditor = useTemplateRef('colorsEditor');
+const { scrollToForm: scrollToValueForm } = useScrollToForm(valueForm);
+const { scrollToForm: scrollToColorsEditor } = useScrollToForm(colorsEditor);
 
 function openCreate(): void {
     editingColors.value = null;
@@ -62,12 +67,14 @@ function openEdit(value: CatalogAttributeValue): void {
     editingColors.value = null;
     editing.value = value;
     formOpen.value = true;
+    void scrollToValueForm();
 }
 
 function openColors(value: CatalogAttributeValue): void {
     formOpen.value = false;
     editing.value = null;
     editingColors.value = value;
+    void scrollToColorsEditor();
 }
 
 function closePanels(): void {
@@ -165,6 +172,7 @@ function reactivateValue(value: CatalogAttributeValue): void {
 
         <ValueForm
             v-if="can.manage && formOpen"
+            ref="valueForm"
             :key="editing?.id ?? 'new'"
             :attribute-id="attribute.id"
             :presentation="attribute.presentation"
@@ -175,6 +183,7 @@ function reactivateValue(value: CatalogAttributeValue): void {
 
         <OfferedColorsEditor
             v-if="can.manage && editingColors !== null"
+            ref="colorsEditor"
             :key="editingColors.id"
             :value-id="editingColors.id"
             :value-name="editingColors.name"

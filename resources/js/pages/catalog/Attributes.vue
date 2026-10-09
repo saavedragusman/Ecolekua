@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
@@ -12,6 +12,7 @@ import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
 import IconButton from '@/components/IconButton.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { useScrollToForm } from '@/composables/useScrollToForm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     activate,
@@ -51,6 +52,8 @@ const columns = computed<DataTableColumn[]>(() => [
 const formOpen = ref(false);
 const editing = ref<CatalogAttribute | null>(null);
 const form = useForm({ name: '', presentation: 'text', special_use: '' });
+const formElement = useTemplateRef<HTMLFormElement>('formElement');
+const { scrollToForm } = useScrollToForm(formElement);
 
 const moveForm = useForm<{ direction: 'up' | 'down' }>({ direction: 'up' });
 const statusForm = useForm({});
@@ -69,6 +72,7 @@ function openEdit(attribute: CatalogAttribute): void {
     form.special_use = attribute.special_use ?? '';
     form.clearErrors();
     formOpen.value = true;
+    void scrollToForm();
 }
 
 function closeForm(): void {
@@ -151,7 +155,12 @@ function reactivateAttribute(attribute: CatalogAttribute): void {
 
         <CatalogSections current="attributes" />
 
-        <form v-if="can.manage && formOpen" novalidate @submit.prevent="submit">
+        <form
+            v-if="can.manage && formOpen"
+            ref="formElement"
+            novalidate
+            @submit.prevent="submit"
+        >
             <AppCard>
                 <h2 class="font-headline-sm text-headline-sm text-primary">
                     {{
