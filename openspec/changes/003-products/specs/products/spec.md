@@ -748,8 +748,8 @@ The backend SHALL offer a side-effect-free query operation that the ERP quoter (
 - **While axes are missing**: it MUST return the active values of the next axis that lead to at least one active combination compatible with what was already chosen. A combination with several values on an axis (DEC-PRD-33) contributes all of them. In a combo component, only the values admitted by the component are returned, both in axes and in order options (DEC-PRD-44).
 - **With all axes chosen**: it MUST return the combination code and the order options:
   - colors: those offered in the chosen fabric or, if the product does not declare fabric, those admitted by the product, or by the combination if it restricts them; plus the option **Personalizado** if the product admits it (PRD-004);
-  - admitted values of the other order attributes (e.g., sizes), by the product or by the combination if it restricts them (DEC-PRD-36);
-  - admitted detail locations, with the palette colors;
+  - admitted values of the other order attributes (e.g., sizes), by the product or by the combination if it restricts them (DEC-PRD-36). An attribute with a single admitted value is marked as applied automatically and the resolution applies it when the client does not send it, except the color when the custom color is offered (DEC-PRD-94);
+  - admitted detail locations, with the palette colors (DEC-PRD-93);
   - admitted customizations.
 - Each option MUST include what is needed to display it: name, order, description, image, reference tone and SVG layer (PRD-020).
 - It uses the same data and criteria as PRD-011, which remains the final validation. It MUST NOT query prices or stock.
