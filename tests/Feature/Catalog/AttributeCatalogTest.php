@@ -447,6 +447,58 @@ it('DEC-PRD-97 keeps accepting an svg layer on the values of a non-color attribu
     expect($value->fresh()->svg_layer)->toBe('manga');
 });
 
+it('DEC-PRD-97 clears the svg layer of every value when an unused attribute becomes color and audits the previous layers', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Acabado']);
+    $layered = AttributeValue::factory()->for($attribute)->withTone('#112233')->create(['name' => 'Liso', 'svg_layer' => 'liso']);
+    $other = AttributeValue::factory()->for($attribute)->withTone('#445566')->create(['name' => 'Rayado', 'svg_layer' => 'rayado']);
+    $plain = AttributeValue::factory()->for($attribute)->withTone('#778899')->create(['name' => 'Mate', 'svg_layer' => null]);
+    $foreign = AttributeValue::factory()->for(CatalogAttribute::factory()->create(['name' => 'Manga']))->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Acabado', 'presentation' => 'color', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Color)
+        ->and($layered->fresh()->svg_layer)->toBeNull()
+        ->and($other->fresh()->svg_layer)->toBeNull()
+        ->and($plain->fresh()->svg_layer)->toBeNull()
+        ->and($foreign->fresh()->svg_layer)->toBe('manga-corta');
+
+    $valueAudits = attributeAuditRows(AuditAction::CatalogUpdated)->where('entity_type', $layered->getMorphClass());
+
+    expect($valueAudits)->toHaveCount(2)
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->old_values)->toEqual(['svg_layer' => 'liso'])
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->new_values)->toEqual(['svg_layer' => null])
+        ->and($valueAudits->firstWhere('entity_id', $other->id)->old_values)->toEqual(['svg_layer' => 'rayado'])
+        ->and($valueAudits->firstWhere('entity_id', $plain->id))->toBeNull();
+});
+
+it('DEC-PRD-97 keeps the svg layers when an unused attribute changes to a non-color presentation', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Manga']);
+    $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Manga', 'presentation' => 'image', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Image)
+        ->and($value->fresh()->svg_layer)->toBe('manga-corta');
+});
+
+it('DEC-PRD-97 leaves the svg layers untouched when a declared attribute is rejected from becoming color', function () {
+    [$fabric] = declaredFabric();
+    $value = AttributeValue::factory()->for($fabric)->withTone('#112233')->create(['svg_layer' => 'drill']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'color', 'special_use' => null])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['presentation']);
+
+    expect($fabric->fresh()->presentation)->toBe(AttributePresentation::Text)
+        ->and($value->fresh()->svg_layer)->toBe('drill')
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
 it('PRD-002 renames a value and audits the old and new name', function () {
     $attribute = CatalogAttribute::factory()->create();
     $value = AttributeValue::factory()->for($attribute)->create(['name' => 'Corta', 'description' => 'Hasta el codo']);
