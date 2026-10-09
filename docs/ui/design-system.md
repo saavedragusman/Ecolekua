@@ -513,7 +513,9 @@ Forma: `rounded-lg` en el ERP (como el tablero de diseño) y `rounded-full` en e
 
 ### 7.2 `IconButton.vue`
 
-`size-11 inline-flex items-center justify-center rounded-full`, con las variantes `primary` (`bg-primary text-on-primary`), `secondary` (`bg-secondary text-on-secondary`), `tertiary` (`bg-tertiary text-on-tertiary`), `danger` (`bg-error text-on-error`) y `tool` (`bg-tertiary-container text-on-primary rounded-lg`). `aria-label` es obligatorio.
+`size-11 inline-flex items-center justify-center rounded-full`, con las variantes `primary` (`bg-primary text-on-primary`), `secondary` (`bg-secondary text-on-secondary`), `tertiary` (`bg-tertiary text-on-tertiary`), `danger` (`bg-error text-on-error`) y `reorder`. `aria-label` es obligatorio.
+
+**Variante `reorder`** (flechas de subir y bajar de los listados ordenables del catálogo). Es un control discreto: el área táctil sigue siendo de 44px (`size-11`, transparente y con el foco visible de §8.1), pero lo que se ve es un círculo de 32px (`size-8 rounded-full bg-surface-container-high text-on-surface-variant`, `group-hover:bg-surface-container-highest`) con un icono de 18px. Las flechas se muestran en todos los anchos; arrastrar y soltar queda fuera de alcance. El grupo de acciones de la fila separa los controles con `gap-x-space-md` para que en tableta no se vea apretado. Reemplaza a la antigua variante `tool` (`bg-tertiary-container`, `rounded-lg`), que ya no se usa.
 
 ### 7.3 `AppCard.vue`
 
@@ -560,7 +562,8 @@ Pista: `h-2 w-full rounded-full bg-surface-container-high overflow-hidden`. Rell
 - `lg:` (y `md:` cuando quepa): tabla dentro de `overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm`.
   - `thead`: `bg-surface-container-low font-label-md text-label-md text-on-surface-variant text-left`.
   - Filas: `border-t border-outline-variant`. Celdas: `px-space-md py-space-sm font-body-sm text-body-sm`.
-- `< md`: pila de `AppCard`, una por registro, con la información clave arriba y el badge de estado visible.
+- `< md`: pila de `AppCard`, una por registro. Cada campo ocupa una fila con la etiqueta a la izquierda y el valor a la derecha: cuadrícula `grid-cols-[auto_1fr]` (con `grid-cols-subgrid` por fila, de modo que la columna de etiquetas tiene el ancho de la etiqueta más larga), `gap-x-space-md gap-y-space-md`. La etiqueta usa `font-label-md text-label-md text-on-surface-variant`; el valor, `font-body-md text-body-md text-on-surface` (16px), alineado a la derecha y con `min-w-0 break-words` para que los valores largos se ajusten dentro de su columna. La columna `actions` ocupa el ancho completo de la tarjeta (etiqueta arriba, botones a todo el ancho).
+- En el ERP, el botón de fila para abrir un registro se llama «Detalle» y conserva un nombre accesible completo (`aria-label="Ver detalle de <nombre>"`).
 - En el ERP **no** se ocultan las barras de desplazamiento.
 
 ### 7.8 `BottomNav.vue` (ERP, `< lg`)

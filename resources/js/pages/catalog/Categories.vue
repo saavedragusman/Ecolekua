@@ -195,17 +195,19 @@ function reactivateCategory(category: CatalogCategory): void {
                 />
             </template>
             <template #cell-actions="{ row }">
-                <div class="flex flex-wrap items-center gap-space-sm">
+                <div
+                    class="flex flex-wrap items-center gap-x-space-md gap-y-space-sm"
+                >
                     <IconButton
                         icon="arrow_upward"
-                        variant="tool"
+                        variant="reorder"
                         :label="`Subir ${row.name}`"
                         :disabled="position(row) === 0 || moveForm.processing"
                         @click="moveCategory(row, 'up')"
                     />
                     <IconButton
                         icon="arrow_downward"
-                        variant="tool"
+                        variant="reorder"
                         :label="`Bajar ${row.name}`"
                         :disabled="
                             position(row) === categories.length - 1 ||

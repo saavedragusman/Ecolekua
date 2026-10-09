@@ -221,8 +221,12 @@ function changeMode(value: string | number): void {
                 />
             </template>
             <template #cell-actions="{ row }">
-                <AppButton variant="outlined" :href="show(row.id).url">
-                    Ver detalle
+                <AppButton
+                    variant="outlined"
+                    :href="show(row.id).url"
+                    :aria-label="`Ver detalle de ${row.name}`"
+                >
+                    Detalle
                 </AppButton>
             </template>
         </DataTable>

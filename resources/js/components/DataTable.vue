@@ -74,11 +74,19 @@ defineSlots<{
             <ul class="flex flex-col gap-space-sm md:hidden">
                 <li v-for="row in rows" :key="String(row[rowKey])">
                     <AppCard>
-                        <dl class="flex flex-col gap-space-xs">
+                        <!-- label left, value right; the label column is as wide as the longest label -->
+                        <dl
+                            class="grid grid-cols-[auto_1fr] gap-x-space-md gap-y-space-md"
+                        >
                             <div
                                 v-for="column in columns"
                                 :key="column.key"
-                                class="flex flex-col"
+                                class="col-span-2"
+                                :class="
+                                    column.key === 'actions'
+                                        ? 'flex flex-col gap-space-xs'
+                                        : 'grid grid-cols-subgrid items-baseline'
+                                "
                             >
                                 <dt
                                     class="font-label-md text-label-md text-on-surface-variant"
@@ -86,7 +94,12 @@ defineSlots<{
                                     {{ column.label }}
                                 </dt>
                                 <dd
-                                    class="font-body-sm text-body-sm text-on-surface"
+                                    class="min-w-0 font-body-md text-body-md text-on-surface"
+                                    :class="
+                                        column.key === 'actions'
+                                            ? ''
+                                            : 'text-right break-words'
+                                    "
                                 >
                                     <slot
                                         :name="`cell-${column.key}`"
