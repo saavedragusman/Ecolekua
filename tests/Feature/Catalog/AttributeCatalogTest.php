@@ -386,6 +386,67 @@ it('PRD-002 accepts a well-formed svg layer and rejects malformed or reserved on
     'reserved sombras' => ['sombras', false],
 ]);
 
+it('DEC-PRD-97 rejects an svg layer on a new value of a color attribute and writes nothing', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+
+    $this->actingAs(attributeManager())
+        ->postJson("/catalog/attributes/{$color->id}/values", ['name' => 'Azul marino', 'tone' => '#1F3A5F', 'svg_layer' => 'azul-marino'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect(AttributeValue::query()->count())->toBe(0)
+        ->and(attributeAuditRows(AuditAction::CatalogCreated)->count())->toBe(0);
+});
+
+it('DEC-PRD-97 rejects an svg layer on an existing value of a color attribute and changes nothing', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    $value = AttributeValue::factory()->for($color)->withTone('#112233')->create(['name' => 'Gris']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Gris oscuro', 'svg_layer' => 'gris'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect($value->fresh()->name)->toBe('Gris')
+        ->and($value->fresh()->svg_layer)->toBeNull()
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated)->count())->toBe(0);
+});
+
+it('DEC-PRD-97 still accepts an empty svg layer on the values of a color attribute', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$color->id}/values", ['name' => 'Verde', 'tone' => '#2E7D32', 'svg_layer' => null])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Verde hoja', 'svg_layer' => null])
+        ->assertRedirect();
+
+    expect($value->fresh()->name)->toBe('Verde hoja')
+        ->and($value->fresh()->svg_layer)->toBeNull();
+});
+
+it('DEC-PRD-97 keeps accepting an svg layer on the values of a non-color attribute', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$sleeves->id}/values", ['name' => 'Corta', 'svg_layer' => 'manga-corta'])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Corta', 'svg_layer' => 'manga'])
+        ->assertRedirect();
+
+    expect($value->fresh()->svg_layer)->toBe('manga');
+});
+
 it('PRD-002 renames a value and audits the old and new name', function () {
     $attribute = CatalogAttribute::factory()->create();
     $value = AttributeValue::factory()->for($attribute)->create(['name' => 'Corta', 'description' => 'Hasta el codo']);
@@ -947,6 +1008,15 @@ it('PRD-002 page GET /catalog/attributes lists the attributes in sort order with
     });
 });
 
+it('DEC-PRD-97 page GET /catalog/attributes/{attribute} lists the svg layer of the values of a non-color attribute', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    AttributeValue::factory()->for($sleeves)->create(['name' => 'Corta', 'svg_layer' => 'manga-corta', 'sort_order' => 1]);
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$sleeves->id}")->assertOk()->assertInertia(
+        fn (Assert $page) => $page->component('catalog/AttributeShow')->where('values.0.svg_layer', 'manga-corta')
+    );
+});
+
 it('PRD-002 page renders an empty list of attributes', function () {
     $this->actingAs(attributeManager())->get('/catalog/attributes')->assertInertia(
         fn (Assert $page) => $page->component('catalog/Attributes')->has('attributes', 0)->where('can.manage', true)
@@ -956,7 +1026,7 @@ it('PRD-002 page renders an empty list of attributes', function () {
 it('PRD-002 page GET /catalog/attributes/{attribute} lists the ordered values of a color attribute with tone, description, layer and status', function () {
     $color = CatalogAttribute::factory()->color()->create();
     CatalogAttribute::factory()->fabric()->create();
-    $second = AttributeValue::factory()->for($color)->withTone('#1f3a5f')->inactive()->create(['name' => 'Azul marino', 'description' => 'Oscuro', 'svg_layer' => 'azul', 'sort_order' => 2]);
+    $second = AttributeValue::factory()->for($color)->withTone('#1f3a5f')->inactive()->create(['name' => 'Azul marino', 'description' => 'Oscuro', 'sort_order' => 2]);
     $first = AttributeValue::factory()->for($color)->withTone('#FFFFFF')->create(['name' => 'Blanco', 'sort_order' => 1]);
 
     $this->actingAs(attributeManager())->get("/catalog/attributes/{$color->id}")->assertOk()->assertInertia(function (Assert $page) use ($color, $first, $second) {
@@ -987,7 +1057,7 @@ it('PRD-002 page GET /catalog/attributes/{attribute} lists the ordered values of
             ])
             ->where('values.1.id', $second->id)
             ->where('values.1.description', 'Oscuro')
-            ->where('values.1.svg_layer', 'azul')
+            ->where('values.1.svg_layer', null)
             ->where('values.1.status', 'inactive')
             ->where('values.1.status_label', 'Inactivo')
             ->where('palette', [])

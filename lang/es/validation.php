@@ -53,6 +53,7 @@ return [
     'attribute_color_requires_tones' => 'Todos los valores del atributo deben tener un tono antes de usar la presentación de color.',
     'attribute_fabric_not_color' => 'El atributo de tela no puede tener presentación de color.',
     'value_name_unique' => 'Ya existe un valor con ese nombre en este atributo.',
+    'value_layer_color_prohibited' => 'Los valores de color no llevan capa SVG: su tono pinta la capa del cuerpo.',
     'value_layer_reserved' => 'Esa capa está reservada para la vista previa de la plantilla.',
     'location_name_unique' => 'Ya existe una ubicación de detalle con ese nombre.',
     'offered_colors_not_fabric' => 'Solo los valores del atributo de tela tienen colores ofrecidos.',

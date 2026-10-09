@@ -13,7 +13,7 @@ import type {
 } from '@/types/products';
 
 // Creates a value of an attribute or edits one (PRD-002). It holds no business rule: the tone only
-// shows for the color presentation, and the backend validates the name, the tone and the layer.
+// shows for the color presentation, the layer only for the others (DEC-PRD-97), and the backend validates the name, the tone and the layer.
 const props = defineProps<{
     attributeId: number;
     presentation: CatalogPresentation;
@@ -34,11 +34,14 @@ const form = useForm({
 });
 
 // Empty optional fields are sent as empty strings; the backend turns them into "none" (null). A
-// non-color attribute never sends a tone, which the backend prohibits.
+// non-color attribute never sends a tone and a color one never sends a layer (DEC-PRD-97); the
+// backend prohibits both.
 form.transform((data) => {
-    const { tone, ...rest } = data;
+    const { tone, svg_layer: layer, ...rest } = data;
 
-    return props.presentation === 'color' ? { ...rest, tone } : rest;
+    return props.presentation === 'color'
+        ? { ...rest, tone }
+        : { ...rest, svg_layer: layer };
 });
 
 function submit(): void {
@@ -83,11 +86,12 @@ function submit(): void {
                 :error="form.errors.tone"
             />
             <AppInput
+                v-if="presentation !== 'color'"
                 v-model="form.svg_layer"
                 label="Capa del SVG (opcional)"
                 autocomplete="off"
                 :maxlength="64"
-                hint="Minúsculas y guiones, por ejemplo azul-marino. No puede ser cuerpo ni sombras."
+                hint="Minúsculas y guiones, por ejemplo manga-corta. No puede ser cuerpo ni sombras."
                 :error="form.errors.svg_layer"
             />
             <!-- Reserved for the value image uploader (Phase 21). -->

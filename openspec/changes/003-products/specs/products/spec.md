@@ -796,7 +796,7 @@ A user with `products.catalog` SHALL manage the images and layers of values and 
 **Visual templates (DEC-PRD-29)**
 
 - A product MAY have a general SVG template or, if its cut changes by gender, one template for each Género value it admits. When there are templates per gender, the preview uses the one of the chosen gender.
-- An attribute value and a detail location MAY have an SVG layer assigned (e.g., Manga corta → `manga-corta`; Orilla de mangas → `orilla-mangas`).
+- An attribute value and a detail location MAY have an SVG layer assigned (e.g., Manga corta → `manga-corta`; Orilla de mangas → `orilla-mangas`). The values of an attribute with the "color" presentation do not carry a layer: their reference tone paints the `cuerpo` layer, and the backend MUST reject assigning one to them (DEC-PRD-97).
 - When uploading a template, the backend MUST:
   1. **sanitize** it: remove scripts, event attributes (`on…`), `foreignObject` and references to external files or sites (DT-03);
   2. detect groups with `id` and store them as layers;

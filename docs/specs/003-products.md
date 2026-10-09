@@ -390,7 +390,7 @@ Un usuario con `products.catalog` gestiona las imágenes y capas de los valores 
 **Plantillas visuales (DEC-PRD-29)**
 
 - Un producto puede tener una plantilla SVG general o, si su corte cambia por género, una plantilla por cada valor de Género que admite. Cuando hay plantillas por género, la vista previa usa la del género elegido.
-- Un valor de atributo y una ubicación de detalle pueden tener asignada una capa SVG (p. ej., Manga corta → `manga-corta`; Orilla de mangas → `orilla-mangas`).
+- Un valor de atributo y una ubicación de detalle pueden tener asignada una capa SVG (p. ej., Manga corta → `manga-corta`; Orilla de mangas → `orilla-mangas`). Los valores de un atributo de presentación «color» no llevan capa: su tono de referencia pinta la capa `cuerpo` y el backend rechaza asignarles una (DEC-PRD-97).
 - Al subir una plantilla, el backend:
   1. la **sanea**: elimina scripts, atributos de evento (`on…`), `foreignObject` y referencias a archivos o sitios externos (DT-03);
   2. detecta los grupos con `id` y los guarda como capas;
@@ -987,6 +987,7 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | DEC-PRD-94 | Atributo de pedido con un único valor admitido (PRD-019) | A) Se sigue listando esa opción (incluida la restricción del componente) y el grupo se marca como aplicado automáticamente (`auto_applied`, mismo criterio que la fase 14), para que el cotizador lo muestre fijo y no como selector · B) Un grupo con una sola opción se marca `auto_applied: true` y la resolución (PRD-011) lo aplica sola, salvo el grupo de color cuando `allows_custom_color` es verdadero (DEC-PRD-34) | **Confirmada** (2026-10-08): **B con excepción**. El grupo de pedido cuyas opciones listadas (tras el producto, la restricción del componente, la restricción de la combinación DEC-PRD-36 y los colores de la tela DEC-PRD-35) quedan en exactamente una se lista y se marca `auto_applied: true`, y la resolución aplica ese valor cuando el cliente no lo envía. Excepción: el grupo de color cuando `allows_custom_color` es verdadero; ahí el cliente elige ese color o «Personalizado», así que no se aplica solo. Si el cliente envía un valor, se valida como siempre | — |
 | DEC-PRD-95 | Componente ausente o ajeno al combo al consultar opciones (PRD-019) | A) El error va en `component_id` con «El componente no pertenece al combo.» · B) Se ignora el componente | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-96 | Personalizaciones en las opciones de pedido (PRD-019) | A) Son las activas admitidas por el producto, sin filtrar por las incluidas en la combinación · B) Se excluyen las ya incluidas en la combinación | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-97 | Capa SVG en los valores de color (PRD-020) | A) Se rechaza: el tono de referencia pinta la capa `cuerpo` y las capas SVG quedan para los valores que se muestran u ocultan (manga, modelo…) y para las ubicaciones de detalle · B) Se admite una capa en cualquier valor | **Confirmada** (2026-10-09): **A** | — |
 
 ### Decisiones técnicas
 
