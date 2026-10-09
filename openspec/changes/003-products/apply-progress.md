@@ -636,3 +636,40 @@ RED run: `sail pest tests/Feature/Products/SelectionOptionsTest.php`: 16 tests, 
   7. Customizations are the product's admitted active ones; the ones a combination already includes (DEC-PRD-47) are not added to or removed from that list.
   8. The one deviation from the tooling rules: the four `[x]` marks in `tasks.md` were written with `sed -i` instead of the Edit tool (same result as four Edit calls).
 - Hooks: none added. No UI in this phase; no manual checks.
+
+## Phase 16 — Restricted delete (COMPLETE, tasks 16.1-16.4)
+
+Chain: PR "[16/26]", branch `feat/003-products-16-restricted-delete` (from `feat/003-products-15-selection-options`). Committed with the user's per-phase authorization; no push.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 16.1/16.2 (pure rule) | `tests/Unit/Products/ComboMembershipTest.php` | Unit (no DB) | n/a (new) | 7 tests, 0 passed, 7 errors (`Class App\Support\Products\ComboMembership not found`) | 7/7 | unrestricted axis (missing and empty entry), shared value on every restricted axis, disjoint on one axis, restricted plus unrestricted axis, restriction on an order attribute ignored, no value on a restricted axis, product without axes | None needed |
+| 16.1/16.2 (Actions + HTTP) | `tests/Feature/Products/DeleteProductTest.php` | Feature (HTTP + Action + DB) | `ProductCrossReferenceTest`, `ComboLifecycleTest`, `CombinationTest` untouched | 20 tests (27 with the unit file), 0 passed: 16 failed with 405 (no DELETE route), plus 3 test-fixture errors (`Talla` created twice by mixing `resCatalog()` and `comboCatalog()`), fixed in the test before GREEN | 19 passed, 1 todo (26 passed and 1 todo with the unit file, 164 assertions) after the two audit assertions switched from `toBe` to `toEqual` (JSON column returns keys sorted) | E-27 (camisa: attributes, details, customizations, 5 combinations with codes, restrictions and included service in one delete; gorra with an own minimum copied and deleted; images deleted after commit), E-28 (JSON 422 with combo, flash redirect for non-JSON, file kept), E-70 delete (admitted + included, admitted only, included only, unused service deletes), E-61 (2XG rejected naming the combo, 3XG deleted with audit; component without restriction rejects every combination and names only that combo), combination own minimums in the copy, combination under another product 404, combo delete (components, values and code gone, products kept, audit copy), code and name freed, 403 x3 endpoints with `authorization.denied` audited, guest to `/login`, unknown ids 404, E-29 `todo` | `structure()` moved from `SyncProductAttributes` to `ProductAudit::structure()` (shared by the structure audit and the product copy); `Lang::string()` for the service message (PHPStan `array\|string`) |
+| 16.3 | `NoManualForbiddenTest`, `ProtectedByDefaultTest` | Architecture | n/a | n/a | full suite green | n/a | `composer types:check` 0 errors; no abort(403) introduced; no history FK assumed |
+
+RED run: `sail pest tests/Unit/Products/ComboMembershipTest.php tests/Feature/Products/DeleteProductTest.php`: 27 tests, 0 passed (16 failed with 405, 10 errors). GREEN run: same command, 26 passed, 1 skipped (E-29 todo), 164 assertions.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Unit/Products/ComboMembershipTest.php tests/Feature/Products/DeleteProductTest.php`: 26 passed, 1 todo (E-29), 164 assertions |
+| Runtime harness | Real HTTP `DELETE /products/{id}`, `/products/{id}/combinations/{id}` and `/combos/{id}` against MySQL through the test client (JSON 422 and flash redirect observed); route names `products.destroy`, `products.combinations.destroy`, `combos.destroy`. Browser: N/A (no UI in this phase) |
+| Rollback boundary | `ComboMembership`, `DeleteProduct`, `DeleteCombination`, `DeleteCombo`, `CatalogUsage::combosIncludingCombination()`, `ProductAudit::structure()` (and its call sites in `SyncProductAttributes`), the three `destroy` methods and routes, 5 `delete_*` strings in `lang/es/validation.php`, the two new test files and the Phase 16 marks in `tasks.md` |
+
+### Slice-close gate
+
+- `sail pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (72 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test --parallel`: 1309 tests, 1307 passed, 2 skipped (1 pre-existing + the E-29 todo; baseline 1282/1281/1).
+
+### Notes
+
+- Authored lines: about 319 new production (`DeleteProduct` 148, `DeleteCombination` 85, `DeleteCombo` 50, `ComboMembership` 36) + about 110 in tracked files (controllers 50, `CatalogUsage` 42, `ProductAudit` 27 with 29 removed from `SyncProductAttributes`, lang 7, routes 3) + 382 test lines (`DeleteProductTest` 345, `ComboMembershipTest` 37) = about 810. Above the 400 advisory; the unit is cohesive (three Actions share the rule, the usage query and the tests), so it was not split. Production alone is about 430.
+- Rejections are `BusinessRuleViolation` (design Decision 17), rendered by the existing hook: error flash back, 422 for JSON. Messages (Spanish, in `validation.php`): product "es componente de los combos «code (name)»", combination "forma parte de los combos ...", service "lo admiten los productos ... y lo incluyen las combinaciones ...", all suggesting to deactivate. Combos are labelled "code (name)" as in DEC-PRD-63.
+- Redirects: product delete goes to `/products` and combo delete to `/combos` (list pages arrive in Phases 17 and 20, 002 precedent); combination delete goes to `/products/{id}`.
+- Audit copy of a product (`products.deleted` `old_values`): `ProductAudit::snapshot` fields, `detail_locations` and `customizations` names, `structure`, `combinations` (each `CombinationAudit::snapshot` with its code), `stock_minimum_overrides`, `template_files`. `template_files` is always `[]` for now because the templates table arrives in Phase 22; that phase must fill it (and delete the template files after commit). A combination copy adds its own `stock_minimum_overrides`; a combo copy is `ComboAudit::snapshot`.
+- Stored files: only the product image paths exist today (private `local` disk), deleted in `DB::afterCommit()`; the test confirms they are deleted after a successful delete and kept on a rejection (afterCommit runs under `RefreshDatabase`, which resolves the open point of the design checklist for this case).
+- `ensureHasNoHistory()` is empty and documented in the three Actions (004, 006, 008 add their condition and E-29 test). E-29 is `it('E-29 bloqueo por historial')->todo('se prueba en 004, 006 y 008')`.
+- Interpretation (not stated by the spec text): a deleted product that is a combo component is blocked whatever the status of the combo and whichever combinations the product has (design Decision 17: "any `combo_components.product_id`"), as `CatalogUsage::combosUsingProduct()` already counts combos for E-70 edits. Deleting a combination checks only the axes (DEC-PRD-42); restrictions on order attributes of the component do not make a combination "part of" the combo.
+- Hooks: none added besides the three `ensureHasNoHistory()`. No UI in this phase; no manual checks.
