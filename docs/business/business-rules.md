@@ -1,6 +1,6 @@
 # Reglas de negocio de Ecolekua
 
-> Actualizado: 2026-10-05 — conteo de piezas para el tramo por línea de negocio (§2.1); tramos de la línea de pañales (§2.3); combos y packs (§2.4); colores por tela y color personalizado (§26). 2026-10-04: traducción al español; precios por línea de producto (§2), anticipo (§3), consumos conocidos (§5), catálogo de productos (§26), stock de producto terminado (§27) y uso de prendas en stock (§28). Las secciones 1–25 conservan su numeración porque las specs las citan.
+> Actualizado: 2026-10-09 — personalización opcional sin cargo en productos puntuales (§26.2). 2026-10-05 — conteo de piezas para el tramo por línea de negocio (§2.1); tramos de la línea de pañales (§2.3); combos y packs (§2.4); colores por tela y color personalizado (§26). 2026-10-04: traducción al español; precios por línea de producto (§2), anticipo (§3), consumos conocidos (§5), catálogo de productos (§26), stock de producto terminado (§27) y uso de prendas en stock (§28). Las secciones 1–25 conservan su numeración porque las specs las citan.
 
 ## 1. Canales de venta
 
@@ -501,6 +501,15 @@ Si el cliente no encuentra un color de su gusto entre los ofrecidos, puede elegi
 - el cliente indica el tono que busca con un selector de colores y una nota con el nombre del color como referencia;
 - el pedido no se procesa desde la web: se habilita el botón de WhatsApp y una asesora acuerda con el cliente la tela, el precio y el tiempo de entrega;
 - la tela se compra en la cantidad necesaria para ese pedido y queda asociada a él, sin entrar al stock general. El sobrante entra al inventario solo si el equipo lo decide.
+
+## 26.2 Personalización sin cargo
+
+En algunos productos puntuales (p. ej., gorras, tazas y mouse pads) la personalización no se cobra aparte: el cliente paga solo el precio del producto.
+
+- No es una regla general por modo de abastecimiento, por categoría ni para todo el catálogo; se indica producto por producto.
+- La personalización es opcional: el producto se vende también liso, y personalizarlo no cambia el precio.
+- Por eso se registra como personalización **admitida** del producto (spec 003, PRD-008), no como incluida en la combinación (DEC-PRD-47), y su precio en ese producto es 0. La spec de precios (004) debe permitir ese precio por producto.
+- Qué productos la ofrecen sin cargo, y con qué personalizaciones, es un dato de la carga inicial que Ecolekua valida.
 
 ---
 
