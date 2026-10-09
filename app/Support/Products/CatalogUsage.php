@@ -49,6 +49,48 @@ final class CatalogUsage
     }
 
     /**
+     * The combos the combination is part of (PRD-014, DEC-PRD-42, E-61): those with a component of its
+     * product that the customer could choose it in (see `ComboMembership`), each once and sorted by
+     * code, as "code (name)" (DEC-PRD-63).
+     *
+     * @param  array<int, list<int>>  $combinationAxes  attributeId => valueIds
+     * @param  list<int>  $axisAttributeIds  attributes the product declares as axes
+     * @return list<string>
+     */
+    public static function combosIncludingCombination(int $productId, array $combinationAxes, array $axisAttributeIds): array
+    {
+        $components = DB::table('combo_components')->where('product_id', $productId)->get(['id', 'combo_id']);
+
+        if ($components->isEmpty()) {
+            return [];
+        }
+
+        $restrictions = [];
+
+        $rows = DB::table('combo_component_values')
+            ->whereIn('combo_component_id', $components->pluck('id')->all())
+            ->get(['combo_component_id', 'catalog_attribute_id', 'attribute_value_id']);
+
+        foreach ($rows as $row) {
+            $restrictions[(int) $row->combo_component_id][(int) $row->catalog_attribute_id][] = (int) $row->attribute_value_id;
+        }
+
+        $comboIds = [];
+
+        foreach ($components as $component) {
+            if (ComboMembership::includes($restrictions[(int) $component->id] ?? [], $combinationAxes, $axisAttributeIds)) {
+                $comboIds[] = (int) $component->combo_id;
+            }
+        }
+
+        if ($comboIds === []) {
+            return [];
+        }
+
+        return self::comboLabels(DB::table('combos')->whereIn('combos.id', array_values(array_unique($comboIds))));
+    }
+
+    /**
      * The combos whose components of this product restrict one of the given values or attributes
      * (DEC-PRD-37, DEC-PRD-44), each once and sorted by code, as "code (name)" (DEC-PRD-63).
      * Removing such a value, or an attribute that holds one, from the product would leave the

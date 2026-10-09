@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Products;
 
 use App\Actions\Products\CreateProduct;
+use App\Actions\Products\DeleteProduct;
 use App\Actions\Products\UpdateProduct;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Products\StoreProductRequest;
 use App\Http\Requests\Products\UpdateProductRequest;
 use App\Models\Product;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 
 /**
@@ -35,5 +38,20 @@ class ProductController extends Controller
         Inertia::flash(['type' => 'success', 'message' => 'El producto fue actualizado.']);
 
         return redirect("/products/{$product->id}");
+    }
+
+    /**
+     * Restricted delete (PRD-014): a rejection is a `BusinessRuleViolation` rendered back with an
+     * error flash (422 for JSON). Until the list page exists (Phase 17) it redirects to `/products`.
+     */
+    public function destroy(Request $request, Product $product, DeleteProduct $deleteProduct): RedirectResponse
+    {
+        Gate::authorize('delete', $product);
+
+        $deleteProduct->handle($product, $request->user());
+
+        Inertia::flash(['type' => 'success', 'message' => 'El producto fue eliminado.']);
+
+        return redirect('/products');
     }
 }

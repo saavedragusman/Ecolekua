@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\User;
 use App\Support\Products\CatalogUsage;
+use App\Support\Products\ProductAudit;
 use App\Support\Products\ProductRules;
 use App\Support\Products\StockMinimum;
 use Illuminate\Database\Eloquent\Collection;
@@ -53,7 +54,7 @@ class SyncProductAttributes
             $product = Product::query()->lockForUpdate()->findOrFail($product->id);
 
             $current = $product->productAttributes()->with(['catalogAttribute', 'allowedValues'])->get()->keyBy('catalog_attribute_id');
-            $before = $this->structure($current->values());
+            $before = ProductAudit::structure($current->values());
 
             $declared = $this->normalize($entries);
             $this->ensureEachAttributeOnce($declared);
@@ -80,7 +81,7 @@ class SyncProductAttributes
 
             $this->persist($product, $declared, $current);
 
-            $after = $this->structure($product->productAttributes()->with(['catalogAttribute', 'allowedValues'])->get());
+            $after = ProductAudit::structure($product->productAttributes()->with(['catalogAttribute', 'allowedValues'])->get());
 
             if ($after !== $before) {
                 $this->audit->handle(
@@ -396,29 +397,5 @@ class SyncProductAttributes
             $row->fill(['role' => $entry['role'], 'sort_order' => $position + 1])->save();
             $row->allowedValues()->sync($entry['value_ids']);
         }
-    }
-
-    /**
-     * Audit form of the structure: attribute name, role and sorted value names, in display order.
-     *
-     * @param  iterable<ProductAttribute>  $declaredAttributes
-     * @return list<array{attribute: string, role: string, values: list<string>}>
-     */
-    private function structure(iterable $declaredAttributes): array
-    {
-        $structure = [];
-
-        foreach ($declaredAttributes as $declaredAttribute) {
-            $names = array_map(fn (AttributeValue $value): string => $value->name, $declaredAttribute->allowedValues->all());
-            sort($names);
-
-            $structure[] = [
-                'attribute' => $declaredAttribute->catalogAttribute->name,
-                'role' => $declaredAttribute->role->value,
-                'values' => $names,
-            ];
-        }
-
-        return $structure;
     }
 }
