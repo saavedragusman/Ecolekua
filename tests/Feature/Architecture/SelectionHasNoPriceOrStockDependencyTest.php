@@ -72,7 +72,9 @@ it('PRD-011 PRD-019 DT-02 detects an import of a stock class and a price table i
     $path = tempnam(sys_get_temp_dir(), 'sel');
     file_put_contents($path, "<?php\nuse App\\Models\\StockMovement;\nuse App\\Support\\Pricing\\PriceList;\n\$rows = DB::table('product_prices');\n\$name = 'supply';\n// stock in a comment is fine\n");
 
-    expect(selectionPriceOrStockUses($path))->toBe(['App\\Models\\StockMovement', 'App\\Support\\Pricing\\PriceList', "'product_prices'"]);
-
-    unlink($path);
+    try {
+        expect(selectionPriceOrStockUses($path))->toBe(['App\\Models\\StockMovement', 'App\\Support\\Pricing\\PriceList', "'product_prices'"]);
+    } finally {
+        unlink($path);
+    }
 });
