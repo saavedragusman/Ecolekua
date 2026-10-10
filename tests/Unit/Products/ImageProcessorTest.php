@@ -94,6 +94,89 @@ it('DT-03 drops the EXIF block of a JPEG', function () {
         ->and($variants['thumb'])->not->toContain('GPS-LAT-12.345');
 });
 
+/**
+ * Names the color of the pixel at (x, y): R, G, B or Y (the four quadrants of the fictitious JPEG).
+ */
+function quadrantColor(GdImage $image, int $x, int $y): string
+{
+    $color = imagecolorsforindex($image, imagecolorat($image, $x, $y));
+    $palette = ['R' => [255, 0, 0], 'G' => [0, 200, 0], 'B' => [0, 0, 255], 'Y' => [255, 255, 0]];
+    $best = 'R';
+    $bestDistance = PHP_INT_MAX;
+
+    foreach ($palette as $name => [$r, $g, $b]) {
+        $distance = ($color['red'] - $r) ** 2 + ($color['green'] - $g) ** 2 + ($color['blue'] - $b) ** 2;
+
+        if ($distance < $bestDistance) {
+            [$best, $bestDistance] = [$name, $distance];
+        }
+    }
+
+    return $best;
+}
+
+/**
+ * @return array{int, int, string} width, height and the quadrant colors read clockwise from the top-left
+ */
+function quadrantsOf(string $webp): array
+{
+    $image = imagecreatefromstring($webp);
+    $width = imagesx($image);
+    $height = imagesy($image);
+    $left = intdiv($width, 4);
+    $right = $width - 1 - $left;
+    $top = intdiv($height, 4);
+    $bottom = $height - 1 - $top;
+
+    return [
+        $width,
+        $height,
+        quadrantColor($image, $left, $top).quadrantColor($image, $right, $top)
+            .quadrantColor($image, $right, $bottom).quadrantColor($image, $left, $bottom),
+    ];
+}
+
+it('DT-03 applies the EXIF orientation before dropping it', function (?int $orientation, int $width, int $height, string $clockwise) {
+    $variants = (new ImageProcessor)->process(FictitiousImage::jpegWithOrientation($orientation));
+
+    // Stored quadrants clockwise from the top-left: R G Y B.
+    expect(quadrantsOf($variants['display']))->toBe([$width, $height, $clockwise])
+        ->and(quadrantsOf($variants['thumb'])[2])->toBe($clockwise)
+        ->and($variants['display'])->not->toContain('Exif');
+})->with([
+    'no EXIF' => [null, 64, 48, 'RGYB'],
+    'orientation 1 (normal)' => [1, 64, 48, 'RGYB'],
+    'orientation 2 (mirror horizontal)' => [2, 64, 48, 'GRBY'],
+    'orientation 3 (rotate 180)' => [3, 64, 48, 'YBRG'],
+    'orientation 4 (mirror vertical)' => [4, 64, 48, 'BYGR'],
+    'orientation 5 (transpose)' => [5, 48, 64, 'RBYG'],
+    'orientation 6 (rotate 90 CW)' => [6, 48, 64, 'BRGY'],
+    'orientation 7 (transverse)' => [7, 48, 64, 'YGRB'],
+    'orientation 8 (rotate 90 CCW)' => [8, 48, 64, 'GYBR'],
+]);
+
+it('DT-03 treats an unknown EXIF orientation value as normal', function () {
+    $variants = (new ImageProcessor)->process(FictitiousImage::jpegWithOrientation(9));
+
+    expect(quadrantsOf($variants['display']))->toBe([64, 48, 'RGYB']);
+});
+
+it('DT-03 leaves PNG and WebP pixels as they are', function (string $bytes) {
+    $variants = (new ImageProcessor)->process($bytes);
+
+    expect(imageInfo($variants['display']))->toBe([40, 30, 'image/webp']);
+})->with([
+    'png' => [fn () => FictitiousImage::png()],
+    'webp' => [fn () => FictitiousImage::webp()],
+]);
+
+it('DT-03 keeps the size bound when the orientation swaps the sides', function () {
+    $variants = (new ImageProcessor)->process(FictitiousImage::jpegWithOrientation(6, 1600, 800));
+
+    expect(imageInfo($variants['display']))->toBe([600, 1200, 'image/webp'])
+        ->and(imageInfo($variants['thumb']))->toBe([160, 320, 'image/webp']);
+});
+
 it('Decision 18 scales display to a long side of 1200 px and thumb to 320 px, keeping the aspect ratio', function () {
     $variants = (new ImageProcessor)->process(FictitiousImage::png(1600, 800));
 

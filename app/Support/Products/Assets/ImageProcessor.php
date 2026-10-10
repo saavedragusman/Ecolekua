@@ -53,6 +53,10 @@ final class ImageProcessor
             throw new InvalidImageException(InvalidImageException::FORMAT, 'The upload could not be decoded.');
         }
 
+        if ($header[2] === IMAGETYPE_JPEG) {
+            $source = $this->orient($source, $this->exifOrientation($bytes));
+        }
+
         $variants = [];
 
         foreach (self::VARIANTS as $name => $variant) {
@@ -60,6 +64,77 @@ final class ImageProcessor
         }
 
         return ['display' => $variants[self::DISPLAY], 'thumb' => $variants[self::THUMB]];
+    }
+
+    /**
+     * The EXIF Orientation tag (1 to 8) of a JPEG; 1 (normal) when the tag is missing, the EXIF
+     * block is unreadable or the value is not a valid orientation.
+     */
+    private function exifOrientation(string $bytes): int
+    {
+        if (! function_exists('exif_read_data')) {
+            return 1;
+        }
+
+        $stream = fopen('php://temp', 'r+b');
+
+        if ($stream === false) {
+            return 1;
+        }
+
+        fwrite($stream, $bytes);
+        rewind($stream);
+
+        try {
+            $exif = @exif_read_data($stream, 'IFD0');
+        } catch (\Throwable) {
+            $exif = false;
+        } finally {
+            fclose($stream);
+        }
+
+        $orientation = is_array($exif) ? ($exif['Orientation'] ?? 1) : 1;
+
+        return is_int($orientation) && $orientation >= 1 && $orientation <= 8 ? $orientation : 1;
+    }
+
+    /**
+     * Rotates or mirrors the pixels so they match how the photo is meant to be displayed.
+     */
+    private function orient(GdImage $image, int $orientation): GdImage
+    {
+        // Counter-clockwise degrees (imagerotate) and whether to mirror horizontally afterwards.
+        $steps = [
+            2 => [0, true],
+            3 => [180, false],
+            4 => [180, true],
+            5 => [270, true],
+            6 => [270, false],
+            7 => [90, true],
+            8 => [90, false],
+        ];
+
+        if (! isset($steps[$orientation])) {
+            return $image;
+        }
+
+        [$degrees, $mirror] = $steps[$orientation];
+
+        if ($degrees !== 0) {
+            $rotated = imagerotate($image, $degrees, 0);
+
+            if ($rotated === false) {
+                throw new InvalidImageException(InvalidImageException::FORMAT, 'The upload could not be oriented.');
+            }
+
+            $image = $rotated;
+        }
+
+        if ($mirror) {
+            imageflip($image, IMG_FLIP_HORIZONTAL);
+        }
+
+        return $image;
     }
 
     /**

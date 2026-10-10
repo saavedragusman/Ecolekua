@@ -61,6 +61,36 @@ final class FictitiousImage
     }
 
     /**
+     * A JPEG of four flat quadrants in the stored orientation (top-left red, top-right green,
+     * bottom-left blue, bottom-right yellow) that carries an EXIF Orientation tag. Passing null
+     * omits the EXIF block entirely.
+     */
+    public static function jpegWithOrientation(?int $orientation, int $width = 64, int $height = 48): string
+    {
+        $image = imagecreatetruecolor($width, $height);
+        $halfWidth = intdiv($width, 2);
+        $halfHeight = intdiv($height, 2);
+
+        imagefilledrectangle($image, 0, 0, $halfWidth - 1, $halfHeight - 1, (int) imagecolorallocate($image, 255, 0, 0));
+        imagefilledrectangle($image, $halfWidth, 0, $width - 1, $halfHeight - 1, (int) imagecolorallocate($image, 0, 200, 0));
+        imagefilledrectangle($image, 0, $halfHeight, $halfWidth - 1, $height - 1, (int) imagecolorallocate($image, 0, 0, 255));
+        imagefilledrectangle($image, $halfWidth, $halfHeight, $width - 1, $height - 1, (int) imagecolorallocate($image, 255, 255, 0));
+
+        $jpeg = self::capture(fn () => imagejpeg($image, null, 95));
+
+        if ($orientation === null) {
+            return $jpeg;
+        }
+
+        // Little-endian TIFF header, one IFD entry: tag 0x0112 (Orientation), type SHORT, count 1.
+        $tiff = "II*\0".pack('V', 8).pack('v', 1).pack('vvVv', 0x0112, 3, 1, $orientation)."\0\0".pack('V', 0);
+        $payload = "Exif\0\0".$tiff;
+        $segment = "\xFF\xE1".pack('n', strlen($payload) + 2).$payload;
+
+        return substr($jpeg, 0, 2).$segment.substr($jpeg, 2);
+    }
+
+    /**
      * A PNG header (signature plus IHDR chunk) that declares the given size and carries no pixel
      * data: it cannot be decoded, so only a check done before decoding can reject it by its size.
      */
