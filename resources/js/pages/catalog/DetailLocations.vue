@@ -177,6 +177,7 @@ function reactivateLocation(location: CatalogDetailLocation): void {
         </p>
 
         <DataTable
+            fit
             :columns="columns"
             :rows="locations"
             row-key="id"

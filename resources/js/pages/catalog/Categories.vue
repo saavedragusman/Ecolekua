@@ -183,6 +183,7 @@ function reactivateCategory(category: CatalogCategory): void {
         </p>
 
         <DataTable
+            fit
             :columns="columns"
             :rows="categories"
             row-key="id"

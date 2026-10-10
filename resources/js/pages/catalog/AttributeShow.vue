@@ -201,6 +201,7 @@ function reactivateValue(value: CatalogAttributeValue): void {
         </p>
 
         <DataTable
+            fit
             :columns="columns"
             :rows="values"
             row-key="id"

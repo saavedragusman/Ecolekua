@@ -208,6 +208,7 @@ function reactivateAttribute(attribute: CatalogAttribute): void {
         </p>
 
         <DataTable
+            fit
             :columns="columns"
             :rows="attributes"
             row-key="id"
