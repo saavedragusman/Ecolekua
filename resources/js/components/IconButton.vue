@@ -3,7 +3,9 @@ import { computed } from 'vue';
 import AppIcon from '@/components/AppIcon.vue';
 import { FOCUS_RING } from '@/lib/ui';
 
-type Variant = 'primary' | 'secondary' | 'tertiary' | 'danger' | 'tool';
+// `reorder` is the discreet circular up/down arrow of sortable lists: a 32px
+// visual circle inside a 44px hit area.
+type Variant = 'primary' | 'secondary' | 'tertiary' | 'danger' | 'reorder';
 
 const props = withDefaults(
     defineProps<{
@@ -26,7 +28,7 @@ const VARIANTS: Record<Variant, string> = {
     secondary: 'rounded-full bg-secondary text-on-secondary',
     tertiary: 'rounded-full bg-tertiary text-on-tertiary',
     danger: 'rounded-full bg-error text-on-error',
-    tool: 'rounded-lg bg-tertiary-container text-on-primary',
+    reorder: 'group rounded-full text-on-surface-variant',
 };
 
 const classes = computed(() => [
@@ -44,6 +46,13 @@ const classes = computed(() => [
         :title="label"
         :class="classes"
     >
-        <AppIcon :name="icon" />
+        <span
+            v-if="variant === 'reorder'"
+            class="inline-flex size-8 items-center justify-center rounded-full bg-surface-container-high transition-colors group-hover:bg-surface-container-highest"
+        >
+            <!-- `!` wins over the unlayered font-size of the Material Symbols stylesheet. -->
+            <AppIcon :name="icon" class="text-lg!" />
+        </span>
+        <AppIcon v-else :name="icon" />
     </button>
 </template>

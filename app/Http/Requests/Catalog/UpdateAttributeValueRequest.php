@@ -32,6 +32,7 @@ class UpdateAttributeValueRequest extends FormRequest
     {
         return [
             'name.unique' => __('validation.value_name_unique'),
+            'svg_layer.prohibited' => __('validation.value_layer_color_prohibited'),
             'svg_layer.not_in' => __('validation.value_layer_reserved'),
         ];
     }

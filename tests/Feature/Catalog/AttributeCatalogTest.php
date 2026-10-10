@@ -386,6 +386,119 @@ it('PRD-002 accepts a well-formed svg layer and rejects malformed or reserved on
     'reserved sombras' => ['sombras', false],
 ]);
 
+it('DEC-PRD-97 rejects an svg layer on a new value of a color attribute and writes nothing', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+
+    $this->actingAs(attributeManager())
+        ->postJson("/catalog/attributes/{$color->id}/values", ['name' => 'Azul marino', 'tone' => '#1F3A5F', 'svg_layer' => 'azul-marino'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect(AttributeValue::query()->count())->toBe(0)
+        ->and(attributeAuditRows(AuditAction::CatalogCreated)->count())->toBe(0);
+});
+
+it('DEC-PRD-97 rejects an svg layer on an existing value of a color attribute and changes nothing', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    $value = AttributeValue::factory()->for($color)->withTone('#112233')->create(['name' => 'Gris']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Gris oscuro', 'svg_layer' => 'gris'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect($value->fresh()->name)->toBe('Gris')
+        ->and($value->fresh()->svg_layer)->toBeNull()
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated)->count())->toBe(0);
+});
+
+it('DEC-PRD-97 still accepts an empty svg layer on the values of a color attribute', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$color->id}/values", ['name' => 'Verde', 'tone' => '#2E7D32', 'svg_layer' => null])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Verde hoja', 'svg_layer' => null])
+        ->assertRedirect();
+
+    expect($value->fresh()->name)->toBe('Verde hoja')
+        ->and($value->fresh()->svg_layer)->toBeNull();
+});
+
+it('DEC-PRD-97 keeps accepting an svg layer on the values of a non-color attribute', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$sleeves->id}/values", ['name' => 'Corta', 'svg_layer' => 'manga-corta'])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Corta', 'svg_layer' => 'manga'])
+        ->assertRedirect();
+
+    expect($value->fresh()->svg_layer)->toBe('manga');
+});
+
+it('DEC-PRD-97 clears the svg layer of every value when an unused attribute becomes color and audits the previous layers', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Acabado']);
+    $layered = AttributeValue::factory()->for($attribute)->withTone('#112233')->create(['name' => 'Liso', 'svg_layer' => 'liso']);
+    $other = AttributeValue::factory()->for($attribute)->withTone('#445566')->create(['name' => 'Rayado', 'svg_layer' => 'rayado']);
+    $plain = AttributeValue::factory()->for($attribute)->withTone('#778899')->create(['name' => 'Mate', 'svg_layer' => null]);
+    $foreign = AttributeValue::factory()->for(CatalogAttribute::factory()->create(['name' => 'Manga']))->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Acabado', 'presentation' => 'color', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Color)
+        ->and($layered->fresh()->svg_layer)->toBeNull()
+        ->and($other->fresh()->svg_layer)->toBeNull()
+        ->and($plain->fresh()->svg_layer)->toBeNull()
+        ->and($foreign->fresh()->svg_layer)->toBe('manga-corta');
+
+    $valueAudits = attributeAuditRows(AuditAction::CatalogUpdated)->where('entity_type', $layered->getMorphClass());
+
+    expect($valueAudits)->toHaveCount(2)
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->old_values)->toEqual(['svg_layer' => 'liso'])
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->new_values)->toEqual(['svg_layer' => null])
+        ->and($valueAudits->firstWhere('entity_id', $other->id)->old_values)->toEqual(['svg_layer' => 'rayado'])
+        ->and($valueAudits->firstWhere('entity_id', $plain->id))->toBeNull();
+});
+
+it('DEC-PRD-97 keeps the svg layers when an unused attribute changes to a non-color presentation', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Manga']);
+    $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Manga', 'presentation' => 'image', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Image)
+        ->and($value->fresh()->svg_layer)->toBe('manga-corta');
+});
+
+it('DEC-PRD-97 leaves the svg layers untouched when a declared attribute is rejected from becoming color', function () {
+    [$fabric] = declaredFabric();
+    $value = AttributeValue::factory()->for($fabric)->withTone('#112233')->create(['svg_layer' => 'drill']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'color', 'special_use' => null])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['presentation']);
+
+    expect($fabric->fresh()->presentation)->toBe(AttributePresentation::Text)
+        ->and($value->fresh()->svg_layer)->toBe('drill')
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
 it('PRD-002 renames a value and audits the old and new name', function () {
     $attribute = CatalogAttribute::factory()->create();
     $value = AttributeValue::factory()->for($attribute)->create(['name' => 'Corta', 'description' => 'Hasta el codo']);
@@ -947,6 +1060,15 @@ it('PRD-002 page GET /catalog/attributes lists the attributes in sort order with
     });
 });
 
+it('DEC-PRD-97 page GET /catalog/attributes/{attribute} lists the svg layer of the values of a non-color attribute', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    AttributeValue::factory()->for($sleeves)->create(['name' => 'Corta', 'svg_layer' => 'manga-corta', 'sort_order' => 1]);
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$sleeves->id}")->assertOk()->assertInertia(
+        fn (Assert $page) => $page->component('catalog/AttributeShow')->where('values.0.svg_layer', 'manga-corta')
+    );
+});
+
 it('PRD-002 page renders an empty list of attributes', function () {
     $this->actingAs(attributeManager())->get('/catalog/attributes')->assertInertia(
         fn (Assert $page) => $page->component('catalog/Attributes')->has('attributes', 0)->where('can.manage', true)
@@ -956,7 +1078,7 @@ it('PRD-002 page renders an empty list of attributes', function () {
 it('PRD-002 page GET /catalog/attributes/{attribute} lists the ordered values of a color attribute with tone, description, layer and status', function () {
     $color = CatalogAttribute::factory()->color()->create();
     CatalogAttribute::factory()->fabric()->create();
-    $second = AttributeValue::factory()->for($color)->withTone('#1f3a5f')->inactive()->create(['name' => 'Azul marino', 'description' => 'Oscuro', 'svg_layer' => 'azul', 'sort_order' => 2]);
+    $second = AttributeValue::factory()->for($color)->withTone('#1f3a5f')->inactive()->create(['name' => 'Azul marino', 'description' => 'Oscuro', 'sort_order' => 2]);
     $first = AttributeValue::factory()->for($color)->withTone('#FFFFFF')->create(['name' => 'Blanco', 'sort_order' => 1]);
 
     $this->actingAs(attributeManager())->get("/catalog/attributes/{$color->id}")->assertOk()->assertInertia(function (Assert $page) use ($color, $first, $second) {
@@ -987,7 +1109,7 @@ it('PRD-002 page GET /catalog/attributes/{attribute} lists the ordered values of
             ])
             ->where('values.1.id', $second->id)
             ->where('values.1.description', 'Oscuro')
-            ->where('values.1.svg_layer', 'azul')
+            ->where('values.1.svg_layer', null)
             ->where('values.1.status', 'inactive')
             ->where('values.1.status_label', 'Inactivo')
             ->where('palette', [])

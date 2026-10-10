@@ -673,3 +673,37 @@ RED run: `sail pest tests/Unit/Products/ComboMembershipTest.php tests/Feature/Pr
 - `ensureHasNoHistory()` is empty and documented in the three Actions (004, 006, 008 add their condition and E-29 test). E-29 is `it('E-29 bloqueo por historial')->todo('se prueba en 004, 006 y 008')`.
 - Interpretation (not stated by the spec text): a deleted product that is a combo component is blocked whatever the status of the combo and whichever combinations the product has (design Decision 17: "any `combo_components.product_id`"), as `CatalogUsage::combosUsingProduct()` already counts combos for E-70 edits. Deleting a combination checks only the axes (DEC-PRD-42); restrictions on order attributes of the component do not make a combination "part of" the combo.
 - Hooks: none added besides the three `ensureHasNoHistory()`. No UI in this phase; no manual checks.
+
+## Phase 17 — Product list and detail UI (COMPLETE except the manual responsive check, tasks 17.1-17.5)
+
+Chain: PR "[17/26]", branch `feat/003-products-17-product-list` (from `feat/003-products-16-restricted-delete`). Committed with the user's per-phase authorization; no push.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 17.1/17.2 | `tests/Feature/Products/ProductListTest.php` | Feature (HTTP + Inertia + DB) | `CatalogSchemaTest` (scopeSearch) untouched | 27 tests, 0 passed (26 failed: 405 / "Not a valid Inertia response" because no `GET /products` route; 1 error: test fixture put a combo code on a combination, fixed in the test with `forCombo()` before GREEN) | 25/27 after backend (the 2 left asserted `component('products/...')`, which needs the Vue pages), 27/27 (372 assertions) after 17.3 | E-04 (index and show 403, guest to login), E-30 (code `147-12`, fragment and case, accent-insensitive name, product listed once for several matching codes, combo codes not searched), `q` trimmed / cut to 100 / non-string, `%` and `_` literal in names and codes, status default / unknown / array fallback, Inactivos and Todos, counts with the same filters whatever the view, category / line / mode filters with counts, nonexistent filter values ignored, filter options labelled, row shape, pagination 15 with query string, Show props (general, `admits_custom_color` true and false, structure with roles and `follows_fabric`, combinations with descriptive name / restrictions / included services / status, details, customizations, images, stock default and overrides, `can` flags for three permission sets, inactive product, 404) | `composer types:check` fixed 3 errors (union Collection param, list-typed `$axes`) |
+| 17.3 | `resources/js/pages/products/{Index,Show}.vue`, `types/products.ts`, `navigation.ts` | Frontend | n/a | n/a (the two `component()` assertions of 17.1) | `sail pnpm types:check`, `pnpm check`, `pnpm build` pass | n/a | n/a |
+
+RED run: `sail artisan test --filter=ProductListTest`: 27 tests, 0 passed. GREEN run: same command, 27 passed (372 assertions).
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail artisan test --filter=ProductListTest`: 27 passed (372 assertions) |
+| Runtime harness | Real HTTP `GET /products` and `GET /products/{id}` against MySQL through the test client with `assertInertia`; Wayfinder regenerated (`sail artisan wayfinder:generate`) and `sail pnpm build` compiled both pages. Browser check at 375 / 768 / 1280 px: **PENDING for the human** (17.4) |
+| Rollback boundary | `ProductController::index/show`, `Product::scopeSearchByNameOrCode`, `ProductPresenter::listRow/filterOptions/detail` (+ private `structure`, `combinationRows`, `references`), the two `GET` routes, `pages/products/{Index,Show}.vue`, `types/products.ts` additions, the "Productos" entry in `navigation.ts`, `ProductListTest`, and the Phase 17 marks in `tasks.md` |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (74 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1336 tests, 1334 passed, 2 skipped (1 pre-existing + the E-29 todo).
+
+### Notes
+
+- Authored lines: about 1461 (additions + deletions, tracked and new files, excluding generated Wayfinder files and this record): production PHP about 300 (`ProductPresenter` 192, `ProductController` 85, `Product` 26, routes), frontend about 690 (`Index.vue` 238, `Show.vue` 342, types 102, navigation 10), tests 458. Above the 400 advisory; the unit is cohesive (a page cannot ship without its props, route and test), so it was not split: recommend `size:exception`.
+- List contract: `GET /products?status=active|inactive|all&q=&category=&line=&mode=`; props `status`, `q`, `category` (int|null), `line`, `mode`, `counts {active, inactive, all}` (same `q` and filters), `filters {categories, lines, modes}`, `products` (paginated 15, query string kept; row: `id, name, category, business_line_label, supply_mode_label, status, status_label, combinations_count`). Unknown or malformed filter values are ignored (null). Name search is accent- and case-insensitive; the code search is a contains-match over the codes of the product's combinations (combo codes are not searched, a product is listed once).
+- Show contract: `product {general fields, admits_custom_color, attributes[{id,name,role,role_label,values,follows_fabric}], combinations[{id,code,name,status,status_label,restrictions,included_customizations}], detail_locations, customizations, stock {default, overrides}, images {has_main, templates}}` and `can {update, deactivate, delete, createCombination}`. `images` exposes only `has_main` and an empty `templates` list: image URLs arrive with the upload slices (Phases 19 and 22) and raw storage paths are never exposed. `follows_fabric` (backend) lets the page say "Los colores salen de la tela elegida." for a color declared without values (DEC-PRD-35).
+- Interpretations (no [DEC-PENDIENTE]): (1) the code search is a contains-match (consistent with the name search and the customers list); (2) the "Nuevo producto", "Editar" and "Nueva combinación" buttons are not rendered yet because their pages arrive in Phases 18 and 19 (the `can` flags are already in the props); (3) the delete rejection reason is the backend error flash already shared by the layout, and "Desactivar" is on the same page (customers precedent).
+- Navigation: "Productos" (`inventory_2`, `products.view`, group Comercial, priority 20). "Combos" arrives with Phase 20.
+- Hooks: none. Manual responsive check (17.4) pending for the human.

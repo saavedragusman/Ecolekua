@@ -12,6 +12,8 @@ defineProps<{
     // Property of each row that uniquely identifies it.
     rowKey: keyof T & string;
     emptyText?: string;
+    // md and up: the table is as wide as its content instead of the full width.
+    fit?: boolean;
 }>();
 
 defineSlots<{
@@ -34,6 +36,7 @@ defineSlots<{
             <!-- md and up: table (tablets are touch devices, but fit a table) -->
             <div
                 class="hidden overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm md:block"
+                :class="{ 'md:w-fit md:max-w-full': fit }"
             >
                 <table class="w-full text-left">
                     <thead
@@ -44,7 +47,7 @@ defineSlots<{
                                 v-for="column in columns"
                                 :key="column.key"
                                 scope="col"
-                                class="px-space-md py-space-sm"
+                                class="px-space-lg py-space-sm"
                             >
                                 {{ column.label }}
                             </th>
@@ -59,7 +62,7 @@ defineSlots<{
                             <td
                                 v-for="column in columns"
                                 :key="column.key"
-                                class="px-space-md py-space-sm font-body-sm text-body-sm text-on-surface"
+                                class="px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface"
                             >
                                 <slot :name="`cell-${column.key}`" :row="row">
                                     {{ row[column.key] }}
@@ -73,20 +76,33 @@ defineSlots<{
             <!-- below md: one card per record -->
             <ul class="flex flex-col gap-space-sm md:hidden">
                 <li v-for="row in rows" :key="String(row[rowKey])">
-                    <AppCard>
-                        <dl class="flex flex-col gap-space-xs">
+                    <AppCard class="px-space-lg">
+                        <!-- label and value on one row; the label column is as wide as the longest label -->
+                        <dl
+                            class="grid grid-cols-[auto_1fr] gap-x-space-md gap-y-space-md"
+                        >
                             <div
                                 v-for="column in columns"
                                 :key="column.key"
-                                class="flex flex-col"
+                                class="col-span-2"
+                                :class="
+                                    column.key === 'actions'
+                                        ? 'flex flex-col gap-space-xs'
+                                        : 'grid grid-cols-subgrid items-baseline'
+                                "
                             >
                                 <dt
-                                    class="font-label-md text-label-md text-on-surface-variant"
+                                    class="font-label-md text-label-lg text-on-surface-variant"
                                 >
                                     {{ column.label }}
                                 </dt>
                                 <dd
-                                    class="font-body-sm text-body-sm text-on-surface"
+                                    class="min-w-0 font-body-md text-body-md text-on-surface"
+                                    :class="
+                                        column.key === 'actions'
+                                            ? ''
+                                            : 'text-left break-words'
+                                    "
                                 >
                                     <slot
                                         :name="`cell-${column.key}`"

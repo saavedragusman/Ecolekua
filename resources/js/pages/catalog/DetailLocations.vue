@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
@@ -10,6 +10,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { useScrollToForm } from '@/composables/useScrollToForm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     activate,
@@ -39,6 +40,8 @@ const columns = computed<DataTableColumn[]>(() => [
 const formOpen = ref(false);
 const editing = ref<CatalogDetailLocation | null>(null);
 const form = useForm({ name: '', svg_layer: '' });
+const formElement = useTemplateRef<HTMLFormElement>('formElement');
+const { scrollToForm } = useScrollToForm(formElement);
 const statusForm = useForm({});
 
 function openCreate(): void {
@@ -54,6 +57,7 @@ function openEdit(location: CatalogDetailLocation): void {
     form.svg_layer = location.svg_layer ?? '';
     form.clearErrors();
     formOpen.value = true;
+    void scrollToForm();
 }
 
 function closeForm(): void {
@@ -124,7 +128,12 @@ function reactivateLocation(location: CatalogDetailLocation): void {
 
         <CatalogSections current="detail-locations" />
 
-        <form v-if="can.manage && formOpen" novalidate @submit.prevent="submit">
+        <form
+            v-if="can.manage && formOpen"
+            ref="formElement"
+            novalidate
+            @submit.prevent="submit"
+        >
             <AppCard>
                 <h2 class="font-headline-sm text-headline-sm text-primary">
                     {{
@@ -168,6 +177,7 @@ function reactivateLocation(location: CatalogDetailLocation): void {
         </p>
 
         <DataTable
+            fit
             :columns="columns"
             :rows="locations"
             row-key="id"
