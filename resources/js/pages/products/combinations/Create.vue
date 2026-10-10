@@ -30,6 +30,7 @@ defineProps<{
         :title="`Nueva combinación de ${product.name}`"
         submit-label="Registrar combinación"
         :cancel-href="show(product.id).url"
+        back-label="Volver al producto"
         :action="store(product.id)"
         :axes="axes"
         :order-attributes="order_attributes"

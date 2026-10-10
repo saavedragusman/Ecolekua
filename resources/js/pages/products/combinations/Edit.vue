@@ -31,6 +31,7 @@ const props = defineProps<{
         :title="`Editar combinación ${props.combination.code} de ${props.product.name}`"
         submit-label="Guardar cambios"
         :cancel-href="show(props.product.id).url"
+        back-label="Volver al producto"
         :action="
             update({
                 product: props.product.id,

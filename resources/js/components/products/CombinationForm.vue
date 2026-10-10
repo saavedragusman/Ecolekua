@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppCheckboxGroup from '@/components/AppCheckboxGroup.vue';
+import AppIcon from '@/components/AppIcon.vue';
 import AppInput from '@/components/AppInput.vue';
 import AppTextarea from '@/components/AppTextarea.vue';
 import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import { useSaveScroll } from '@/composables/useSaveScroll';
+import { FOCUS_RING } from '@/lib/ui';
 import type {
     CombinationAttribute,
     CombinationFields,
@@ -22,6 +24,7 @@ const props = defineProps<{
     title: string;
     submitLabel: string;
     cancelHref: string;
+    backLabel: string;
     // `store(product)` or `update({ product, combination })` Wayfinder definition.
     action: RouteDefinition<'post'> | RouteDefinition<'put'>;
     axes: CombinationAttribute[];
@@ -88,9 +91,22 @@ function submit(): void {
         @submit.prevent="submit"
     >
         <AppCard>
-            <h1 class="font-headline-md text-headline-md text-primary">
-                {{ title }}
-            </h1>
+            <div class="flex items-center gap-space-sm">
+                <Link
+                    :href="cancelHref"
+                    :aria-label="backLabel"
+                    :title="backLabel"
+                    :class="[
+                        'inline-flex size-11 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-surface-container-low',
+                        FOCUS_RING,
+                    ]"
+                >
+                    <AppIcon name="arrow_back" />
+                </Link>
+                <h1 class="font-headline-md text-headline-md text-primary">
+                    {{ title }}
+                </h1>
+            </div>
         </AppCard>
 
         <ActionErrors :errors="{ axes: form.errors.axes }" />
