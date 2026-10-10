@@ -282,10 +282,10 @@ Depends on Phase 17. Covers PRD-003/PRD-004/PRD-009 UI, spec §8.
 
 Depends on Phase 18. Covers PRD-005 UI and the "Duplicar" action.
 
-- [ ] 19.1 RED — Extend `CombinationTest.php` with GET pages: `products.combinations.create` requires `products.create`, `.edit` requires `products.update`; props contain the product axes with allowed values, order attributes with allowed values for restrictions, selectable `service` products; `?from={combination}` pre-fills axes, restrictions, description and included customizations with an empty code (`duplicate` test); a combination of another product in `from` is ignored. Expected: fail. [PRD-005, PRD-016]
-- [ ] 19.2 GREEN (backend) — Add `create`, `edit` to `app/Http/Controllers/Products/CombinationController.php` and the GET routes (before the `combinations/{combination}` routes). Run the tests: GREEN.
-- [ ] 19.3 GREEN (frontend) — Create `resources/js/pages/products/combinations/Create.vue`, `Edit.vue`, `resources/js/components/products/CombinationForm.vue` (one `AppCheckboxGroup` per axis limited to allowed values, code as text, restrictions, included customizations, "Duplicar" link on the product page). [Decision 20]
-- [ ] 19.4 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`; manual create / duplicate flow PENDING for the human. Commit: `feat(003): combination editor with duplicate [PRD-005]`.
+- [x] 19.1 RED — Extend `CombinationTest.php` with GET pages: `products.combinations.create` requires `products.create`, `.edit` requires `products.update`; props contain the product axes with allowed values, order attributes with allowed values for restrictions, selectable `service` products; `?from={combination}` pre-fills axes, restrictions, description and included customizations with an empty code (`duplicate` test); a combination of another product in `from` is ignored. Expected: fail. [PRD-005, PRD-016]
+- [x] 19.2 GREEN (backend) — Add `create`, `edit` to `app/Http/Controllers/Products/CombinationController.php` and the GET routes (before the `combinations/{combination}` routes). Run the tests: GREEN.
+- [x] 19.3 GREEN (frontend) — Create `resources/js/pages/products/combinations/Create.vue`, `Edit.vue`, `resources/js/components/products/CombinationForm.vue` (one `AppCheckboxGroup` per axis limited to allowed values, code as text, restrictions, included customizations, "Duplicar" link on the product page). [Decision 20]
+- [ ] 19.4 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`; automated gate passed (1369 tests, 1367 passed, 2 skipped); manual create / duplicate flow PENDING for the human. Commit: `feat(003): combination editor with duplicate [PRD-005]`.
 
 ## Phase 20: Combos UI (design slice 20)
 

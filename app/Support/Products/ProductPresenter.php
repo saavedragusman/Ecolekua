@@ -423,6 +423,103 @@ final class ProductPresenter
     }
 
     /**
+     * Subject of the combination editor pages.
+     *
+     * @return array{id: int, name: string, status: string, status_label: string}
+     */
+    public static function combinationSubject(Product $product): array
+    {
+        return [
+            'id' => $product->id,
+            'name' => $product->name,
+            'status' => $product->status->value,
+            'status_label' => $product->status->label(),
+        ];
+    }
+
+    /**
+     * What the combination editor can check (PRD-005): the axes of the product in display order with
+     * the values it admits, the order attributes a combination can restrict (never the color of a
+     * product that declares the fabric, DEC-PRD-35, nor one without admitted values) and the services
+     * it can include (active ones plus those `$combination` already includes, DEC-PRD-56). The backend
+     * still validates every submission.
+     *
+     * @return array{axes: list<array<string, mixed>>, order_attributes: list<array<string, mixed>>, services: list<array{value: int, label: string}>}
+     */
+    public static function combinationOptions(Product $product, ?Combination $combination = null): array
+    {
+        $rows = $product->productAttributes()
+            ->with(['catalogAttribute', 'allowedValues'])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $declaresFabric = $rows->contains(fn (ProductAttribute $row): bool => $row->catalogAttribute->special_use === AttributeSpecialUse::Fabric);
+
+        $describe = fn (ProductAttribute $row): array => [
+            'id' => $row->catalog_attribute_id,
+            'name' => $row->catalogAttribute->name,
+            'values' => array_values($row->allowedValues->sortBy(['sort_order', 'id'])->map(fn (AttributeValue $value): array => [
+                'value' => $value->id,
+                'label' => $value->status === CatalogStatus::Active ? $value->name : "{$value->name} (inactivo)",
+            ])->all()),
+        ];
+
+        $heldServices = $combination?->customizations()->pluck('products.id')->all() ?? [];
+        $services = Product::query()
+            ->where('supply_mode', SupplyMode::Service->value)
+            ->where(fn ($query) => $query->where('status', CatalogStatus::Active->value)->orWhereIn('id', $heldServices))
+            ->get();
+
+        return [
+            'axes' => array_values($rows->where('role', AttributeRole::Axis)->map($describe)->all()),
+            'order_attributes' => array_values($rows
+                ->where('role', AttributeRole::Order)
+                ->reject(fn (ProductAttribute $row): bool => $row->allowedValues->isEmpty()
+                    || ($declaresFabric && $row->catalogAttribute->presentation === AttributePresentation::Color))
+                ->map($describe)
+                ->all()),
+            'services' => self::checkboxOptions($services),
+        ];
+    }
+
+    /**
+     * Fields of the combination form (PRD-005): axes and restrictions as `attributeId => valueIds`,
+     * ready to be sent back. A null `$combination` is the empty form. `$withCode` is false when the
+     * combination is only a template to duplicate: it gets no code (DT-01).
+     *
+     * @return array{code: string, description: string, axes: array<int, list<int>>, restrictions: array<int, list<int>>, included_customization_ids: list<int>}
+     */
+    public static function combinationForm(?Combination $combination, bool $withCode = true): array
+    {
+        if ($combination === null) {
+            return ['code' => '', 'description' => '', 'axes' => [], 'restrictions' => [], 'included_customization_ids' => []];
+        }
+
+        $roles = $combination->product->productAttributes->mapWithKeys(fn (ProductAttribute $row): array => [$row->catalog_attribute_id => $row->role]);
+        $axes = [];
+        $restrictions = [];
+
+        foreach ($combination->values()->orderBy('sort_order')->orderBy('attribute_values.id')->get() as $value) {
+            $role = $roles[$value->catalog_attribute_id] ?? null;
+
+            if ($role === AttributeRole::Axis) {
+                $axes[$value->catalog_attribute_id][] = $value->id;
+            } elseif ($role === AttributeRole::Order) {
+                $restrictions[$value->catalog_attribute_id][] = $value->id;
+            }
+        }
+
+        return [
+            'code' => $withCode ? (string) $combination->code : '',
+            'description' => (string) $combination->description,
+            'axes' => $axes,
+            'restrictions' => $restrictions,
+            'included_customization_ids' => array_values($combination->customizations()->pluck('products.id')->map(fn (mixed $id): int => (int) $id)->all()),
+        ];
+    }
+
+    /**
      * @param  Collection<int, DetailLocation>|Collection<int, Product>  $items
      * @return list<array{value: int, label: string}>
      */

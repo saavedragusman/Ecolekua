@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -18,6 +18,10 @@ import {
     index,
     structure,
 } from '@/routes/products';
+import {
+    create as createCombination,
+    edit as editCombination,
+} from '@/routes/products/combinations';
 import type { ProductCan, ProductDetail } from '@/types/products';
 
 defineOptions({ layout: AppLayout });
@@ -51,13 +55,17 @@ function deleteProduct(): void {
     deleteForm.submit(destroy(props.product.id));
 }
 
-const combinationColumns: DataTableColumn[] = [
+// The "Acciones" column only exists when the user can edit or create combinations.
+const combinationColumns = computed<DataTableColumn[]>(() => [
     { key: 'code', label: 'Código' },
     { key: 'name', label: 'Combinación' },
     { key: 'restrictions', label: 'Restricciones' },
     { key: 'included_customizations', label: 'Incluye' },
     { key: 'status', label: 'Estado' },
-];
+    ...(props.can.update || props.can.createCombination
+        ? [{ key: 'actions', label: 'Acciones' }]
+        : []),
+]);
 
 const LABEL = 'font-label-md text-label-md text-on-surface-variant';
 const VALUE = 'font-body-md text-body-md text-on-surface';
@@ -200,7 +208,39 @@ const EMPTY = 'No registrado';
                         :label="row.status_label"
                     />
                 </template>
+                <template #cell-actions="{ row }">
+                    <span class="flex flex-col gap-space-xs md:flex-row">
+                        <AppButton
+                            v-if="can.update"
+                            variant="outlined"
+                            :href="
+                                editCombination({
+                                    product: product.id,
+                                    combination: row.id,
+                                }).url
+                            "
+                        >
+                            Editar
+                        </AppButton>
+                        <AppButton
+                            v-if="can.createCombination"
+                            variant="outlined"
+                            :href="
+                                createCombination(product.id, {
+                                    query: { from: row.id },
+                                }).url
+                            "
+                        >
+                            Duplicar
+                        </AppButton>
+                    </span>
+                </template>
             </DataTable>
+            <div v-if="can.createCombination">
+                <AppButton :href="createCombination(product.id).url">
+                    Nueva combinación
+                </AppButton>
+            </div>
         </AppCard>
 
         <AppCard>

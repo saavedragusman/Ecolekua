@@ -113,8 +113,10 @@ Route::put('/products/{product}/attributes', [ProductStructureController::class,
 Route::put('/products/{product}/stock-minimums', [ProductStockMinimumController::class, 'update'])->name('products.stock-minimums.update');
 
 // Combinations of a product (PRD-005). Scoped bindings: a combination of another product is a 404.
-// The editor pages (`create`, `edit`) are declared with their pages in Phase 19.
+// `combinations/create` is declared before the routes with a `{combination}` segment.
 Route::scopeBindings()->group(function () {
+    Route::get('/products/{product}/combinations/create', [CombinationController::class, 'create'])->name('products.combinations.create');
+    Route::get('/products/{product}/combinations/{combination}/edit', [CombinationController::class, 'edit'])->name('products.combinations.edit');
     Route::post('/products/{product}/combinations', [CombinationController::class, 'store'])->name('products.combinations.store');
     Route::put('/products/{product}/combinations/{combination}', [CombinationController::class, 'update'])->name('products.combinations.update');
     Route::post('/products/{product}/combinations/{combination}/activate', [CombinationController::class, 'activate'])->name('products.combinations.activate');
