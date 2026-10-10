@@ -8,6 +8,7 @@ import AppSelect from '@/components/AppSelect.vue';
 import type { SelectOption } from '@/components/AppSelect.vue';
 import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import IconButton from '@/components/IconButton.vue';
+import { useSaveScroll } from '@/composables/useSaveScroll';
 import { update } from '@/routes/products/attributes';
 import type {
     ProductRole,
@@ -156,8 +157,10 @@ function fieldError(index: number, field: string): string | undefined {
     ];
 }
 
+const { saveOptions } = useSaveScroll();
+
 function submit(): void {
-    form.submit(update(props.productId), { preserveScroll: true });
+    form.submit(update(props.productId), saveOptions);
 }
 </script>
 

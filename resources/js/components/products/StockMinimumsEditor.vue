@@ -6,6 +6,7 @@ import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
 import AppSelect from '@/components/AppSelect.vue';
 import type { SelectOption } from '@/components/AppSelect.vue';
+import { useSaveScroll } from '@/composables/useSaveScroll';
 import { update } from '@/routes/products/stock-minimums';
 import type { ProductStockEditor } from '@/types/products';
 
@@ -85,8 +86,10 @@ function changeSize(row: Row, value: string | number): void {
     row.size_value_id = value === '' ? '' : Number(value);
 }
 
+const { saveOptions } = useSaveScroll();
+
 function submit(): void {
-    form.submit(update(props.productId), { preserveScroll: true });
+    form.submit(update(props.productId), saveOptions);
 }
 </script>
 

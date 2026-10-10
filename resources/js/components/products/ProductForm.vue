@@ -8,6 +8,7 @@ import AppCheckboxGroup from '@/components/AppCheckboxGroup.vue';
 import AppInput from '@/components/AppInput.vue';
 import AppSelect from '@/components/AppSelect.vue';
 import AppTextarea from '@/components/AppTextarea.vue';
+import { useSaveScroll } from '@/composables/useSaveScroll';
 import type { ProductEditable, ProductFormOptions } from '@/types/products';
 import type { RouteDefinition } from '@/wayfinder';
 
@@ -103,8 +104,10 @@ function listError(field: string): string | undefined {
     return key === undefined ? undefined : errors[key];
 }
 
+const { saveOptions } = useSaveScroll();
+
 function submit(): void {
-    form.submit(props.action, { preserveScroll: true });
+    form.submit(props.action, saveOptions);
 }
 </script>
 
