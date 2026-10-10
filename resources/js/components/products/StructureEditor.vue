@@ -146,6 +146,8 @@ function moveAxis(index: number, direction: 'up' | 'down'): void {
 
     const list = form.attributes;
     [list[index], list[neighbour.index]] = [list[neighbour.index], list[index]];
+    // Errors are keyed by position: after a move they would point at the wrong attribute.
+    form.clearErrors();
 }
 
 function fieldError(index: number, field: string): string | undefined {
