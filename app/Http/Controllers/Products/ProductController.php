@@ -25,7 +25,7 @@ use Inertia\Response;
 /**
  * Read pages and write endpoints of the product catalog (PRD-003, PRD-012, PRD-015). Authorization is
  * `ProductPolicy`: the form requests check it before any Action runs and the pages call
- * `Gate::authorize`. The form pages arrive in Phase 18.
+ * `Gate::authorize`.
  */
 class ProductController extends Controller
 {
@@ -78,7 +78,37 @@ class ProductController extends Controller
             'mode' => $mode?->value,
             'counts' => ['active' => $active, 'inactive' => $inactive, 'all' => $active + $inactive],
             'filters' => ProductPresenter::filterOptions(),
+            'can' => ['create' => Gate::allows('create', Product::class)],
             'products' => $page->through(fn (Product $product): array => ProductPresenter::listRow($product)),
+        ]);
+    }
+
+    /**
+     * Registration form (PRD-003). The proposed default minimum stock is 6 (DEC-PRD-46); the form only
+     * shows it for the `stock_with_minimum` mode and the backend validates the submission.
+     */
+    public function create(): Response
+    {
+        Gate::authorize('create', Product::class);
+
+        return Inertia::render('products/Create', [
+            'options' => ProductPresenter::formOptions(),
+            'defaults' => ['min_stock_default' => 6],
+        ]);
+    }
+
+    /**
+     * Edit form (PRD-012): an inactive product stays editable. The own minimum stock editor only
+     * exists for `stock_with_minimum` products (PRD-009).
+     */
+    public function edit(Product $product): Response
+    {
+        Gate::authorize('update', $product);
+
+        return Inertia::render('products/Edit', [
+            'product' => ProductPresenter::form($product),
+            'options' => [...ProductPresenter::formOptions($product), ...ProductPresenter::relationOptions($product)],
+            'stock' => ProductPresenter::stockEditor($product),
         ]);
     }
 

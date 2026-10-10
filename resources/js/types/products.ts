@@ -180,3 +180,93 @@ export type ProductCan = {
     delete: boolean;
     createCombination: boolean;
 };
+
+// --- Product forms and structure editor (PRD-003, PRD-004, PRD-009, PRD-012) -----------------
+
+export type ProductFormOption<T extends string | number = string | number> = {
+    value: T;
+    label: string;
+};
+
+// Options of the general data form, labelled by the backend. `detail_locations` and `customizations`
+// only travel on the edit page.
+export type ProductFormOptions = {
+    categories: ProductFormOption<number>[];
+    lines: ProductFormOption<string>[];
+    modes: ProductFormOption<string>[];
+    detail_locations?: ProductFormOption<number>[];
+    customizations?: ProductFormOption<number>[];
+};
+
+// Proposed value of the form, defined by the backend (DEC-PRD-46).
+export type ProductFormDefaults = {
+    min_stock_default: number;
+};
+
+// Stored general data of a product for the edit form.
+export type ProductEditable = {
+    id: number;
+    name: string;
+    description: string | null;
+    product_category_id: number;
+    business_line: string;
+    supply_mode: string;
+    min_stock_default: number | null;
+    allows_custom_color: boolean;
+    portal_visible: boolean;
+    status: CatalogStatus;
+    detail_location_ids: number[];
+    customization_ids: number[];
+};
+
+// One own minimum: a combination, a size when the product declares one, and the minimum.
+export type ProductStockOverrideRow = {
+    combination_id: number;
+    size_value_id: number | null;
+    minimum: number;
+};
+
+// Articles that can carry an own minimum. `sizes` is null when the product does not declare the size
+// attribute; otherwise it holds the sizes that combination admits.
+export type ProductStockArticle = {
+    id: number;
+    code: string | null;
+    name: string;
+    sizes: ProductFormOption<number>[] | null;
+};
+
+export type ProductStockEditor = {
+    size_attribute: string | null;
+    combinations: ProductStockArticle[];
+    overrides: ProductStockOverrideRow[];
+};
+
+export type ProductRole = 'axis' | 'order';
+
+// Structure as it is stored and as it is sent back (`PUT /products/{id}/attributes`).
+export type ProductStructureEntry = {
+    attribute_id: number;
+    role: ProductRole;
+    allowed_value_ids: number[];
+};
+
+// An attribute the product can declare. `fixed_role` is the only role the backend accepts for the
+// fabric (axis) and the color (order); `values` carry their labels, inactive ones included only when
+// the product already holds them.
+export type ProductStructureAttribute = {
+    id: number;
+    name: string;
+    status: CatalogStatus;
+    is_fabric: boolean;
+    is_color: boolean;
+    fixed_role: ProductRole | null;
+    values: ProductFormOption<number>[];
+};
+
+export type ProductStructureSubject = {
+    id: number;
+    name: string;
+    status: CatalogStatus;
+    status_label: string;
+    has_combinations: boolean;
+};
