@@ -21,6 +21,7 @@ defineProps<{
         title="Nuevo producto"
         submit-label="Registrar producto"
         :cancel-href="index().url"
+        back-label="Volver a productos"
         :action="store()"
         :options="options"
         :proposed-minimum="defaults.min_stock_default"

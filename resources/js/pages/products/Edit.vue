@@ -29,6 +29,7 @@ const props = defineProps<{
             title="Editar producto"
             submit-label="Guardar cambios"
             :cancel-href="show(props.product.id).url"
+            back-label="Volver al producto"
             :action="update(props.product.id)"
             :options="props.options"
             :product="props.product"
