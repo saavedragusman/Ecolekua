@@ -26,6 +26,7 @@ const props = defineProps<{
         :title="`Editar combo ${props.combo.name}`"
         submit-label="Guardar cambios"
         :cancel-href="show(props.combo.id).url"
+        back-label="Volver al combo"
         :action="update(props.combo.id)"
         :products="props.products"
         :initial="props.initial"

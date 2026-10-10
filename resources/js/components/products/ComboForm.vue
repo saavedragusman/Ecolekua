@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { useForm } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppCheckbox from '@/components/AppCheckbox.vue';
 import AppCheckboxGroup from '@/components/AppCheckboxGroup.vue';
+import AppIcon from '@/components/AppIcon.vue';
 import AppInput from '@/components/AppInput.vue';
 import AppSelect from '@/components/AppSelect.vue';
 import type { SelectOption } from '@/components/AppSelect.vue';
 import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import { useSaveScroll } from '@/composables/useSaveScroll';
+import { FOCUS_RING } from '@/lib/ui';
 import type {
     CombinationValueMap,
     ComboFields,
@@ -25,6 +27,7 @@ const props = defineProps<{
     title: string;
     submitLabel: string;
     cancelHref: string;
+    backLabel: string;
     // `store()` or `update(id)` Wayfinder definition.
     action: RouteDefinition<'post'> | RouteDefinition<'put'>;
     products: ComboProductOption[];
@@ -153,9 +156,22 @@ function submit(): void {
         @submit.prevent="submit"
     >
         <AppCard>
-            <h1 class="font-headline-md text-headline-md text-primary">
-                {{ title }}
-            </h1>
+            <div class="flex items-center gap-space-sm">
+                <Link
+                    :href="cancelHref"
+                    :aria-label="backLabel"
+                    :title="backLabel"
+                    :class="[
+                        'inline-flex size-11 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-surface-container-low',
+                        FOCUS_RING,
+                    ]"
+                >
+                    <AppIcon name="arrow_back" />
+                </Link>
+                <h1 class="font-headline-md text-headline-md text-primary">
+                    {{ title }}
+                </h1>
+            </div>
         </AppCard>
 
         <AppCard>

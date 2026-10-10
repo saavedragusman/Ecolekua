@@ -20,6 +20,7 @@ defineProps<{
         title="Nuevo combo"
         submit-label="Registrar combo"
         :cancel-href="index().url"
+        back-label="Volver a combos"
         :action="store()"
         :products="products"
         :initial="initial"
