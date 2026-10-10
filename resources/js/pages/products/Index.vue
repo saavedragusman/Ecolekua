@@ -12,7 +12,7 @@ import SegmentedTabs from '@/components/SegmentedTabs.vue';
 import type { SegmentedTab } from '@/components/SegmentedTabs.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { index, show } from '@/routes/products';
+import { create, index, show } from '@/routes/products';
 import type {
     ProductFilterOptions,
     ProductListPage,
@@ -33,6 +33,8 @@ const props = defineProps<{
     mode: string | null;
     counts: ProductStatusCounts;
     filters: ProductFilterOptions;
+    // Mirrors the policy; it only decides what to show.
+    can: { create: boolean };
 }>();
 
 const term = ref(props.q);
@@ -155,9 +157,16 @@ function changeMode(value: string | number): void {
     <Head title="Productos" />
 
     <div class="flex flex-col gap-space-md">
-        <h1 class="font-headline-md text-headline-md text-primary">
-            Productos
-        </h1>
+        <div
+            class="flex flex-col gap-space-sm md:flex-row md:items-center md:justify-between"
+        >
+            <h1 class="font-headline-md text-headline-md text-primary">
+                Productos
+            </h1>
+            <AppButton v-if="can.create" :href="create().url">
+                Nuevo producto
+            </AppButton>
+        </div>
 
         <form
             role="search"

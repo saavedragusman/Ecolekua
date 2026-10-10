@@ -456,3 +456,10 @@ it('shows an inactive product page and answers 404 for an unknown product', func
 
     $this->actingAs($this->viewer)->get('/products/999999')->assertNotFound();
 });
+
+it('PRD-003 exposes can.create on the list only to a user with products.create', function () {
+    $creator = userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsCreate);
+
+    $this->actingAs($creator)->get('/products')->assertInertia(fn (Assert $page) => $page->where('can.create', true));
+    $this->actingAs($this->viewer)->get('/products')->assertInertia(fn (Assert $page) => $page->where('can.create', false));
+});
