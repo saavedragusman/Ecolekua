@@ -126,6 +126,11 @@ function addAttribute(): void {
     toAdd.value = '';
 }
 
+// Presentation only: the backend rejects removing an axis while the product has combinations.
+function axisRemovalLocked(entry: ProductStructureEntry): boolean {
+    return props.hasCombinations && entry.role === 'axis';
+}
+
 function removeAttribute(index: number): void {
     form.attributes.splice(index, 1);
     form.clearErrors();
@@ -268,13 +273,29 @@ function submit(): void {
                     :error="fieldError(row.index, 'allowed_value_ids')"
                 />
 
-                <div>
+                <div
+                    class="flex flex-col gap-space-xs md:flex-row md:items-center md:gap-space-sm"
+                >
                     <AppButton
                         variant="outlined"
+                        :disabled="axisRemovalLocked(row.entry)"
+                        :aria-describedby="
+                            axisRemovalLocked(row.entry)
+                                ? `axis-removal-locked-${row.entry.attribute_id}`
+                                : undefined
+                        "
                         @click="removeAttribute(row.index)"
                     >
                         Quitar atributo
                     </AppButton>
+                    <p
+                        v-if="axisRemovalLocked(row.entry)"
+                        :id="`axis-removal-locked-${row.entry.attribute_id}`"
+                        class="font-body-sm text-body-sm text-on-surface-variant"
+                    >
+                        No se puede quitar un eje mientras el producto tenga
+                        combinaciones.
+                    </p>
                 </div>
             </div>
         </AppCard>
