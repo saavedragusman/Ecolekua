@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Catalog\StoreDetailLocationRequest;
 use App\Http\Requests\Catalog\UpdateDetailLocationRequest;
 use App\Models\DetailLocation;
+use App\Support\Products\Assets\ImageUrls;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -40,6 +41,7 @@ class DetailLocationController extends Controller
                     'id' => $location->id,
                     'name' => $location->name,
                     'svg_layer' => $location->svg_layer,
+                    'image' => ImageUrls::for($location, 'catalog.detail-locations.image.show', 'location'),
                     'status' => $location->status->value,
                     'status_label' => $location->status->label(),
                 ])

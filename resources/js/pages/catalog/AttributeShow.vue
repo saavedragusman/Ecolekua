@@ -52,6 +52,10 @@ const columns = computed<DataTableColumn[]>(() => [
 const formOpen = ref(false);
 const editing = ref<CatalogAttributeValue | null>(null);
 const editingColors = ref<CatalogAttributeValue | null>(null);
+// The row being edited, read again from the props so an image upload (which reloads them) shows.
+const editingCurrent = computed(
+    () => props.values.find((row) => row.id === editing.value?.id) ?? null,
+);
 const valueForm = useTemplateRef('valueForm');
 const colorsEditor = useTemplateRef('colorsEditor');
 const { scrollToForm: scrollToValueForm } = useScrollToForm(valueForm);
@@ -176,7 +180,7 @@ function reactivateValue(value: CatalogAttributeValue): void {
             :key="editing?.id ?? 'new'"
             :attribute-id="attribute.id"
             :presentation="attribute.presentation"
-            :value="editing"
+            :value="editingCurrent"
             @done="closePanels"
             @cancel="closePanels"
         />
@@ -207,13 +211,33 @@ function reactivateValue(value: CatalogAttributeValue): void {
             row-key="id"
             empty-text="Este atributo aún no tiene valores."
         >
+            <!-- A value with an image shows it; a color value without one shows its swatch; any other
+                 value is plain text (PRD-020). -->
             <template #cell-name="{ row }">
-                <span class="font-label-lg text-label-lg">{{ row.name }}</span>
-                <span
-                    v-if="row.description"
-                    class="block font-body-sm text-body-sm text-on-surface-variant"
-                >
-                    {{ row.description }}
+                <span class="inline-flex items-center gap-space-sm">
+                    <img
+                        v-if="row.image"
+                        :src="row.image.thumb"
+                        :alt="`Imagen de ${row.name}`"
+                        class="size-10 shrink-0 rounded-lg border border-outline bg-surface-container-low object-cover"
+                    />
+                    <span
+                        v-else-if="row.tone"
+                        class="size-6 shrink-0 rounded-full border border-outline"
+                        :style="{ backgroundColor: row.tone }"
+                        aria-hidden="true"
+                    />
+                    <span>
+                        <span class="font-label-lg text-label-lg">{{
+                            row.name
+                        }}</span>
+                        <span
+                            v-if="row.description"
+                            class="block font-body-sm text-body-sm text-on-surface-variant"
+                        >
+                            {{ row.description }}
+                        </span>
+                    </span>
                 </span>
             </template>
             <template #cell-tone="{ row }">

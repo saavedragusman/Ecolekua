@@ -7,6 +7,7 @@ import AppIcon from '@/components/AppIcon.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
+import ImageUploader from '@/components/products/ImageUploader.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { FOCUS_RING } from '@/lib/ui';
@@ -25,6 +26,10 @@ import {
     destroy as destroyCombination,
     edit as editCombination,
 } from '@/routes/products/combinations';
+import {
+    destroy as destroyImage,
+    store as storeImage,
+} from '@/routes/products/image';
 import type {
     ProductCan,
     ProductCombinationRow,
@@ -414,15 +419,25 @@ const EMPTY = 'No registrado';
 
         <AppCard>
             <h2 :class="H2">Imágenes</h2>
+            <ImageUploader
+                v-if="can.update"
+                label="Imagen principal"
+                :alt="`Imagen de ${product.name}`"
+                :image="product.image"
+                :upload-to="storeImage(product.id)"
+                :remove-from="destroyImage(product.id)"
+            />
             <dl class="flex flex-col gap-space-sm">
-                <div class="flex flex-col">
+                <div v-if="!can.update" class="flex flex-col">
                     <dt :class="LABEL">Imagen principal</dt>
                     <dd :class="VALUE">
-                        {{
-                            product.images.has_main
-                                ? 'Cargada'
-                                : 'Sin imagen principal'
-                        }}
+                        <img
+                            v-if="product.image"
+                            :src="product.image.thumb"
+                            :alt="`Imagen de ${product.name}`"
+                            class="size-40 rounded-lg border border-outline bg-surface-container-low object-contain"
+                        />
+                        <template v-else>Sin imagen principal</template>
                     </dd>
                 </div>
                 <div class="flex flex-col">

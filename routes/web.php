@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Catalog\AttributeController;
 use App\Http\Controllers\Catalog\AttributeValueController;
+use App\Http\Controllers\Catalog\CatalogAssetController;
 use App\Http\Controllers\Catalog\CategoryController;
 use App\Http\Controllers\Catalog\DetailLocationController;
 use App\Http\Controllers\Catalog\FabricOfferedColorController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ComboController;
+use App\Http\Controllers\Products\ProductAssetController;
 use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Products\ProductStockMinimumController;
@@ -88,6 +90,10 @@ Route::post('/catalog/values/{value}/move', [AttributeValueController::class, 'm
 Route::post('/catalog/values/{value}/activate', [AttributeValueController::class, 'activate'])->name('catalog.values.activate');
 Route::post('/catalog/values/{value}/deactivate', [AttributeValueController::class, 'deactivate'])->name('catalog.values.deactivate');
 Route::put('/catalog/values/{value}/offered-colors', [FabricOfferedColorController::class, 'update'])->name('catalog.values.offered-colors.update');
+// Images (PRD-020, Decision 18): upload and removal are `manage`; serving is `viewAsset`.
+Route::post('/catalog/values/{value}/image', [CatalogAssetController::class, 'storeValue'])->name('catalog.values.image.store');
+Route::delete('/catalog/values/{value}/image', [CatalogAssetController::class, 'destroyValue'])->name('catalog.values.image.destroy');
+Route::get('/catalog/values/{value}/image/{variant}', [CatalogAssetController::class, 'showValue'])->name('catalog.values.image.show');
 
 // Catalog detail locations (PRD-007). The `{location}` parameter binds `DetailLocation`; locations
 // have no order in the spec (no move route) and are never deleted.
@@ -96,6 +102,9 @@ Route::post('/catalog/detail-locations', [DetailLocationController::class, 'stor
 Route::put('/catalog/detail-locations/{location}', [DetailLocationController::class, 'update'])->name('catalog.detail-locations.update');
 Route::post('/catalog/detail-locations/{location}/activate', [DetailLocationController::class, 'activate'])->name('catalog.detail-locations.activate');
 Route::post('/catalog/detail-locations/{location}/deactivate', [DetailLocationController::class, 'deactivate'])->name('catalog.detail-locations.deactivate');
+Route::post('/catalog/detail-locations/{location}/image', [CatalogAssetController::class, 'storeLocation'])->name('catalog.detail-locations.image.store');
+Route::delete('/catalog/detail-locations/{location}/image', [CatalogAssetController::class, 'destroyLocation'])->name('catalog.detail-locations.image.destroy');
+Route::get('/catalog/detail-locations/{location}/image/{variant}', [CatalogAssetController::class, 'showLocation'])->name('catalog.detail-locations.image.show');
 
 // Products (spec 003, PRD-003, PRD-015). Authorization lives in ProductPolicy. `/products/create`
 // is declared before `/products/{product}` so it is not read as a product id.
@@ -111,6 +120,10 @@ Route::post('/products/{product}/activate', [ProductStatusController::class, 'ac
 Route::post('/products/{product}/deactivate', [ProductStatusController::class, 'deactivate'])->name('products.deactivate');
 Route::put('/products/{product}/attributes', [ProductStructureController::class, 'update'])->name('products.attributes.update');
 Route::put('/products/{product}/stock-minimums', [ProductStockMinimumController::class, 'update'])->name('products.stock-minimums.update');
+// Main image (PRD-020, Decision 18): upload and removal are `update`; serving is `view`.
+Route::post('/products/{product}/image', [ProductAssetController::class, 'store'])->name('products.image.store');
+Route::delete('/products/{product}/image', [ProductAssetController::class, 'destroy'])->name('products.image.destroy');
+Route::get('/products/{product}/image/{variant}', [ProductAssetController::class, 'show'])->name('products.image.show');
 
 // Combinations of a product (PRD-005). Scoped bindings: a combination of another product is a 404.
 // `combinations/create` is declared before the routes with a `{combination}` segment.

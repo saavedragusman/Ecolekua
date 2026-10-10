@@ -685,8 +685,9 @@ it('PRD-002 never deletes attributes or values: there are no delete routes', fun
     $this->actingAs(attributeManager())->deleteJson("/catalog/attributes/{$attribute->id}")->assertStatus(405);
     $this->actingAs(attributeManager())->deleteJson("/catalog/values/{$value->id}")->assertStatus(405);
 
+    // Removing an image (PRD-020, `DELETE .../image`) is not deleting the value.
     $deleteRoutes = collect(Route::getRoutes()->getRoutes())
-        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/') && in_array('DELETE', $route->methods(), true));
+        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/') && ! str_ends_with($route->uri(), '/image') && in_array('DELETE', $route->methods(), true));
 
     expect($deleteRoutes)->toHaveCount(0)
         ->and(CatalogAttribute::query()->count())->toBe(1)
@@ -1102,6 +1103,7 @@ it('PRD-002 page GET /catalog/attributes/{attribute} lists the ordered values of
                 'description' => null,
                 'tone' => '#FFFFFF',
                 'svg_layer' => null,
+                'image' => null,
                 'status' => 'active',
                 'status_label' => 'Activo',
                 'sort_order' => 1,
