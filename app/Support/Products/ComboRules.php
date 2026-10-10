@@ -149,9 +149,11 @@ final class ComboRules
      * The color of a product with fabric has no allowed values of its own: its colors are the ones
      * offered by the fabrics the product admits.
      *
+     * Public so the combo editor pages offer exactly what the validation accepts.
+     *
      * @return array<int, list<int>>
      */
-    private static function admittedValues(Product $product): array
+    public static function admittedValues(Product $product): array
     {
         $declared = ProductCombinations::declared($product);
 

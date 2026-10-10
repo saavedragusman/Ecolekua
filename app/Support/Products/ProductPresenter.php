@@ -11,6 +11,8 @@ use App\Enums\SupplyMode;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
 use App\Models\Combination;
+use App\Models\Combo;
+use App\Models\ComboComponent;
 use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductAttribute;
@@ -517,6 +519,166 @@ final class ProductPresenter
             'restrictions' => $restrictions,
             'included_customization_ids' => array_values($combination->customizations()->pluck('products.id')->map(fn (mixed $id): int => (int) $id)->all()),
         ];
+    }
+
+    /**
+     * Row of the combo list (PRD-015). Expects `catalogCode` loaded and `components_count` from
+     * `withCount('components')`.
+     *
+     * @return array<string, mixed>
+     */
+    public static function comboRow(Combo $combo): array
+    {
+        return [
+            'id' => $combo->id,
+            'name' => $combo->name,
+            'code' => $combo->code,
+            'components_count' => (int) $combo->getAttribute('components_count'),
+            'portal_visible' => $combo->portal_visible,
+            'status' => $combo->status->value,
+            'status_label' => $combo->status->label(),
+        ];
+    }
+
+    /**
+     * Subject of the combo edit page.
+     *
+     * @return array{id: int, name: string, status: string, status_label: string}
+     */
+    public static function comboSubject(Combo $combo): array
+    {
+        return [
+            'id' => $combo->id,
+            'name' => $combo->name,
+            'status' => $combo->status->value,
+            'status_label' => $combo->status->label(),
+        ];
+    }
+
+    /**
+     * Combo page (PRD-010, PRD-015): its data and each component with the values it admits per
+     * attribute, in the display order of the product's attributes and of the values. An attribute
+     * the component does not restrict is not listed.
+     *
+     * @return array<string, mixed>
+     */
+    public static function comboDetail(Combo $combo): array
+    {
+        $combo->load(['catalogCode', 'components.product', 'components.values.catalogAttribute']);
+
+        $positions = [];
+
+        return [
+            ...self::comboSubject($combo),
+            'code' => $combo->code,
+            'portal_visible' => $combo->portal_visible,
+            'components' => array_values($combo->components->map(function (ComboComponent $component) use (&$positions): array {
+                $positions[$component->product_id] ??= array_flip($component->product->productAttributes()
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->pluck('catalog_attribute_id')
+                    ->map(fn (mixed $id): int => (int) $id)
+                    ->all());
+
+                $groups = $component->values
+                    ->sortBy(['sort_order', 'id'])
+                    ->groupBy('catalog_attribute_id')
+                    ->sortBy(fn (Collection $values, int $attributeId): int => $positions[$component->product_id][$attributeId] ?? PHP_INT_MAX);
+
+                return [
+                    'id' => $component->id,
+                    'product_id' => $component->product_id,
+                    'product' => $component->product->name,
+                    'quantity' => $component->quantity,
+                    'restrictions' => array_values($groups->map(fn (Collection $values): array => [
+                        'attribute' => $values->first()->catalogAttribute->name,
+                        'values' => array_values($values->map(fn (AttributeValue $value): string => $value->name)->all()),
+                    ])->all()),
+                ];
+            })->all()),
+        ];
+    }
+
+    /**
+     * Fields of the combo form (PRD-010): each component with its product, quantity and the admitted
+     * values as `attributeId => valueIds`, ready to be sent back. A null `$combo` is the empty form.
+     *
+     * @return array{name: string, code: string, portal_visible: bool, components: list<array{product_id: int, quantity: int, values: array<int, list<int>>}>}
+     */
+    public static function comboForm(?Combo $combo): array
+    {
+        if ($combo === null) {
+            return ['name' => '', 'code' => '', 'portal_visible' => true, 'components' => []];
+        }
+
+        $combo->load(['catalogCode', 'components.values']);
+
+        return [
+            'name' => $combo->name,
+            'code' => (string) $combo->code,
+            'portal_visible' => $combo->portal_visible,
+            'components' => array_values($combo->components->map(function (ComboComponent $component): array {
+                $values = [];
+
+                foreach ($component->values->sortBy(['sort_order', 'id']) as $value) {
+                    $values[$value->catalog_attribute_id][] = $value->id;
+                }
+
+                return ['product_id' => $component->product_id, 'quantity' => $component->quantity, 'values' => $values];
+            })->all()),
+        ];
+    }
+
+    /**
+     * Products a component can use (PRD-010, E-62): active diaper-line products that are not services,
+     * plus those `$combo` already holds even if deactivated since (DEC-PRD-64). Each carries the
+     * attributes it declares with the values a component may admit, exactly the ones
+     * `ComboRules::validateComponents()` accepts (the colors of a product with fabric come from the
+     * fabrics it admits). An attribute without admitted values cannot be restricted and is not listed.
+     * The backend still validates every submission.
+     *
+     * @return list<array{id: int, name: string, attributes: list<array{id: int, name: string, values: list<array{value: int, label: string}>}>}>
+     */
+    public static function comboProducts(?Combo $combo = null): array
+    {
+        $held = $combo?->components()->pluck('product_id')->all() ?? [];
+
+        $products = Product::query()
+            ->where('business_line', BusinessLine::Diapers->value)
+            ->where('supply_mode', '!=', SupplyMode::Service->value)
+            ->where(fn ($query) => $query->where('status', CatalogStatus::Active->value)->orWhereIn('id', $held))
+            ->with(['productAttributes' => fn ($query) => $query->orderBy('sort_order')->orderBy('id'), 'productAttributes.catalogAttribute'])
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
+
+        $admitted = $products->mapWithKeys(fn (Product $product): array => [$product->id => ComboRules::admittedValues($product)]);
+        $values = AttributeValue::query()
+            ->whereIn('id', $admitted->flatten()->unique()->all())
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->keyBy('id');
+
+        return array_values($products->map(fn (Product $product): array => [
+            'id' => $product->id,
+            'name' => $product->name,
+            'attributes' => array_values($product->productAttributes
+                ->map(function (ProductAttribute $row) use ($admitted, $values, $product): array {
+                    $options = [];
+
+                    foreach ($values->only($admitted[$product->id][$row->catalog_attribute_id] ?? []) as $value) {
+                        $options[] = [
+                            'value' => $value->id,
+                            'label' => $value->status === CatalogStatus::Active ? $value->name : "{$value->name} (inactivo)",
+                        ];
+                    }
+
+                    return ['id' => $row->catalog_attribute_id, 'name' => $row->catalogAttribute->name, 'values' => $options];
+                })
+                ->reject(fn (array $attribute): bool => $attribute['values'] === [])
+                ->all()),
+        ])->all());
     }
 
     /**

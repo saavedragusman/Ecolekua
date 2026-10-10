@@ -293,6 +293,75 @@ export type CombinationFields = {
 
 export type CombinationEditable = CombinationFields & { id: number };
 
+// --- Combos (PRD-010, PRD-015) ---------------------------------------------------------------
+
+export type ComboListRow = {
+    id: number;
+    name: string;
+    code: string | null;
+    components_count: number;
+    portal_visible: boolean;
+    status: CatalogStatus;
+    status_label: string;
+};
+
+export type ComboListPage = Paginated<ComboListRow>;
+
+export type ComboCan = {
+    update: boolean;
+    deactivate: boolean;
+    delete: boolean;
+};
+
+// A component as the combo page shows it: the values it admits per attribute, by name. An attribute
+// the component does not restrict is not listed.
+export type ComboComponentRow = {
+    id: number;
+    product_id: number;
+    product: string;
+    quantity: number;
+    restrictions: { attribute: string; values: string[] }[];
+};
+
+export type ComboDetail = {
+    id: number;
+    name: string;
+    code: string | null;
+    portal_visible: boolean;
+    status: CatalogStatus;
+    status_label: string;
+    components: ComboComponentRow[];
+};
+
+// Subject of the edit page.
+export type ComboSubject = {
+    id: number;
+    name: string;
+    status: CatalogStatus;
+    status_label: string;
+};
+
+// A product a component can use, with the attributes it can restrict and the values it may admit.
+export type ComboProductOption = {
+    id: number;
+    name: string;
+    attributes: CombinationAttribute[];
+};
+
+export type ComboComponentFields = {
+    product_id: number;
+    quantity: number;
+    values: CombinationValueMap;
+};
+
+// Fields of the form as the backend sends them and expects them back.
+export type ComboFields = {
+    name: string;
+    code: string;
+    portal_visible: boolean;
+    components: ComboComponentFields[];
+};
+
 export type ProductStructureSubject = {
     id: number;
     name: string;

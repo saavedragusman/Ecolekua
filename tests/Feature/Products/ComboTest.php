@@ -12,6 +12,7 @@ use App\Models\ComboComponent;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 // --- Creation (E-21) --------------------------------------------------------------------------
 
@@ -307,4 +308,248 @@ it('PRD-016 requires products.create to create a combo, auditing the denial', fu
 
     expectNoComboWritten();
     expect(AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole()->context['route'])->toBe('combos.store');
+});
+
+// --- Pages (PRD-010, PRD-015, E-04) -----------------------------------------------------------
+
+/**
+ * A combo with a registry code, no components.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function codedCombo(string $name, string $code, array $attributes = []): Combo
+{
+    $combo = Combo::factory()->create([...$attributes, 'name' => $name]);
+    CatalogCode::factory()->forCombo($combo)->create(['code' => $code]);
+
+    return $combo;
+}
+
+/**
+ * @return list<string>
+ */
+function listedComboNames(Assert $page): array
+{
+    return collect($page->toArray()['props']['combos']['data'])->pluck('name')->all();
+}
+
+it('E-04 forbids the combo list and detail to a user without products.view', function () {
+    $combo = codedCombo('Kit Oro', 'K-ORO');
+    $user = userWithPermissions(PermissionName::ProductsCreate, PermissionName::ProductsUpdate);
+
+    $this->actingAs($user)->get('/combos')->assertForbidden();
+    $this->actingAs($user)->get("/combos/{$combo->id}")->assertForbidden();
+});
+
+it('E-04 requires products.create for the creation form and products.update for the edit form', function () {
+    $combo = codedCombo('Kit Oro', 'K-ORO');
+    $viewer = userWithPermissions(PermissionName::ProductsView);
+
+    $this->actingAs($viewer)->get('/combos/create')->assertForbidden();
+    $this->actingAs($viewer)->get("/combos/{$combo->id}/edit")->assertForbidden();
+    $this->actingAs(comboEditor())->get('/combos/create')->assertForbidden();
+    $this->actingAs(comboCreator())->get("/combos/{$combo->id}/edit")->assertForbidden();
+
+    $this->actingAs(comboCreator())->get('/combos/create')->assertOk()->assertInertia(fn (Assert $page) => $page->component('combos/Create'));
+    $this->actingAs(comboEditor())->get("/combos/{$combo->id}/edit")->assertOk()->assertInertia(fn (Assert $page) => $page->component('combos/Edit'));
+});
+
+it('E-04 redirects a guest to the login on every combo page', function () {
+    $combo = codedCombo('Kit Oro', 'K-ORO');
+
+    $this->get('/combos')->assertRedirect('/login');
+    $this->get('/combos/create')->assertRedirect('/login');
+    $this->get("/combos/{$combo->id}")->assertRedirect('/login');
+    $this->get("/combos/{$combo->id}/edit")->assertRedirect('/login');
+});
+
+it('PRD-015 lists the active combos by default with the backend counts of the three views', function () {
+    codedCombo('Kit Plata', 'K-PLA');
+    codedCombo('Kit Oro', 'K-ORO');
+    codedCombo('Kit Bronce', 'K-BRO', ['status' => CatalogStatus::Inactive]);
+    $viewer = userWithPermissions(PermissionName::ProductsView);
+
+    $this->actingAs($viewer)->get('/combos')->assertInertia(function (Assert $page) {
+        $page->component('combos/Index')
+            ->where('status', 'active')
+            ->where('q', '')
+            ->where('counts', ['active' => 2, 'inactive' => 1, 'all' => 3])
+            ->where('can.create', false);
+
+        expect(listedComboNames($page))->toBe(['Kit Oro', 'Kit Plata']);
+    });
+
+    $this->actingAs($viewer)->get('/combos?status=inactive')->assertInertia(function (Assert $page) {
+        expect(listedComboNames($page))->toBe(['Kit Bronce']);
+    });
+
+    $this->actingAs($viewer)->get('/combos?status=all')->assertInertia(function (Assert $page) {
+        expect(listedComboNames($page))->toBe(['Kit Bronce', 'Kit Oro', 'Kit Plata']);
+    });
+
+    $this->actingAs($viewer)->get('/combos?status=unknown')->assertInertia(fn (Assert $page) => $page->where('status', 'active'));
+});
+
+it('PRD-015 exposes the row of a combo with its code, component count and labelled status', function () {
+    $catalog = comboCatalog();
+    makeCombo($catalog);
+    $viewer = userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsCreate);
+
+    $this->actingAs($viewer)->get('/combos')->assertInertia(function (Assert $page) {
+        $page->where('can.create', true);
+
+        expect($page->toArray()['props']['combos']['data'][0])->toMatchArray([
+            'name' => 'Kit Oro antiderrame',
+            'code' => 'K-ORO',
+            'components_count' => 3,
+            'portal_visible' => true,
+            'status' => 'active',
+            'status_label' => 'Activo',
+        ]);
+    });
+});
+
+it('PRD-015 searches combos by name without accents or case and by code, computing the counts with the same search', function () {
+    codedCombo('Kit ecológico', 'K-ECO');
+    codedCombo('Kit Oro', 'K-ORO');
+    codedCombo('Kit ecológico viejo', 'K-OLD', ['status' => CatalogStatus::Inactive]);
+    $viewer = userWithPermissions(PermissionName::ProductsView);
+
+    $this->actingAs($viewer)->get('/combos?q=ECOLOGICO')->assertInertia(function (Assert $page) {
+        $page->where('counts', ['active' => 1, 'inactive' => 1, 'all' => 2]);
+
+        expect(listedComboNames($page))->toBe(['Kit ecológico']);
+    });
+
+    $this->actingAs($viewer)->get('/combos?q=k-or')->assertInertia(function (Assert $page) {
+        expect(listedComboNames($page))->toBe(['Kit Oro']);
+    });
+});
+
+it('PRD-015 trims the search term, cuts it to 100 characters, treats a non-string as empty and matches % and _ literally', function () {
+    codedCombo('Kit 100%', 'K-1');
+    codedCombo('Kit 100X', 'K-2');
+    $viewer = userWithPermissions(PermissionName::ProductsView);
+
+    $this->actingAs($viewer)->get('/combos?q='.urlencode('  Kit 100%  '))->assertInertia(function (Assert $page) {
+        $page->where('q', 'Kit 100%');
+
+        expect(listedComboNames($page))->toBe(['Kit 100%']);
+    });
+
+    $this->actingAs($viewer)->get('/combos?q[]=x')->assertInertia(function (Assert $page) {
+        $page->where('q', '');
+
+        expect(listedComboNames($page))->toHaveCount(2);
+    });
+
+    $this->actingAs($viewer)->get('/combos?q='.str_repeat('a', 150))->assertInertia(fn (Assert $page) => $page->where('q', str_repeat('a', 100)));
+});
+
+it('PRD-015 paginates the combo list by 15', function () {
+    foreach (range(1, 16) as $number) {
+        codedCombo(sprintf('Kit %02d', $number), sprintf('K-%02d', $number));
+    }
+
+    $viewer = userWithPermissions(PermissionName::ProductsView);
+
+    $this->actingAs($viewer)->get('/combos')->assertInertia(function (Assert $page) {
+        $page->where('combos.last_page', 2)->where('combos.total', 16);
+
+        expect(listedComboNames($page))->toHaveCount(15);
+    });
+
+    $this->actingAs($viewer)->get('/combos?page=2')->assertInertia(function (Assert $page) {
+        expect(listedComboNames($page))->toBe(['Kit 16']);
+    });
+});
+
+it('PRD-015 shows a combo with its components, quantities and the values each one admits', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog, [
+        'components' => [
+            comboComponent($catalog, 'Pañal antiderrame', 2, ['Talla' => ['3XG', '4XG', '5XG']]),
+            comboComponent($catalog, 'Absorbente', 3, ['Talla' => ['3XG'], 'Color' => ['Blanco']]),
+            comboComponent($catalog, 'Protector de cama', 1),
+        ],
+    ]);
+    $admin = userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsUpdate, PermissionName::ProductsDeactivate);
+
+    $this->actingAs($admin)->get("/combos/{$combo->id}")->assertInertia(function (Assert $page) use ($combo, $catalog) {
+        $page->component('combos/Show')
+            ->where('can', ['update' => true, 'deactivate' => true, 'delete' => false]);
+
+        $props = $page->toArray()['props']['combo'];
+
+        expect($props)->toMatchArray([
+            'id' => $combo->id,
+            'name' => 'Kit Oro antiderrame',
+            'code' => 'K-ORO',
+            'portal_visible' => true,
+            'status' => 'active',
+            'status_label' => 'Activo',
+        ])
+            ->and(collect($props['components'])->map(fn (array $component): array => [$component['product_id'], $component['product'], $component['quantity']])->all())->toBe([
+                [$catalog['products']['Pañal antiderrame']->id, 'Pañal antiderrame', 2],
+                [$catalog['products']['Absorbente']->id, 'Absorbente', 3],
+                [$catalog['products']['Protector de cama']->id, 'Protector de cama', 1],
+            ])
+            ->and($props['components'][0]['restrictions'])->toBe([['attribute' => 'Talla', 'values' => ['3XG', '4XG', '5XG']]])
+            ->and($props['components'][1]['restrictions'])->toBe([
+                ['attribute' => 'Talla', 'values' => ['3XG']],
+                ['attribute' => 'Color', 'values' => ['Blanco']],
+            ])
+            ->and($props['components'][2]['restrictions'])->toBe([]);
+    });
+});
+
+it('PRD-015 offers only active diaper-line products that are not services, with their attributes and admitted values', function () {
+    $catalog = comboCatalog();
+    $catalog['products']['Protector de cama']->forceFill(['status' => CatalogStatus::Inactive])->save();
+
+    $this->actingAs(comboCreator())->get('/combos/create')->assertInertia(function (Assert $page) {
+        $page->component('combos/Create');
+
+        $products = collect($page->toArray()['props']['products']);
+        $byName = $products->keyBy('name');
+        $labels = fn (string $product, string $attribute): array => collect($byName[$product]['attributes'])->firstWhere('name', $attribute)['values'];
+        $names = fn (array $values): array => collect($values)->pluck('label')->sort()->values()->all();
+
+        expect($products->pluck('name')->all())->toBe(['Absorbente', 'Pañal antiderrame', 'Pañal ecológico'])
+            ->and(collect($byName['Absorbente']['attributes'])->pluck('name')->all())->toBe(['Talla', 'Color'])
+            ->and($names($labels('Absorbente', 'Talla')))->toBe(['3XG', '4XG'])
+            ->and($names($labels('Absorbente', 'Color')))->toBe(['Azul', 'Blanco'])
+            ->and($names($labels('Pañal antiderrame', 'Talla')))->toBe(['3XG', '4XG', '5XG'])
+            ->and($labels('Pañal antiderrame', 'Talla')[0]['value'])->toBeInt()
+            // The color of a product that declares the fabric comes from the fabrics it admits.
+            ->and($names($labels('Pañal ecológico', 'Color')))->toBe(['Blanco', 'Crema'])
+            ->and($page->toArray()['props']['initial'])->toMatchArray(['name' => '', 'code' => '', 'portal_visible' => true, 'components' => []]);
+    });
+});
+
+it('PRD-015 keeps offering on the edit form an inactive product the combo already holds', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+    $catalog['products']['Protector de cama']->forceFill(['status' => CatalogStatus::Inactive])->save();
+    $talla = $catalog['attrs']['Talla']->id;
+
+    $this->actingAs(comboEditor())->get("/combos/{$combo->id}/edit")->assertInertia(function (Assert $page) use ($combo, $catalog, $talla) {
+        $page->component('combos/Edit')
+            ->where('combo.id', $combo->id)
+            ->where('combo.name', 'Kit Oro antiderrame')
+            ->where('combo.status', 'active');
+
+        $props = $page->toArray()['props'];
+        $initial = $props['initial'];
+
+        expect(collect($props['products'])->pluck('name')->all())->toBe(['Absorbente', 'Pañal antiderrame', 'Pañal ecológico', 'Protector de cama'])
+            ->and($initial)->toMatchArray(['name' => 'Kit Oro antiderrame', 'code' => 'K-ORO', 'portal_visible' => true])
+            ->and(collect($initial['components'])->map(fn (array $component): array => [$component['product_id'], $component['quantity']])->all())->toBe([
+                [$catalog['products']['Pañal antiderrame']->id, 2],
+                [$catalog['products']['Absorbente']->id, 3],
+                [$catalog['products']['Protector de cama']->id, 1],
+            ])
+            ->and($initial['components'][0]['values'])->toBe([$talla => comboIds($catalog, '3XG', '4XG', '5XG')])
+            ->and($initial['components'][1]['values'])->toBe([]);
+    });
 });

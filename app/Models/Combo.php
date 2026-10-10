@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CatalogStatus;
 use Database\Factories\ComboFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -74,5 +75,35 @@ class Combo extends Model
     public function components(): HasMany
     {
         return $this->hasMany(ComboComponent::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * @param  Builder<Combo>  $query
+     */
+    public function scopeWithStatus(Builder $query, CatalogStatus $status): void
+    {
+        $query->where('status', $status->value);
+    }
+
+    /**
+     * List search (PRD-015): the combo name (accent- and case-insensitive) or its registry code.
+     * `%` and `_` match literally; a blank term filters nothing.
+     *
+     * @param  Builder<Combo>  $query
+     */
+    public function scopeSearchByNameOrCode(Builder $query, string $term): void
+    {
+        $term = trim($term);
+
+        if ($term === '') {
+            return;
+        }
+
+        $pattern = '%'.addcslashes($term, '\\%_').'%';
+
+        $query->where(function (Builder $query) use ($pattern): void {
+            $query->whereRaw("`combos`.`name` collate utf8mb4_unicode_ci like ? escape '\\\\'", [$pattern])
+                ->orWhereHas('catalogCode', fn (Builder $code) => $code->whereRaw("`catalog_codes`.`code` like ? escape '\\\\'", [$pattern]));
+        });
     }
 }
