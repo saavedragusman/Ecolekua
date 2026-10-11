@@ -41,6 +41,7 @@ const props = defineProps<{
         :axes="props.axes"
         :order-attributes="props.order_attributes"
         :services="props.services"
+        :diaper="props.product.business_line === 'diapers'"
         :initial="props.combination"
     />
 </template>

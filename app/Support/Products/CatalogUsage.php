@@ -160,6 +160,25 @@ final class CatalogUsage
     }
 
     /**
+     * Codes of the combinations of the product that include at least one customization (DEC-PRD-98),
+     * whatever their status, sorted.
+     *
+     * @return list<string>
+     */
+    public static function combinationsWithIncludedCustomizations(int $productId): array
+    {
+        return array_values(DB::table('combination_customizations')
+            ->join('combinations', 'combinations.id', '=', 'combination_customizations.combination_id')
+            ->join('catalog_codes', 'catalog_codes.combination_id', '=', 'combinations.id')
+            ->where('combinations.product_id', $productId)
+            ->distinct()
+            ->orderBy('catalog_codes.code')
+            ->pluck('catalog_codes.code')
+            ->map(fn (mixed $code): string => (string) $code)
+            ->all());
+    }
+
+    /**
      * Formats names for an error message: «A», «B».
      *
      * @param  list<string>  $names

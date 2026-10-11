@@ -37,6 +37,7 @@ const props = withDefaults(
 
 const STOCK_WITH_MINIMUM = 'stock_with_minimum';
 const ON_DEMAND = 'on_demand';
+const DIAPERS = 'diapers';
 
 const stored = props.product;
 const editing = stored !== undefined;
@@ -74,6 +75,11 @@ const form = useForm<FormData>({
 
 const showsMinimum = computed(() => form.supply_mode === STOCK_WITH_MINIMUM);
 const showsCustomColor = computed(() => form.supply_mode === ON_DEMAND);
+// The diaper line has no details nor customizations (DEC-PRD-98): the sections are hidden and not
+// sent, so the backend names what a product that still holds some must drop before moving.
+const showsRelations = computed(
+    () => editing && form.business_line !== DIAPERS,
+);
 
 // Only the fields the selected mode shows travel; the relations only exist when editing.
 form.transform((data) => ({
@@ -89,7 +95,7 @@ form.transform((data) => ({
     ...(data.supply_mode === ON_DEMAND
         ? { allows_custom_color: data.allows_custom_color }
         : {}),
-    ...(editing
+    ...(showsRelations.value
         ? {
               detail_location_ids: data.detail_location_ids,
               customization_ids: data.customization_ids,
@@ -209,7 +215,7 @@ function submit(): void {
             />
         </AppCard>
 
-        <AppCard v-if="editing">
+        <AppCard v-if="showsRelations">
             <h2 class="font-headline-sm text-headline-sm text-primary">
                 Detalles
             </h2>
@@ -223,7 +229,7 @@ function submit(): void {
             />
         </AppCard>
 
-        <AppCard v-if="editing">
+        <AppCard v-if="showsRelations">
             <h2 class="font-headline-sm text-headline-sm text-primary">
                 Personalizaciones
             </h2>

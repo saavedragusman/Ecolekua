@@ -35,6 +35,7 @@ defineProps<{
         :axes="axes"
         :order-attributes="order_attributes"
         :services="services"
+        :diaper="product.business_line === 'diapers'"
         :initial="initial"
     />
 </template>

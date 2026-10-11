@@ -30,6 +30,8 @@ const props = defineProps<{
     axes: CombinationAttribute[];
     orderAttributes: CombinationAttribute[];
     services: ProductFormOption<number>[];
+    // The product is of the diaper line: its combinations include no customizations (DEC-PRD-98).
+    diaper: boolean;
     // Stored combination, or the pre-filled values of a duplicate.
     initial: CombinationFields;
 }>();
@@ -52,6 +54,15 @@ const form = useForm<CombinationFields>({
     axes: copyMap(props.initial.axes),
     restrictions: copyMap(props.initial.restrictions),
     included_customization_ids: [...props.initial.included_customization_ids],
+});
+
+// The included customizations only travel when the section is shown.
+form.transform((data) => {
+    const { included_customization_ids: included, ...rest } = data;
+
+    return props.diaper
+        ? rest
+        : { ...rest, included_customization_ids: included };
 });
 
 function valuesOf(map: CombinationValueMap, attributeId: number): number[] {
@@ -180,7 +191,7 @@ function submit(): void {
             />
         </AppCard>
 
-        <AppCard>
+        <AppCard v-if="!diaper">
             <h2 class="font-headline-sm text-headline-sm text-primary">
                 Personalizaciones incluidas
             </h2>

@@ -59,6 +59,7 @@ class UpdateProduct
 
         $this->ensureNotComboComponentChange($product, $line, $mode);
         $this->ensureNotServiceReferenced($product, $mode);
+        $this->ensureDiaperLineHasNoDetails($product, $line, $data);
 
         $product->fill([
             'name' => $data['name'],
@@ -178,6 +179,75 @@ class UpdateProduct
         if ($message !== null) {
             throw ValidationException::withMessages(['supply_mode' => $message]);
         }
+    }
+
+    /**
+     * DEC-PRD-98 / E-73: a diaper-line product declares no detail locations nor admitted
+     * customizations, and its combinations include none. Sending any is rejected on its own field.
+     * Moving a product to the diaper line is rejected while it still holds some (what the edit does
+     * not clear in the same request), naming what to remove. Runs before any write, under the
+     * product lock.
+     *
+     * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException on `detail_location_ids`, `customization_ids` and `business_line`
+     */
+    private function ensureDiaperLineHasNoDetails(Product $product, BusinessLine $line, array $data): void
+    {
+        if ($line !== BusinessLine::Diapers) {
+            return;
+        }
+
+        $sentLocations = array_key_exists('detail_location_ids', $data) ? $this->ids($data['detail_location_ids']) : null;
+        $sentServices = array_key_exists('customization_ids', $data) ? $this->ids($data['customization_ids']) : null;
+        $errors = [];
+
+        if ($sentLocations !== null && $sentLocations !== []) {
+            $errors['detail_location_ids'] = __('validation.diaper_no_details');
+        }
+
+        if ($sentServices !== null && $sentServices !== []) {
+            $errors['customization_ids'] = __('validation.diaper_no_customizations');
+        }
+
+        if ($product->business_line !== BusinessLine::Diapers) {
+            $parts = [];
+            $locations = $sentLocations === null ? $this->sortedNames($product->detailLocations()->pluck('detail_locations.name')->all()) : [];
+            $services = $sentServices === null ? $this->sortedNames($product->customizations()->pluck('products.name')->all()) : [];
+            $codes = CatalogUsage::combinationsWithIncludedCustomizations($product->id);
+
+            if ($locations !== []) {
+                $parts[] = __('validation.diaper_line_blocked_details', ['names' => CatalogUsage::quote($locations)]);
+            }
+
+            if ($services !== []) {
+                $parts[] = __('validation.diaper_line_blocked_customizations', ['names' => CatalogUsage::quote($services)]);
+            }
+
+            if ($codes !== []) {
+                $parts[] = __('validation.diaper_line_blocked_included', ['names' => CatalogUsage::quote($codes)]);
+            }
+
+            if ($parts !== []) {
+                $errors['business_line'] = __('validation.diaper_line_blocked', ['items' => implode('; ', $parts)]);
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $names
+     * @return list<string>
+     */
+    private function sortedNames(array $names): array
+    {
+        $names = array_map(fn (mixed $name): string => (string) $name, $names);
+        sort($names, SORT_STRING | SORT_FLAG_CASE);
+
+        return $names;
     }
 
     /**

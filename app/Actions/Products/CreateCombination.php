@@ -54,6 +54,8 @@ class CreateCombination
     {
         $product = Product::query()->lockForUpdate()->findOrFail($product->id);
 
+        ProductCombinations::ensureIncludedCustomizationsAllowed($product, $data['included_customization_ids'] ?? null);
+
         ['axes' => $axes, 'restrictions' => $restrictions] = CombinationRules::validate(
             ProductCombinations::declared($product),
             $data['axes'] ?? [],

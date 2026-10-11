@@ -794,3 +794,33 @@ Existing tests changed because of this slice (not weakened): `ProtectedByDefault
 - `ImageProcessor` now reads the EXIF Orientation of JPEG uploads (`exif_read_data` over an in-memory stream, warnings suppressed; missing, unreadable or out-of-range values count as 1) and rotates / mirrors the decoded pixels with `imagerotate` / `imageflip` before the two variants are resized. PNG and WebP are untouched. The size, header and dimension bounds still run before decoding; EXIF is still not written to the output.
 - Tests (`ImageProcessorTest`, test helper `FictitiousImage::jpegWithOrientation` builds a four-quadrant JPEG and injects an APP1 Exif segment by bytes): `DT-03 applies the EXIF orientation before dropping it` (no EXIF and orientations 1-8, asserting dimensions and quadrant colors), unknown value 9, PNG/WebP untouched, size bound after a side swap. RED: 27 tests, 19 passed, 8 failed. GREEN: 27 passed (69 assertions).
 - `ext-exif` is not declared in `composer.json`: the code guards with `function_exists('exif_read_data')` and falls back to orientation 1, so no lock change was needed.
+
+## Fix DEC-PRD-98 — Diaper line without details or customizations (tasks D98.1-D98.4, E-73)
+
+Decision confirmed 2026-10-10, option A, registered in the spec first (docs commit `89aac7a`).
+
+### TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| D98.1-D98.2 backend | `tests/Feature/Products/DiaperLineDetailsTest.php` (10 tests): 3 passed, 7 failed (expected 422 got 302 on diaper detail/customization/included customization/line change; `product.business_line` missing in the combination editor props) | 10 passed; `tests/Feature/Products` 507 passed after one existing exact-props assertion in `CombinationTest` gained `business_line` | none needed |
+| D98.3 frontend | no frontend runner (R-6): covered by the page-props test | `pnpm types:check` and `pnpm build` pass | — |
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail artisan test tests/Feature/Products/DiaperLineDetailsTest.php tests/Feature/Products/CombinationTest.php`: 62 passed |
+| Runtime harness | Real HTTP PUT / POST against MySQL (Actions in their transactions under the product lock). Manual check of the hidden sections in a browser: **PENDING for the human** |
+| Rollback boundary | `UpdateProduct::ensureDiaperLineHasNoDetails`, `ProductCombinations::ensureIncludedCustomizationsAllowed` and its two call sites, `CatalogUsage::combinationsWithIncludedCustomizations`, the `diaper_*` lang keys, `business_line` in `combinationSubject`, the four Vue files and the type, the new test file |
+
+### Slice-close gate
+
+- `sail pint` / `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass. `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1462 tests, 1460 passed, 2 skipped.
+
+### Notes
+
+- Backend: `UpdateProduct` rejects a non-empty `detail_location_ids` / `customization_ids` for a diaper on its own field, and a move to the diaper line (`business_line` error) naming the detail locations, admitted customizations and combination codes still held (what the same edit clears with an empty list is not counted; an omitted list keeps the stored set). `CreateCombination` / `UpdateCombination` reject a non-empty `included_customization_ids` for a diaper product on that field. Guards run in the Actions, inside the transaction, so the importer goes through them too.
+- Registration (`POST /products`) does not accept detail locations or customizations (they are set when editing), so no registration clause exists to enforce.
+- UI: `ProductForm.vue` and `products/Show.vue` hide the sections for `business_line = diapers` (the form does not send the lists, so a product that still holds some gets the backend message naming them); `CombinationForm.vue` takes a `diaper` prop (from the new `product.business_line` in the editor props), hides "Personalizaciones incluidas" and does not send the list; the "Incluye" column is hidden on the product page.
+- Existing diaper data is not modified or cleaned: a stored diaper that already holds details keeps them until edited (no migration was requested). No seeder or import creates diaper details. Not covered by the decision: see report.

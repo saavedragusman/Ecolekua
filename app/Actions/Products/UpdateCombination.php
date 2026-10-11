@@ -54,6 +54,8 @@ class UpdateCombination
 
         $this->ensureEditableWithoutHistory($combination);
 
+        ProductCombinations::ensureIncludedCustomizationsAllowed($product, $data['included_customization_ids'] ?? null);
+
         $before = CombinationAudit::snapshot($combination);
 
         ['axes' => $axes, 'restrictions' => $restrictions] = CombinationRules::validate(

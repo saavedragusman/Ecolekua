@@ -356,10 +356,10 @@ Depends on all phases.
 
 Depends on Phase 21. Covers PRD-007, PRD-008, E-73, DEC-PRD-98 (confirmed 2026-10-10, option A). Branch `feat/003-products-dec98-diaper-line`.
 
-- [ ] D98.1 RED — Add `E-73` tests (HTTP level) in the existing product and combination feature tests: a diaper product registered or edited with a detail location or an admitted customization → 422; a diaper combination saved with an included customization → 422; a uniforms product with details, admitted customizations or combinations with included customizations changed to the diaper line → 422 naming what to remove, nothing changes; page props let the UI hide the sections. Expected: fail. [PRD-007, PRD-008, E-73, DEC-PRD-98]
-- [ ] D98.2 GREEN backend — Rules in the request/rules layer and the Actions (inside the existing transaction), Spanish messages in `lang/es/validation.php` naming the items to remove. Run the tests: GREEN. [DEC-PRD-98]
-- [ ] D98.3 GREEN frontend — `ProductForm.vue`, `products/Show.vue` and `CombinationForm.vue` hide the detail, customization and included-customization sections for the diaper line and do not send them. Presentation only. [DEC-PRD-98]
-- [ ] D98.4 Gate — `sail pint` then `pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): rechazar detalles y personalizaciones en productos de pañales [PRD-007, PRD-008, DEC-PRD-98, E-73]`.
+- [x] D98.1 RED — Add `E-73` tests (HTTP level) in the existing product and combination feature tests: a diaper product registered or edited with a detail location or an admitted customization → 422; a diaper combination saved with an included customization → 422; a uniforms product with details, admitted customizations or combinations with included customizations changed to the diaper line → 422 naming what to remove, nothing changes; page props let the UI hide the sections. Expected: fail. [PRD-007, PRD-008, E-73, DEC-PRD-98]
+- [x] D98.2 GREEN backend — Rules in the request/rules layer and the Actions (inside the existing transaction), Spanish messages in `lang/es/validation.php` naming the items to remove. Run the tests: GREEN. [DEC-PRD-98]
+- [x] D98.3 GREEN frontend — `ProductForm.vue`, `products/Show.vue` and `CombinationForm.vue` hide the detail, customization and included-customization sections for the diaper line and do not send them. Presentation only. [DEC-PRD-98]
+- [x] D98.4 Gate — `sail pint` then `pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): rechazar detalles y personalizaciones en productos de pañales [PRD-007, PRD-008, DEC-PRD-98, E-73]`.
 
 ## Coverage Matrix
 

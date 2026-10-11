@@ -132,12 +132,17 @@ function deleteCombination(): void {
     });
 }
 
+// The diaper line has no details nor customizations, admitted or included (DEC-PRD-98).
+const isDiaper = computed(() => props.product.business_line === 'diapers');
+
 // The "Acciones" column only exists when the user can act on combinations.
 const combinationColumns = computed<DataTableColumn[]>(() => [
     { key: 'code', label: 'Código' },
     { key: 'name', label: 'Combinación' },
     { key: 'restrictions', label: 'Restricciones' },
-    { key: 'included_customizations', label: 'Incluye' },
+    ...(isDiaper.value
+        ? []
+        : [{ key: 'included_customizations', label: 'Incluye' }]),
     { key: 'status', label: 'Estado' },
     ...(props.can.update ||
     props.can.createCombination ||
@@ -347,7 +352,7 @@ const EMPTY = 'No registrado';
             </div>
         </AppCard>
 
-        <AppCard>
+        <AppCard v-if="!isDiaper">
             <h2 :class="H2">Detalles</h2>
             <p v-if="product.detail_locations.length === 0" :class="VALUE">
                 El producto no admite detalles.
@@ -368,7 +373,7 @@ const EMPTY = 'No registrado';
             </ul>
         </AppCard>
 
-        <AppCard>
+        <AppCard v-if="!isDiaper">
             <h2 :class="H2">Personalizaciones</h2>
             <p v-if="product.customizations.length === 0" :class="VALUE">
                 El producto no admite personalizaciones.
