@@ -44,8 +44,9 @@ class DeleteProduct
             $this->ensureServiceNotInUse($product);
             $this->ensureHasNoHistory($product);
 
-            $copy = $this->copy($product);
-            $files = array_values(array_filter([$product->image_display_path, $product->image_thumb_path]));
+            $templateFiles = array_values($product->templates()->pluck('svg_path')->map(fn (mixed $path): string => (string) $path)->all());
+            $copy = $this->copy($product, $templateFiles);
+            $files = array_values(array_filter([$product->image_display_path, $product->image_thumb_path, ...$templateFiles]));
 
             $product->delete();
 
@@ -117,12 +118,12 @@ class DeleteProduct
     /**
      * Full copy of the aggregate in audit form (design "Audit payloads"): general data, admitted
      * detail locations and customizations as sorted names, structure, every combination with its
-     * code and own minimums. `template_files` stays empty until the SVG templates exist (Phase 22
-     * lists their file names here).
+     * code and own minimums, and the paths of the template files (deleted after the commit).
      *
+     * @param  list<string>  $templateFiles
      * @return array<string, mixed>
      */
-    private function copy(Product $product): array
+    private function copy(Product $product, array $templateFiles): array
     {
         $names = function (string $relation, string $column) use ($product): array {
             $names = $product->{$relation}()->pluck($column)->map(fn (mixed $name): string => (string) $name)->all();
@@ -142,7 +143,7 @@ class DeleteProduct
             'structure' => ProductAudit::structure($product->productAttributes()->with(['catalogAttribute', 'allowedValues'])->get()),
             'combinations' => $combinations,
             'stock_minimum_overrides' => StockMinimum::snapshot($product),
-            'template_files' => [],
+            'template_files' => $templateFiles,
         ];
     }
 }

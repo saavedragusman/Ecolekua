@@ -6,11 +6,13 @@ use App\Actions\Audit\RecordAuditEvent;
 use App\Enums\AuditAction;
 use App\Enums\BusinessLine;
 use App\Enums\SupplyMode;
+use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Products\CatalogUsage;
 use App\Support\Products\ProductAudit;
 use App\Support\Products\StockMinimum;
+use App\Support\Products\TemplateLayerGuard;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -271,15 +273,22 @@ class UpdateProduct
     }
 
     /**
-     * Hook for PRD-020 / DEC-PRD-52: adding a location whose `svg_layer` is missing from any
-     * template of the product is rejected with the missing layer. Templates arrive in Phase 21;
-     * task 22.7 fills this hook with the layer requirements check.
+     * PRD-020: adding a location whose `svg_layer` is missing from any template of the product is
+     * rejected with the missing layer. Locations the product already admitted are not checked.
      *
      * @param  list<int>  $addedLocationIds
+     *
+     * @throws ValidationException on `detail_location_ids`
      */
     private function ensureNoDetailLocationLayerGap(Product $product, array $addedLocationIds): void
     {
-        // Intentionally empty until task 22.7.
+        if ($addedLocationIds === []) {
+            return;
+        }
+
+        $layers = DetailLocation::query()->whereIn('id', $addedLocationIds)->whereNotNull('svg_layer')->pluck('svg_layer')->all();
+
+        TemplateLayerGuard::ensureTemplatesHaveLayers($product->id, array_values(array_map(strval(...), $layers)), 'detail_location_ids');
     }
 
     /**

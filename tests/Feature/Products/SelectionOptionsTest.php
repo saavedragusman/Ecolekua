@@ -500,7 +500,8 @@ it('DT-02 query bound: the options of a component cost the same number of querie
         $fewCount = resQueryCount(fn () => optRun($fewInput));
         $manyCount = resQueryCount(fn () => optRun($manyInput));
 
+        // 10 to load the combo and its products (the templates query of PRD-020 is the tenth) + 1 for the palette.
         expect($manyCount)->toBe($fewCount)
-            ->and($manyCount)->toBeLessThanOrEqual(10);
+            ->and($manyCount)->toBeLessThanOrEqual(11);
     }
 });

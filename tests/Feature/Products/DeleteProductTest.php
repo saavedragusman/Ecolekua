@@ -8,6 +8,7 @@ use App\Models\Combination;
 use App\Models\Combo;
 use App\Models\ComboComponent;
 use App\Models\Product;
+use App\Models\ProductTemplate;
 use App\Models\StockMinimumOverride;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -136,6 +137,22 @@ it('E-27 deletes the stored images of the product only after the commit', functi
 
     expect(Storage::disk('local')->exists('catalog/products/1/display.webp'))->toBeFalse()
         ->and(Storage::disk('local')->exists('catalog/products/1/thumb.webp'))->toBeFalse();
+});
+
+it('E-27 lists the template files in the audit copy and deletes them only after the commit', function () {
+    Storage::fake('local');
+    $catalog = resCatalog();
+    $pantalon = $catalog['pantalon'];
+    $path = "catalog/templates/{$pantalon->id}/01abc.svg";
+    ProductTemplate::factory()->for($pantalon)->create(['svg_path' => $path]);
+    Storage::disk('local')->put($path, '<svg/>');
+
+    $this->actingAs(deleter())->delete("/products/{$pantalon->id}")->assertRedirect('/products');
+
+    $audit = AuditLog::query()->where('action', AuditAction::ProductDeleted->value)->sole();
+    expect($audit->old_values['template_files'])->toBe([$path])
+        ->and(ProductTemplate::query()->count())->toBe(0)
+        ->and(Storage::disk('local')->exists($path))->toBeFalse();
 });
 
 it('E-28 rejects deleting a product that is a combo component, names the combo and suggests deactivating', function () {

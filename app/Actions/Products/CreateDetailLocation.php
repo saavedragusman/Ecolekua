@@ -8,6 +8,7 @@ use App\Enums\CatalogStatus;
 use App\Models\DetailLocation;
 use App\Models\User;
 use App\Support\Audit\AuditOrigin;
+use App\Support\Products\TemplateLayerGuard;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -61,13 +62,15 @@ class CreateDetailLocation
     }
 
     /**
-     * Hook for DEC-PRD-53 / E-72: assigning a non-null `svg_layer` must be rejected while a product
-     * that admits the location has a template without that layer. A new location is admitted by no
-     * product yet, so this call site only matters once imports can create it already linked; task
-     * 22.7 fills it with `CatalogUsage::productsMissingLayer()`.
+     * DEC-PRD-53 / E-72: assigning a non-null `svg_layer` is rejected while a product that admits the
+     * location has a template without that layer. A new location is admitted by no product yet, so
+     * the check finds nothing today; it stays so the rule holds if a location is ever created already
+     * admitted. A null layer never runs it.
      */
     private function ensureNoProductMissesLayer(DetailLocation $location): void
     {
-        // Intentionally empty until task 22.7.
+        if ($location->svg_layer !== null) {
+            TemplateLayerGuard::ensureLayerFitsProducts('location', $location->id, $location->svg_layer);
+        }
     }
 }

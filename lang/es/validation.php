@@ -67,6 +67,17 @@ return [
     'image_format' => 'El archivo no es una imagen válida. Use JPG, PNG o WebP.',
     'image_dimensions' => 'La imagen es demasiado grande: su lado más largo no puede superar :side px. Reduzca su tamaño antes de subirla.',
 
+    // SVG templates of products (spec 003, PRD-020, E-37..E-41).
+    'template_required' => 'Elija un archivo SVG.',
+    'template_upload_failed' => 'No se pudo subir la plantilla. Verifique que pese 2 MB o menos.',
+    'template_size' => 'La plantilla no puede superar 2 MB.',
+    'template_format' => 'El archivo no es un SVG válido.',
+    'template_doctype' => 'El SVG no puede declarar DOCTYPE ni entidades.',
+    'template_missing_layers' => 'A la plantilla le faltan estas capas: :layers.',
+    'template_variant_invalid' => 'El género elegido no es uno de los que admite el producto.',
+    'template_layer_conflict' => 'No se puede asignar la capa «:layer»: a alguna plantilla de estos productos le falta esa capa: :products.',
+    'template_layer_added' => 'A alguna plantilla del producto le faltan estas capas: :layers. Suba una plantilla que las incluya antes de añadir el cambio.',
+
     // Products (spec 003).
     'product_name_unique' => 'Ya existe un producto con ese nombre.',
     'product_category_unavailable' => 'Elija una categoría activa.',

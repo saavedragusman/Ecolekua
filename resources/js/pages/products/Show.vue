@@ -8,6 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
 import ImageUploader from '@/components/products/ImageUploader.vue';
+import TemplateUploader from '@/components/products/TemplateUploader.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { FOCUS_RING } from '@/lib/ui';
@@ -445,17 +446,29 @@ const EMPTY = 'No registrado';
                         <template v-else>Sin imagen principal</template>
                     </dd>
                 </div>
-                <div class="flex flex-col">
+                <div v-if="!can.update" class="flex flex-col">
                     <dt :class="LABEL">Plantillas</dt>
                     <dd :class="VALUE">
                         {{
                             product.images.templates.length > 0
-                                ? product.images.templates.join(', ')
+                                ? product.images.templates
+                                      .map(
+                                          (template) =>
+                                              template.variant ?? 'General',
+                                      )
+                                      .join(', ')
                                 : 'Sin plantillas'
                         }}
                     </dd>
                 </div>
             </dl>
+            <TemplateUploader
+                v-if="can.update"
+                :product-id="product.id"
+                :product-name="product.name"
+                :templates="product.images.templates"
+                :variants="product.template_variants"
+            />
         </AppCard>
 
         <div class="flex flex-col gap-space-sm md:flex-row">

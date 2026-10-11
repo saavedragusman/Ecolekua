@@ -5,6 +5,7 @@ namespace App\Support\Products;
 use App\Enums\CatalogStatus;
 use App\Models\CatalogAttribute;
 use App\Models\Product;
+use App\Support\Products\Assets\TemplateLayerRequirements;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -176,6 +177,98 @@ final class CatalogUsage
             ->pluck('catalog_codes.code')
             ->map(fn (mixed $code): string => (string) $code)
             ->all());
+    }
+
+    /**
+     * Layers a template of the product must have (PRD-020, E-37): `cuerpo`, the layer of every value
+     * the product admits and the layer of every detail location it admits, whatever their status.
+     *
+     * @return list<string>
+     */
+    public static function requiredTemplateLayers(int $productId): array
+    {
+        $values = DB::table('product_attribute_values')
+            ->join('product_attributes', 'product_attributes.id', '=', 'product_attribute_values.product_attribute_id')
+            ->join('attribute_values', 'attribute_values.id', '=', 'product_attribute_values.attribute_value_id')
+            ->where('product_attributes.product_id', $productId)
+            ->whereNotNull('attribute_values.svg_layer')
+            ->pluck('attribute_values.svg_layer');
+
+        $locations = DB::table('product_detail_locations')
+            ->join('detail_locations', 'detail_locations.id', '=', 'product_detail_locations.detail_location_id')
+            ->where('product_detail_locations.product_id', $productId)
+            ->whereNotNull('detail_locations.svg_layer')
+            ->pluck('detail_locations.svg_layer');
+
+        return TemplateLayerRequirements::required(
+            array_values(array_map(strval(...), $values->all())),
+            array_values(array_map(strval(...), $locations->all())),
+        );
+    }
+
+    /**
+     * Names of the products that admit the value or the location and have a template without the
+     * layer (DEC-PRD-53, E-72), sorted. Products without templates are not affected.
+     *
+     * @param  'value'|'location'  $kind
+     * @return list<string>
+     */
+    public static function productsMissingLayer(string $kind, int $id, string $layer): array
+    {
+        $products = $kind === 'value'
+            ? DB::table('product_attribute_values')
+                ->join('product_attributes', 'product_attributes.id', '=', 'product_attribute_values.product_attribute_id')
+                ->where('product_attribute_values.attribute_value_id', $id)
+                ->pluck('product_attributes.product_id')
+            : DB::table('product_detail_locations')->where('detail_location_id', $id)->pluck('product_id');
+
+        if ($products->isEmpty()) {
+            return [];
+        }
+
+        $affected = [];
+
+        foreach (DB::table('product_templates')->whereIn('product_id', $products->all())->get(['product_id', 'layers']) as $template) {
+            /** @var list<string> $layers */
+            $layers = json_decode((string) $template->layers, true) ?: [];
+
+            if (TemplateLayerRequirements::missing($layers, [$layer]) !== []) {
+                $affected[] = (int) $template->product_id;
+            }
+        }
+
+        if ($affected === []) {
+            return [];
+        }
+
+        return array_values(DB::table('products')->whereIn('id', array_unique($affected))->orderBy('name')->pluck('name')->map(strval(...))->all());
+    }
+
+    /**
+     * The given layers that at least one template of the product lacks (PRD-020, E-40), sorted. A
+     * product without templates lacks nothing.
+     *
+     * @param  list<string>  $layers
+     * @return list<string>
+     */
+    public static function layersMissingFromTemplates(int $productId, array $layers): array
+    {
+        if ($layers === []) {
+            return [];
+        }
+
+        $missing = [];
+
+        foreach (DB::table('product_templates')->where('product_id', $productId)->pluck('layers') as $json) {
+            /** @var list<string> $templateLayers */
+            $templateLayers = json_decode((string) $json, true) ?: [];
+            $missing = [...$missing, ...TemplateLayerRequirements::missing($templateLayers, $layers)];
+        }
+
+        $missing = array_values(array_unique($missing));
+        sort($missing, SORT_STRING);
+
+        return $missing;
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Support\Products;
 use App\Models\AttributeValue;
 use App\Models\Product;
 use App\Models\ProductAttribute;
+use App\Models\ProductTemplate;
 
 /**
  * Audit form of the general data of a product (design "Audit payloads"): enum values as strings
@@ -29,6 +30,22 @@ final class ProductAudit
             'allows_custom_color' => $product->allows_custom_color,
             'portal_visible' => $product->portal_visible,
             'status' => $product->status->value,
+        ];
+    }
+
+    /**
+     * Audit form of a template (`products.template_uploaded` / `products.template_removed`): the
+     * original file name, the name of the gender value it is for (null for the general template)
+     * and its layers. The template must be loaded with `variantValue`.
+     *
+     * @return array{file: string, variant: string|null, layers: list<string>}
+     */
+    public static function template(ProductTemplate $template): array
+    {
+        return [
+            'file' => $template->original_name,
+            'variant' => $template->variantValue?->name,
+            'layers' => $template->layers,
         ];
     }
 
