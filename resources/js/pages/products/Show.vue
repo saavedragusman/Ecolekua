@@ -161,7 +161,7 @@ const EMPTY = 'No registrado';
 <template>
     <Head :title="product.name" />
 
-    <div class="mx-auto flex w-full max-w-4xl flex-col gap-space-md">
+    <div class="mx-auto flex w-full max-w-7xl flex-col gap-space-md">
         <AppCard>
             <div
                 class="flex flex-col gap-space-sm md:flex-row md:items-center md:justify-between"
