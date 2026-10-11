@@ -367,6 +367,7 @@ A product MAY declare the detail locations it admits (pechera, orilla de pechera
 - Details MUST be optional when selecting the product.
 - Details MUST NOT affect the price and are a specification for production (DEC-PRD-07).
 - Buttons are transparent and are not chosen (business rules §26).
+- A product of the diaper line MUST NOT declare detail locations: the backend MUST reject it and the interface MUST NOT show the section. Changing a product to the diaper line while it has detail locations MUST be rejected and indicate which ones to remove (DEC-PRD-98).
 
 #### Scenario: E-19 — Color de detalle inválido
 
@@ -385,6 +386,7 @@ Customizations are added to the garment or included in certain combinations (DEC
 - Included and admitted customizations are independent (DEC-PRD-47): "included" describes what the combination's price covers and "admitted" is what can be added as an extra. For example, `139-1` (mono escolar "C/VINIL") includes vinyl without the product offering additional vinyl.
 - Quantity, price and the relationship with the order are defined by `004` and `006`.
 - An active service visible in the portal is also sold on its own (e.g., sublimation on a garment of the customer) (DEC-PRD-28).
+- A product of the diaper line MUST NOT declare admitted customizations and its combinations MUST NOT declare included customizations: the backend MUST reject it and the interface MUST NOT show those sections. Changing a product to the diaper line while it has admitted customizations, or combinations with included customizations, MUST be rejected and indicate which ones to remove (DEC-PRD-98).
 
 #### Scenario: E-34 — Personalización no admitida
 
@@ -882,6 +884,16 @@ Source citation: (PRD-020, DEC-PRD-53)
 - GIVEN the value "Manga 3/4" with the layer `manga-3-4`, admitted by a product whose template has that layer but not `manga-tres-cuartos`
 - WHEN the layer of "Manga 3/4" is changed in the catalog to `manga-tres-cuartos`
 - THEN the backend rejects the change, indicates the affected product and the value does not change
+
+#### Scenario: E-73 — Detalles y personalizaciones en un pañal
+
+Source citation: (PRD-007, PRD-008, DEC-PRD-98)
+
+- GIVEN a product of the diaper line, a product of the uniforms line with a detail location, an admitted customization and a combination with an included customization
+- WHEN the diaper is registered or edited with a detail location or an admitted customization, or a combination of the diaper is registered or edited with an included customization
+- THEN the backend rejects each attempt and nothing changes
+- AND when the uniforms product is changed to the diaper line, the backend rejects the change, indicates the detail locations, admitted customizations and combinations with included customizations to remove, and the line does not change
+- AND the detail page and the form of a diaper-line product do not show the detail or customization sections, nor does the combination editor show included customizations
 
 ## Interface constraints (ERP, source §8)
 
