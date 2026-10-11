@@ -744,3 +744,10 @@ RED run: `sail artisan test --filter=<the 15 new test names>`: 15 tests, 0 passe
 - Interpretations (no [DEC-PENDIENTE]): (1) structure entries are sent in the order shown (axes can be moved among axes only); (2) held inactive attributes and values appear in the structure editor so a save does not silently drop them (DEC-PRD-51 / DEC-PRD-55 pattern); (3) "Nueva combinación" stays for Phase 19.
 - Process note: one append to `resources/js/types/products.ts` (and an empty no-op append to a test file) was made with a shell heredoc by mistake, against the Edit/Write-only rule; the content is ordinary and was formatted by `pnpm check:fix`.
 - Manual checks pending for the human (18.5): create, edit (including mode switch and stock overrides) and structure (add, remove, reorder axes) flows at 375 and 1280 px.
+
+## Phase 19 — Task 19.5 fix: combination row actions on the product page (COMPLETE, manual check pending)
+
+- Plan gap authorized by the user: PRD-013 / PRD-014 require deactivating, reactivating and deleting combinations, and the backend existed and was tested, but no task covered the UI.
+- No RED/backend change: the product page already exposes `can.deactivate` and `can.delete`, which resolve to the same permissions (`products.deactivate`, `products.delete`) as `CombinationPolicy`; the existing tests already assert them. The repo has no JS test runner, so the change is frontend-only and verified by the gate and a manual check.
+- `resources/js/pages/products/Show.vue`: "Acciones" column now also appears with `can.deactivate` or `can.delete`; per row "Desactivar" (active, `ConfirmDialog`), "Reactivar" (inactive, no confirmation), "Eliminar" (`ConfirmDialog` danger, irreversible; combo or history rejection returns as the error flash). Wayfinder `activate` / `deactivate` / `destroy` of `@/routes/products/combinations`, `preserveScroll: true`. The same slot feeds the mobile cards.
+- Manual checks for the human: deactivate / reactivate / delete a combination at 375 and 1280 px; reactivating an overlapping combination and deleting one that belongs to a combo show the error flash and change nothing.
