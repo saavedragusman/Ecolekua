@@ -361,6 +361,15 @@ Depends on Phase 21. Covers PRD-007, PRD-008, E-73, DEC-PRD-98 (confirmed 2026-1
 - [x] D98.3 GREEN frontend — `ProductForm.vue`, `products/Show.vue` and `CombinationForm.vue` hide the detail, customization and included-customization sections for the diaper line and do not send them. Presentation only. [DEC-PRD-98]
 - [x] D98.4 Gate — `sail pint` then `pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): rechazar detalles y personalizaciones en productos de pañales [PRD-007, PRD-008, DEC-PRD-98, E-73]`.
 
+## Fix DEC-PRD-100: no SVG layer on Tela, Talla or Género values
+
+Depends on Fix DEC-PRD-97. Covers PRD-020, DEC-PRD-100 (confirmed 2026-10-11, option A; complementary case option B). Branch `feat/003-products-22-svg-templates`.
+
+- [x] D100.1 RED — `DEC-PRD-100` tests in `AttributeCatalogTest.php`: creating or updating a value with a layer in a Tela, Talla or Género attribute → 422 and nothing written; null layer accepted; attribute without special use still accepts a layer; an unused attribute gaining a special use clears its values' layers with one audit row per layered value; a declared attribute gaining it stays rejected (DEC-PRD-51) with layers unchanged; page prop `attribute.special_use`. Observed RED: 15 tests, 9 failed (create and update rejections and the clearing, each over Tela, Talla and Género), 6 passed as regression guards. [PRD-020, DEC-PRD-100]
+- [x] D100.2 GREEN backend — `CatalogRules::valueRules` rejects a non-empty `svg_layer` when the attribute has a special use (message `validation.value_layer_special_use_prohibited`); `UpdateCatalogAttribute` clears and audits the layers when an unused attribute gains a special use, inside the existing transaction. Observed GREEN: `--filter=DEC-PRD-100` 15/15; `--filter=Catalog` 249/249. [DEC-PRD-100]
+- [x] D100.3 GREEN frontend — `ValueForm.vue` receives `specialUse`, hides "Capa del SVG" and does not send `svg_layer` for Tela, Talla and Género values; `AttributeShow.vue` passes it. Presentation only. [DEC-PRD-100]
+- [x] D100.4 Gate — `sail pint` then `pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test` (1555 tests, 1553 passed, 2 skipped). Commit: `feat(003): rechazar capa SVG en valores de Tela, Talla y Género [PRD-020, DEC-PRD-100]`.
+
 ## Coverage Matrix
 
 ### PRD / §4 to phases

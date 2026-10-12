@@ -17,7 +17,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Edits the name, presentation and special use of an attribute (PRD-002). Order and status have
  * their own Actions. The audit row carries only the fields that changed and nothing is written when
- * nothing changed. Becoming color clears the SVG layer of the attribute's values (DEC-PRD-97).
+ * nothing changed. Becoming color (DEC-PRD-97) or gaining a special use (DEC-PRD-100) clears the SVG
+ * layer of the attribute's values.
  */
 class UpdateCatalogAttribute
 {
@@ -104,12 +105,18 @@ class UpdateCatalogAttribute
      * DEC-PRD-97: the values of a color attribute carry no SVG layer, so when an attribute becomes
      * color its values lose theirs in the same transaction, one audit row per value with the
      * previous layer. Runs after the in-use check, so only attributes no product declares get here.
+     * DEC-PRD-100: the same happens when the attribute gains the special use Tela, Talla or Género.
      *
      * @param  array<string, mixed>  $data
      */
     private function clearLayersForColor(CatalogAttribute $attribute, array $data, User $actor): void
     {
-        if ($data['presentation'] !== AttributePresentation::Color->value || $attribute->presentation === AttributePresentation::Color) {
+        $becomesColor = $data['presentation'] === AttributePresentation::Color->value
+            && $attribute->presentation !== AttributePresentation::Color;
+        // DEC-PRD-100: same criterion when the attribute gains the Tela, Talla or Género special use.
+        $gainsSpecialUse = isset($data['special_use']) && $data['special_use'] !== $attribute->special_use?->value;
+
+        if (! $becomesColor && ! $gainsSpecialUse) {
             return;
         }
 

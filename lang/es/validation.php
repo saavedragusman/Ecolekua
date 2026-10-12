@@ -54,6 +54,7 @@ return [
     'attribute_fabric_not_color' => 'El atributo de tela no puede tener presentación de color.',
     'value_name_unique' => 'Ya existe un valor con ese nombre en este atributo.',
     'value_layer_color_prohibited' => 'Los valores de color no llevan capa SVG: su tono pinta la capa del cuerpo.',
+    'value_layer_special_use_prohibited' => 'Los valores de tela, talla y género no llevan capa SVG: la talla no se dibuja, el género elige la plantilla y la tela se ve en su miniatura.',
     'value_layer_reserved' => 'Esa capa está reservada para la vista previa de la plantilla.',
     'location_name_unique' => 'Ya existe una ubicación de detalle con ese nombre.',
     'offered_colors_not_fabric' => 'Solo los valores del atributo de tela tienen colores ofrecidos.',

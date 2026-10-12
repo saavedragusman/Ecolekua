@@ -499,6 +499,130 @@ it('DEC-PRD-97 leaves the svg layers untouched when a declared attribute is reje
         ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
 });
 
+it('DEC-PRD-100 rejects an svg layer on a new value of a Tela, Talla or Género attribute and writes nothing', function (string $state, string $name) {
+    $attribute = CatalogAttribute::factory()->{$state}()->create();
+
+    $this->actingAs(attributeManager())
+        ->postJson("/catalog/attributes/{$attribute->id}/values", ['name' => $name, 'svg_layer' => 'valor-con-capa'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect(AttributeValue::query()->count())->toBe(0)
+        ->and(attributeAuditRows(AuditAction::CatalogCreated)->count())->toBe(0);
+})->with([
+    'Tela' => ['fabric', 'Drill'],
+    'Talla' => ['size', 'M'],
+    'Género' => ['gender', 'Dama'],
+]);
+
+it('DEC-PRD-100 rejects an svg layer on an existing value of a Tela, Talla or Género attribute and changes nothing', function (string $state, string $name) {
+    $attribute = CatalogAttribute::factory()->{$state}()->create();
+    $value = AttributeValue::factory()->for($attribute)->create(['name' => $name]);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/values/{$value->id}", ['name' => "{$name} 2", 'svg_layer' => 'valor-con-capa'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect($value->fresh()->name)->toBe($name)
+        ->and($value->fresh()->svg_layer)->toBeNull()
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated)->count())->toBe(0);
+})->with([
+    'Tela' => ['fabric', 'Drill'],
+    'Talla' => ['size', 'M'],
+    'Género' => ['gender', 'Dama'],
+]);
+
+it('DEC-PRD-100 still accepts an empty svg layer on the values of a Tela, Talla or Género attribute', function (string $state) {
+    $attribute = CatalogAttribute::factory()->{$state}()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$attribute->id}/values", ['name' => 'Valor', 'svg_layer' => null])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Valor renombrado', 'svg_layer' => null])
+        ->assertRedirect();
+
+    expect($value->fresh()->name)->toBe('Valor renombrado')
+        ->and($value->fresh()->svg_layer)->toBeNull();
+})->with(['fabric', 'size', 'gender']);
+
+it('DEC-PRD-100 keeps accepting an svg layer on the values of an attribute without special use', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    CatalogAttribute::factory()->size()->create();
+
+    $this->actingAs(attributeManager())
+        ->postJson("/catalog/attributes/{$sleeves->id}/values", ['name' => 'Corta', 'svg_layer' => 'manga-corta'])
+        ->assertRedirect();
+
+    expect(AttributeValue::query()->sole()->svg_layer)->toBe('manga-corta');
+});
+
+it('DEC-PRD-100 clears the svg layer of every value when an unused attribute gets a Tela, Talla or Género special use and audits the previous layers', function (AttributeSpecialUse $use) {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Modelo']);
+    $layered = AttributeValue::factory()->for($attribute)->create(['name' => 'Uno', 'svg_layer' => 'uno']);
+    $other = AttributeValue::factory()->for($attribute)->create(['name' => 'Dos', 'svg_layer' => 'dos']);
+    $plain = AttributeValue::factory()->for($attribute)->create(['name' => 'Tres', 'svg_layer' => null]);
+    $foreign = AttributeValue::factory()->for(CatalogAttribute::factory()->create(['name' => 'Manga']))->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Modelo', 'presentation' => 'text', 'special_use' => $use->value])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->special_use)->toBe($use)
+        ->and($layered->fresh()->svg_layer)->toBeNull()
+        ->and($other->fresh()->svg_layer)->toBeNull()
+        ->and($plain->fresh()->svg_layer)->toBeNull()
+        ->and($foreign->fresh()->svg_layer)->toBe('manga-corta');
+
+    $valueAudits = attributeAuditRows(AuditAction::CatalogUpdated)->where('entity_type', $layered->getMorphClass());
+
+    expect($valueAudits)->toHaveCount(2)
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->old_values)->toEqual(['svg_layer' => 'uno'])
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->new_values)->toEqual(['svg_layer' => null])
+        ->and($valueAudits->firstWhere('entity_id', $other->id)->old_values)->toEqual(['svg_layer' => 'dos'])
+        ->and($valueAudits->firstWhere('entity_id', $plain->id))->toBeNull();
+})->with([AttributeSpecialUse::Fabric, AttributeSpecialUse::Size, AttributeSpecialUse::Gender]);
+
+it('DEC-PRD-100 keeps the svg layers when an unused attribute is edited without gaining a special use', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Manga']);
+    $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Manga larga', 'presentation' => 'text', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($value->fresh()->svg_layer)->toBe('manga-corta');
+});
+
+it('DEC-PRD-100 leaves the svg layers untouched when a declared attribute is rejected from getting a special use', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Modelo']);
+    $product = Product::factory()->create(['name' => 'Camisa corporativa']);
+    ProductAttribute::factory()->axis()->create(['product_id' => $product->id, 'catalog_attribute_id' => $attribute->id]);
+    $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => 'modelo-a']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Modelo', 'presentation' => 'text', 'special_use' => 'size'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['special_use']);
+
+    expect($attribute->fresh()->special_use)->toBeNull()
+        ->and($value->fresh()->svg_layer)->toBe('modelo-a')
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
+it('DEC-PRD-100 page GET /catalog/attributes/{attribute} exposes the special use so the form hides the layer', function () {
+    $size = CatalogAttribute::factory()->size()->create();
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$size->id}")->assertOk()->assertInertia(
+        fn (Assert $page) => $page->component('catalog/AttributeShow')->where('attribute.special_use', 'size')
+    );
+});
+
 it('PRD-002 renames a value and audits the old and new name', function () {
     $attribute = CatalogAttribute::factory()->create();
     $value = AttributeValue::factory()->for($attribute)->create(['name' => 'Corta', 'description' => 'Hasta el codo']);
