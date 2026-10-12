@@ -824,3 +824,34 @@ Decision confirmed 2026-10-10, option A, registered in the spec first (docs comm
 - Registration (`POST /products`) does not accept detail locations or customizations (they are set when editing), so no registration clause exists to enforce.
 - UI: `ProductForm.vue` and `products/Show.vue` hide the sections for `business_line = diapers` (the form does not send the lists, so a product that still holds some gets the backend message naming them); `CombinationForm.vue` takes a `diaper` prop (from the new `product.business_line` in the editor props), hides "Personalizaciones incluidas" and does not send the list; the "Incluye" column is hidden on the product page.
 - Existing diaper data is not modified or cleaned: a stored diaper that already holds details keeps them until edited (no migration was requested). No seeder or import creates diaper details. Not covered by the decision: see report.
+
+## Phase 23 — CSV reader extraction and import of colors and combinations (COMPLETE, tasks 23.1-23.6)
+
+Mode: Strict TDD. Branch `feat/003-products-23-catalog-import`, stacked on `feat/003-products-22-svg-templates` (PR 24 of the slice table).
+
+### TDD Cycle Evidence
+
+| Task | Test file | Safety net | RED | GREEN |
+|---|---|---|---|---|
+| 23.1-23.2 | `tests/Unit/Support/CsvReaderTest.php` | `ImportCustomersTest.php` 61 passed | 11 tests, 0 passed (`CsvReader` not found) | 11 passed (21 assertions); with the unchanged 002 tests 72 passed |
+| 23.3-23.4 | `tests/Feature/Console/ImportCatalogTest.php` | N/A (new) | 40 tests, 0 passed (`catalog:import` does not exist) | 40 passed (362 assertions); with the two files above 112 passed |
+| 23.5 | — | — | — | no disk writes found; `storage/app/private/.gitignore` ignores `imports/`; phpstan 0 errors |
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail pest tests/Feature/Console/ImportCatalogTest.php tests/Unit/Support tests/Feature/Console/ImportCustomersTest.php`: 112 passed |
+| Runtime harness | `migrate:fresh --seed`, fictitious author, runtime-generated CSVs in `storage/app/private/imports/`: valid load exit 0 (3 categories, 5 attributes, 14 values, 3 products, 6 combinations, 36 import audit rows); re-run exit 1 (catalog not empty); colors file without tone exit 1 with the report table. Files deleted afterwards |
+| Rollback boundary | `app/Support/Csv/*`, `CustomerCsvReader` (restore the previous body), `app/Support/Products/Import/*`, `ImportCatalog` Action and command, the `catalog_import_*` lang keys, and the two optional parameters of `SyncFabricOfferedColors` / `SyncProductAttributes` |
+
+### Slice-close gate
+
+- `sail pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass. `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1606 tests, 1604 passed, 2 skipped.
+
+### Notes
+
+- DEC-PRD-100 / DEC-PRD-97: the import never sets `svg_layer`; values are created through `CreateAttributeValue` with name (and tone for the palette) only, and a test asserts no value has a layer.
+- Only change to existing Actions: `SyncFabricOfferedColors` and `SyncProductAttributes` accept the optional `origin` and `auditContext` (the others already did); there is no import-specific branching.
+- Size: the slice is far over the ~450-line forecast (about 2,600 authored changed lines of code and tests, of which about 900 are the 51 tests and about 750 the in-memory plan). It is one cohesive unit (reader, plan, Action, command); no whitespace, comment or test was removed to fit.
+- Phase 24 replaces the combo header-only handling (a note is printed today when `combos.csv` has rows).

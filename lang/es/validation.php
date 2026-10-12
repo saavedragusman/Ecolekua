@@ -176,6 +176,22 @@ return [
     'selection_component_not_in_combo' => 'El componente no pertenece al combo.',
     'selection_axis_out_of_order' => 'Elija los ejes en el orden del producto.',
 
+    // Initial load of the catalog (spec 003, PRD-018, E-32). Reasons never repeat a cell value.
+    'catalog_import_list_malformed' => 'Use el formato Atributo=valor|Atributo=valor.',
+    'catalog_import_list_repeated' => 'El atributo se repite en la lista.',
+    'catalog_import_attribute_in_both' => 'El atributo ya está en la lista de ejes.',
+    'catalog_import_code_repeated' => 'Código repetido en la fila :row.',
+    'catalog_import_color_repeated' => 'Color repetido en la fila :row.',
+    'catalog_import_color_not_in_palette' => 'Algún color no está en el archivo de colores.',
+    'catalog_import_fabric_not_found' => 'La tela no existe entre los valores de Tela del archivo de combinaciones.',
+    'catalog_import_differs_category' => 'Difiere de la categoría de la fila :row.',
+    'catalog_import_differs_line' => 'Difiere de la línea de la fila :row.',
+    'catalog_import_differs_mode' => 'Difiere del modo de la fila :row.',
+    'catalog_import_differs_stock' => 'Difiere del stock mínimo de la fila :row.',
+    'catalog_import_differs_axes' => 'El orden de los ejes difiere del de la fila :row.',
+    'catalog_import_differs_order' => 'Los atributos de pedido difieren de los de la fila :row.',
+    'catalog_import_overlap' => 'Coincide con la combinación de la fila :row en todos sus ejes.',
+
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
         'mixed' => 'El campo :attribute debe contener al menos una mayúscula y una minúscula.',
