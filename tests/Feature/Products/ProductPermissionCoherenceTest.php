@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\PermissionName;
 use App\Models\AuditLog;
 use App\Models\Permission;
 use App\Models\Role;
@@ -13,6 +14,19 @@ const PRODUCTS_VIEW_REQUIRED_MESSAGE = 'Los permisos de productos requieren tamb
 function productCoherenceIds(array $names): array
 {
     return Permission::query()->whereIn('name', $names)->pluck('id')->all();
+}
+
+/**
+ * Every `products.*` permission other than `products.view`, derived from the catalog.
+ *
+ * @return list<string>
+ */
+function productDependentPermissions(): array
+{
+    return array_values(array_filter(
+        array_map(fn (PermissionName $permission): string => $permission->value, PermissionName::cases()),
+        fn (string $name): bool => str_starts_with($name, 'products.') && $name !== PermissionName::ProductsView->value,
+    ));
 }
 
 function productCoherenceAuditCount(): int
@@ -31,13 +45,17 @@ it('E-33 rejects each products.* permission other than products.view without pro
 
     expect($role->permissions()->count())->toBe(0)
         ->and(productCoherenceAuditCount())->toBe(0);
-})->with([
-    'products.create',
-    'products.update',
-    'products.deactivate',
-    'products.delete',
-    'products.catalog',
-]);
+})->with(fn (): array => productDependentPermissions());
+
+it('DEC-PRD-23 covers exactly the five known dependents, so a new products.* permission must be reviewed here', function () {
+    expect(productDependentPermissions())->toEqualCanonicalizing([
+        'products.create',
+        'products.update',
+        'products.deactivate',
+        'products.delete',
+        'products.catalog',
+    ]);
+});
 
 it('E-33 leaves the role unchanged when the incoherent set replaces an existing one', function () {
     $role = Role::factory()->create();

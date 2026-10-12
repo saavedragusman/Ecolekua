@@ -44,6 +44,9 @@ return [
     'customer_document_unique' => 'Ya existe un cliente con ese documento.',
     'customer_advisor_ineligible' => 'La asesora debe ser un usuario activo con permiso para tener cartera.',
 
+    // Catalog (spec 003).
+    'category_name_unique' => 'Ya existe una categoría con ese nombre.',
+
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
         'mixed' => 'El campo :attribute debe contener al menos una mayúscula y una minúscula.',
