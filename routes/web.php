@@ -60,6 +60,7 @@ Route::post('/customers/{customer}/deactivate', [CustomerStatusController::class
 Route::put('/customers/{customer}/advisor', [CustomerAdvisorController::class, 'update'])->name('customers.advisor.update');
 
 // Catalog (spec 003, PRD-001). Authorization lives in CatalogPolicy; categories are never deleted.
+Route::get('/catalog/categories', [CategoryController::class, 'index'])->name('catalog.categories.index');
 Route::post('/catalog/categories', [CategoryController::class, 'store'])->name('catalog.categories.store');
 Route::put('/catalog/categories/{category}', [CategoryController::class, 'update'])->name('catalog.categories.update');
 Route::post('/catalog/categories/{category}/move', [CategoryController::class, 'move'])->name('catalog.categories.move');
@@ -82,6 +83,7 @@ Route::put('/catalog/values/{value}/offered-colors', [FabricOfferedColorControll
 
 // Catalog detail locations (PRD-007). The `{location}` parameter binds `DetailLocation`; locations
 // have no order in the spec (no move route) and are never deleted.
+Route::get('/catalog/detail-locations', [DetailLocationController::class, 'index'])->name('catalog.detail-locations.index');
 Route::post('/catalog/detail-locations', [DetailLocationController::class, 'store'])->name('catalog.detail-locations.store');
 Route::put('/catalog/detail-locations/{location}', [DetailLocationController::class, 'update'])->name('catalog.detail-locations.update');
 Route::post('/catalog/detail-locations/{location}/activate', [DetailLocationController::class, 'activate'])->name('catalog.detail-locations.activate');

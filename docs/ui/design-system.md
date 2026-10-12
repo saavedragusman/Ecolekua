@@ -611,6 +611,23 @@ Selector de vistas para filtrar un listado (por ejemplo Activos / Inactivos / To
 - Contenedor: `flex w-full gap-space-xs rounded-lg bg-surface-container-high p-space-xs`; en `md:` se ajusta al contenido (`md:w-fit`). Ítem: `min-h-11 flex-1 rounded-lg px-space-md font-label-lg text-label-lg`; en `md:` `flex-none`. Seleccionado: `bg-primary text-on-primary`; reposo: `text-on-surface-variant hover:bg-surface-container-highest`.
 - En `< md` ocupa todo el ancho como control segmentado, con objetivos de al menos 44px. Foco visible según §8.1. Solo tokens del sistema, sin `dark:` ni hexadecimales.
 
+### 7.12 `ColorPicker.vue` (tono de referencia de un color del catálogo)
+
+Selector de un tono `#RRGGBB` (spec 003, PRD-002, E-36). Solo se usa donde el tono es un dato del catálogo.
+
+- Compuesto por un `<input type="color">` nativo superpuesto, invisible, sobre una muestra (`size-11`, `rounded-lg`, borde `border-outline`) y un campo de texto hexadecimal (`min-h-11`, mismo estilo que §7.4) con etiqueta visible y mensaje de error enlazado con `aria-describedby`.
+- La muestra es el único lugar donde el tono se aplica como estilo en línea (`:style="{ backgroundColor }"`): el tono es un dato del catálogo, no un valor de estilo, y no contradice la regla de «sin hexadecimales en el código de estilos». Si el texto no es un `#RRGGBB` válido, la muestra queda con `bg-surface-container-low`.
+- Emite `#RRGGBB` en mayúsculas al elegir con el selector; el campo de texto emite lo que se escribe. La validación (formato, obligatoriedad según el atributo) es del backend, que devuelve el error por campo.
+- El foco del selector nativo se muestra en la muestra (`focus-within:ring-2 focus-within:ring-primary`). `aria-label` del selector: «Elegir color: <etiqueta>». Sin `dark:`.
+
+### 7.13 `AppCheckboxGroup.vue` (lista de casillas con filtro opcional)
+
+Lista etiquetada de casillas que comparten un modelo de arreglo (valores permitidos, colores ofrecidos, ubicaciones, etc.).
+
+- `<fieldset>` con `<legend>` (`font-label-md text-label-md text-on-surface-variant`) y una casilla `AppCheckbox` por opción (objetivo de al menos 44px). Error y ayuda debajo, enlazados con `aria-describedby`.
+- Filtro opcional (`filterable`): un `AppInput` de búsqueda («Filtrar: <etiqueta>») que solo oculta opciones; una opción marcada y oculta sigue en el modelo. La coincidencia ignora tildes y mayúsculas.
+- Sin opciones muestra `emptyText`; con filtro sin coincidencias muestra «Ninguna opción coincide con el filtro.». Una opción puede ir deshabilitada.
+
 ---
 
 ---
@@ -675,3 +692,5 @@ Hasta que una decisión pase a **Confirmada**, los agentes aplican la recomendac
 - [ ] Foco visible navegando con teclado.
 - [ ] Las acciones destructivas usan `ConfirmDialog` (§7.10): Esc cancela, el foco inicial está en "Cancelar" y vuelve al disparador.
 - [ ] Ningún texto en `text-secondary-container` sobre fondo claro.
+- [ ] `ColorPicker` (§7.12): la muestra refleja el tono escrito o elegido, el selector nativo abre desde la muestra (≥44px), un tono inválido enviado se muestra como error del backend y el tono solo se aplica como estilo en línea de la muestra.
+- [ ] `AppCheckboxGroup` (§7.13): el filtro oculta opciones sin quitar las marcadas, las casillas son ≥44px, el mensaje de lista vacía y de filtro sin coincidencias se muestran y la leyenda es visible.

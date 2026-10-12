@@ -1,5 +1,6 @@
 import { home } from '@/routes';
 import { index as auditIndex } from '@/routes/audit';
+import { index as categoriesIndex } from '@/routes/catalog/categories';
 import { index as customersIndex } from '@/routes/customers';
 import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
@@ -7,7 +8,7 @@ import { index as usersIndex } from '@/routes/users';
 // Display order of the navigation groups. Groups without a visible entry are
 // omitted. The type already admits Comercial, Producción and Inventario; entries
 // are declared for a group only once its specs and routes exist (AGENTS.md §0;
-// design Decision 20). Comercial has Clientes (spec 002).
+// design Decision 20). Comercial has Clientes (spec 002) and Catálogo (spec 003).
 export const NAV_GROUPS = [
     'Comercial',
     'Producción',
@@ -57,6 +58,17 @@ export const NAV_ENTRIES: NavEntry[] = [
         permission: 'customers.view',
         group: 'Comercial',
         priority: 10,
+    },
+    {
+        // Entry point of the catalog (spec 003): lands on categories; the other sections are
+        // reached from the page. Active only on this page because the match is by `href`.
+        key: 'catalog',
+        label: 'Catálogo',
+        icon: 'category',
+        href: categoriesIndex.url(),
+        permission: 'products.catalog',
+        group: 'Comercial',
+        priority: 30,
     },
     {
         key: 'users',
