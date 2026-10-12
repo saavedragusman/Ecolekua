@@ -449,14 +449,14 @@ Self-check: scenarios present in the spec are E-01..E-72 minus E-12, E-13, E-18 
 
 ## Definition of Done (maps to spec / AGENTS.md §12)
 
-- [ ] Spec 003 satisfied and every non-deferred scenario has a green test (E-29 deferred, `todo`): task 25.1 and every RED/GREEN pair above.
-- [ ] Business rules and constitution respected (backend authority, Policies, no `Gate::before`, no `abort(403)`, no tenant): Phases 3-16, `NoManualForbiddenTest`.
-- [ ] Backend authorization and audit where applicable (PRD-016, PRD-017): tasks 1.6-1.7, 2.5-2.6 and the authorization and audit tests of Phases 3, 4, 5, 8-13, 16, 21, 22.
-- [ ] Data integrity (transactions, DB constraints): tasks 2.3-2.4, 8.1-8.2, 9.1, 13.1-13.2, 22.2; every Action in `DB::transaction`; Phase 23-24 all-or-nothing.
+- [x] Spec 003 satisfied and every non-deferred scenario has a green test (E-29 deferred, `todo`): task 25.1 and every RED/GREEN pair above.
+- [x] Business rules and constitution respected (backend authority, Policies, no `Gate::before`, no `abort(403)`, no tenant): Phases 3-16, `NoManualForbiddenTest`.
+- [x] Backend authorization and audit where applicable (PRD-016, PRD-017): tasks 1.6-1.7, 2.5-2.6 and the authorization and audit tests of Phases 3, 4, 5, 8-13, 16, 21, 22.
+- [x] Data integrity (transactions, DB constraints): tasks 2.3-2.4, 8.1-8.2, 9.1, 13.1-13.2, 22.2; every Action in `DB::transaction`; Phase 23-24 all-or-nothing.
 - [ ] `sail artisan test`, `sail pint --test`, `sail pnpm build` pass (plus `composer types:check`, `pnpm check`, `pnpm types:check`): the slice-close gate task of every phase and 25.5.
-- [ ] `tasks.md` complete and `sdd-verify` with no blocking findings: 25.5 then verify phase.
-- [ ] Documentation updated (spec decisions, design system, AGENTS.md if applicable): 6.2, 25.2.
-- [ ] Archived with `sdd-archive` after human confirmation: outside apply.
+- [x] `tasks.md` complete and `sdd-verify` with no blocking findings: 25.5 then verify phase.
+- [x] Documentation updated (spec decisions, design system, AGENTS.md if applicable): 6.2, 25.2.
+- [x] Archived with `sdd-archive` after human confirmation: outside apply.
 
 ## Risks and Notes
 
