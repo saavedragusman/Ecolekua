@@ -58,10 +58,6 @@ class ImportCatalog extends Command
             $this->error($problem);
         }
 
-        foreach ($report->notes as $note) {
-            $this->warn($note);
-        }
-
         if ($report->errors !== []) {
             $this->error('No se importó nada: los archivos tienen '.count($report->errors).' error(es).');
             $this->table(

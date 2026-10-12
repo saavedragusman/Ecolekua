@@ -181,6 +181,8 @@ return [
     'catalog_import_list_repeated' => 'El atributo se repite en la lista.',
     'catalog_import_attribute_in_both' => 'El atributo ya está en la lista de ejes.',
     'catalog_import_code_repeated' => 'Código repetido en la fila :row.',
+    'catalog_import_code_repeated_in' => 'Código repetido en la fila :row del archivo :file.',
+    'catalog_import_combo_name_differs' => 'El nombre difiere del de la fila :row, que tiene el mismo código.',
     'catalog_import_color_repeated' => 'Color repetido en la fila :row.',
     'catalog_import_color_not_in_palette' => 'Algún color no está en el archivo de colores.',
     'catalog_import_fabric_not_found' => 'La tela no existe entre los valores de Tela del archivo de combinaciones.',
