@@ -772,3 +772,100 @@ it('E-32 reports a row rejected while creating, rolls everything back and never 
         ->and($output)->not->toContain('Gorra');
     cimpExpectUntouched($auditBefore);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Decisions DEC-PRD-101..104 (confirmed 2026-10-12)
+// ---------------------------------------------------------------------------------------------
+
+it('DEC-PRD-101 rejects an order attribute without values, except the empty color of a product with fabric', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[0]['pedido'] = 'Talla=|Color=';
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combinaciones', 2, 'pedido'))->not->toBeNull()
+        ->and(cimpReason($report, 'combinaciones', 3, 'pedido'))->toBeNull();
+    cimpExpectUntouched($auditBefore);
+});
+
+it('DEC-PRD-102 rejects a color of a product without fabric that is not in the palette', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[3]['pedido'] = 'Color=Rojo,Naranja';
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 5, 'pedido'))->toBe(__('validation.catalog_import_color_not_in_palette'))
+        ->and($output)->not->toContain('Naranja');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('DEC-PRD-103 rejects rows of a product that change the order of the axes and keeps the per-row restriction of a common set', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[1]['ejes'] = 'Modelo=Columbia|Tela=ALG-OXF Pima|Género=Caballero';
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 3, 'ejes'))->toBe(__('validation.catalog_import_differs_axes', ['row' => 2]));
+    cimpExpectUntouched($auditBefore);
+
+    // The valid set: the product allows XS..XL and each row restricts it to a subset (or none).
+    [$exit] = cimpRun();
+    $talla = CatalogAttribute::query()->where('name', 'Talla')->firstOrFail();
+    $restricted = Combination::query()->get()->filter(fn (Combination $combination): bool => $combination->values()
+        ->wherePivot('catalog_attribute_id', $talla->id)->exists());
+
+    expect($exit)->toBe(0)
+        ->and($restricted)->toHaveCount(2);
+});
+
+it('DEC-PRD-104 rejects an attribute named like a special use without matching it exactly', function (string $name, string $column) {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+
+    if ($column === 'ejes') {
+        $rows[0]['ejes'] = "Tela=ALG-OXF Pima|Modelo=Columbia|{$name}=Dama";
+    } else {
+        $rows[0]['pedido'] = "{$name}=XS,S,M,L|Color=";
+    }
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combinaciones', 2, $column))->toBe(__('validation.catalog_import_special_use_lookalike'))
+        ->and($output)->not->toContain($name);
+    cimpExpectUntouched($auditBefore);
+})->with([
+    'plural size' => ['tallas', 'pedido'],
+    'accented plural size' => ['Tallás', 'pedido'],
+    'synonym sex' => ['sexo', 'ejes'],
+    'synonym talle' => ['Talle', 'pedido'],
+    'synonym tejido' => ['Tejido', 'ejes'],
+    'plural fabric' => ['Telas', 'ejes'],
+    'typo gender' => ['Genro', 'ejes'],
+    'plural gender' => ['Géneros', 'ejes'],
+]);
+
+it('DEC-PRD-104 still imports attributes whose name does not resemble a special use', function () {
+    cimpAuthor();
+    $rows = cimpRows();
+    $rows[0]['pedido'] = 'Talla=XS,S,M,L|Manga=Corta,Larga|Color=';
+    $rows[1]['pedido'] = 'Talla=S,M,L,XL|Manga=Corta,Larga|Color=';
+    $rows[2]['pedido'] = 'Talla=XS,S,M,L,XL|Manga=Corta,Larga|Color=';
+
+    [$exit] = cimpRun($rows);
+
+    expect($exit)->toBe(0)
+        ->and(CatalogAttribute::query()->whereIn('name', ['Modelo', 'Manga'])->pluck('special_use')->filter()->all())->toBe([]);
+});

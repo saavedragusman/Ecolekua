@@ -52,6 +52,9 @@ final class CatalogImportColumns
         'talla' => AttributeSpecialUse::Size,
     ];
 
+    /** Known synonyms of the special uses, by the lowercase name without accents (DEC-PRD-104). */
+    public const SPECIAL_USE_SYNONYMS = ['sexo', 'sexos', 'talle', 'talles', 'tejido', 'tejidos'];
+
     /** Name of the one attribute with presentation color, by the lowercase name. */
     public const COLOR_ATTRIBUTE = 'color';
 }

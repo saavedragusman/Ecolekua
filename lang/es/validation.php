@@ -190,6 +190,7 @@ return [
     'catalog_import_differs_stock' => 'Difiere del stock mínimo de la fila :row.',
     'catalog_import_differs_axes' => 'El orden de los ejes difiere del de la fila :row.',
     'catalog_import_differs_order' => 'Los atributos de pedido difieren de los de la fila :row.',
+    'catalog_import_special_use_lookalike' => 'El nombre del atributo se parece a un uso especial (Tela, Género o Talla); use exactamente ese nombre o renómbrelo.',
     'catalog_import_overlap' => 'Coincide con la combinación de la fila :row en todos sus ejes.',
 
     'password' => [

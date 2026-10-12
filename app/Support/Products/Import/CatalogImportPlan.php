@@ -435,6 +435,10 @@ final class CatalogImportPlan
         $specialUse = $this->specialUse($key);
         $name = $isColor ? 'Color' : $name;
 
+        if ($specialUse === null && $this->resemblesSpecialUse($key)) {
+            $this->error($file, $line, $column, __('validation.catalog_import_special_use_lookalike'));
+        }
+
         $this->attributeIds[$key] = count($this->attributeIds) + 1;
         $this->attributeModels[$key] = $this->model($presentation, $specialUse);
         $this->attributes[] = [
@@ -688,6 +692,27 @@ final class CatalogImportPlan
     private function specialUse(string $attributeKey): ?AttributeSpecialUse
     {
         return CatalogImportColumns::SPECIAL_USES[Str::ascii($attributeKey)] ?? null;
+    }
+
+    /**
+     * DEC-PRD-104: a name that is not exactly a special use but is a known synonym, is one edit away
+     * from a special use (plural, typo) or is a special use plus "es".
+     */
+    private function resemblesSpecialUse(string $attributeKey): bool
+    {
+        $name = trim(Str::ascii($attributeKey));
+
+        if (in_array($name, CatalogImportColumns::SPECIAL_USE_SYNONYMS, true)) {
+            return true;
+        }
+
+        foreach (array_keys(CatalogImportColumns::SPECIAL_USES) as $use) {
+            if ($name === $use.'es' || levenshtein($name, $use) <= 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function model(AttributePresentation $presentation, ?AttributeSpecialUse $specialUse): CatalogAttribute
