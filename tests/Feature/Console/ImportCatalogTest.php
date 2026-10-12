@@ -936,6 +936,17 @@ it('E-31 creates categories, attributes, products, combinations, combos, colors 
         ->and(Combo::query()->where('name', 'Kit sencillo')->firstOrFail()->components()->count())->toBe(1);
 });
 
+it('DEC-PRD-105 creates the imported combos active and visible in the portal', function () {
+    cimpAuthor();
+
+    [$exit] = cimpRunCombos([cimpComboRow()]);
+    $combo = Combo::query()->where('name', 'Kit pañal')->firstOrFail();
+
+    expect($exit)->toBe(0)
+        ->and($combo->status->value)->toBe('active')
+        ->and($combo->portal_visible)->toBeTrue();
+});
+
 it('E-31 audits every created row as an import, including the combos, with the console origin and the author', function () {
     $author = cimpAuthor();
     $auditBefore = (int) AuditLog::query()->max('id');

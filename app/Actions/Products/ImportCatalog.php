@@ -274,6 +274,8 @@ class ImportCatalog
                 fn (array $context): Combo => $this->createCombo->handle([
                     'name' => $combo['name'],
                     'code' => $combo['code'],
+                    // DEC-PRD-105: imported combos are published in the portal.
+                    'portal_visible' => true,
                     'components' => array_map(fn (array $component): array => [
                         'product_id' => $products[$component['product']]->id,
                         'quantity' => $component['quantity'],
