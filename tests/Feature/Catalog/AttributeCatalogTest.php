@@ -486,16 +486,20 @@ it('DEC-PRD-97 keeps the svg layers when an unused attribute changes to a non-co
 });
 
 it('DEC-PRD-97 leaves the svg layers untouched when a declared attribute is rejected from becoming color', function () {
-    [$fabric] = declaredFabric();
-    $value = AttributeValue::factory()->for($fabric)->withTone('#112233')->create(['svg_layer' => 'drill']);
+    $sleeve = CatalogAttribute::factory()->create(['name' => 'Manga']);
+    ProductAttribute::factory()->axis()->create([
+        'product_id' => Product::factory()->create(['name' => 'Camisa corporativa'])->id,
+        'catalog_attribute_id' => $sleeve->id,
+    ]);
+    $value = AttributeValue::factory()->for($sleeve)->create(['svg_layer' => 'manga-corta']);
 
     $this->actingAs(attributeManager())
-        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'color', 'special_use' => null])
+        ->putJson("/catalog/attributes/{$sleeve->id}", ['name' => 'Manga', 'presentation' => 'color', 'special_use' => null])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['presentation']);
 
-    expect($fabric->fresh()->presentation)->toBe(AttributePresentation::Text)
-        ->and($value->fresh()->svg_layer)->toBe('drill')
+    expect($sleeve->fresh()->presentation)->toBe(AttributePresentation::Text)
+        ->and($value->fresh()->svg_layer)->toBe('manga-corta')
         ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
 });
 
