@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Catalog\AttributeController;
 use App\Http\Controllers\Catalog\AttributeValueController;
 use App\Http\Controllers\Catalog\CategoryController;
+use App\Http\Controllers\Catalog\DetailLocationController;
 use App\Http\Controllers\Catalog\FabricOfferedColorController;
 use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
@@ -78,6 +79,13 @@ Route::post('/catalog/values/{value}/move', [AttributeValueController::class, 'm
 Route::post('/catalog/values/{value}/activate', [AttributeValueController::class, 'activate'])->name('catalog.values.activate');
 Route::post('/catalog/values/{value}/deactivate', [AttributeValueController::class, 'deactivate'])->name('catalog.values.deactivate');
 Route::put('/catalog/values/{value}/offered-colors', [FabricOfferedColorController::class, 'update'])->name('catalog.values.offered-colors.update');
+
+// Catalog detail locations (PRD-007). The `{location}` parameter binds `DetailLocation`; locations
+// have no order in the spec (no move route) and are never deleted.
+Route::post('/catalog/detail-locations', [DetailLocationController::class, 'store'])->name('catalog.detail-locations.store');
+Route::put('/catalog/detail-locations/{location}', [DetailLocationController::class, 'update'])->name('catalog.detail-locations.update');
+Route::post('/catalog/detail-locations/{location}/activate', [DetailLocationController::class, 'activate'])->name('catalog.detail-locations.activate');
+Route::post('/catalog/detail-locations/{location}/deactivate', [DetailLocationController::class, 'deactivate'])->name('catalog.detail-locations.deactivate');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
