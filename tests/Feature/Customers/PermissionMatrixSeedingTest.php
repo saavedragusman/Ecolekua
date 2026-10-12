@@ -49,7 +49,7 @@ function removeCustomersPermissions(): void
 it('DEC-CLI-11 seeds a fresh database with the section 4 matrix and the 001 grants only on Administrador', function () {
     $foundation = array_values(array_filter(
         array_map(fn (PermissionName $p) => $p->value, PermissionName::cases()),
-        fn (string $name) => ! str_starts_with($name, 'customers.'),
+        fn (string $name) => ! str_starts_with($name, 'customers.') && ! str_starts_with($name, 'products.'),
     ));
 
     foreach (expectedCustomersMatrix() as $roleName => $expected) {

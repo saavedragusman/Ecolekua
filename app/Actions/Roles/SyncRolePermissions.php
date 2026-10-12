@@ -20,7 +20,7 @@ use Illuminate\Validation\ValidationException;
  * only assigned automatically where its spec states an initial grant (FND-017, DEC-CLI-11,
  * see InitialRolePermissions); every later change goes through this Action. Removing users.assign_roles
  * or roles.manage from the last administrator's roles is rejected (FND-020, E-25). The submitted
- * set must also be coherent (DEC-022, DEC-CLI-32), otherwise a validation error on `permissions` is raised.
+ * set must also be coherent (DEC-022, DEC-CLI-32, DEC-PRD-23), otherwise a validation error on `permissions` is raised.
  */
 class SyncRolePermissions
 {
@@ -68,7 +68,8 @@ class SyncRolePermissions
     /**
      * DEC-022: `roles.manage` requires `roles.view`, and every `users.*` permission other than
      * `users.view` requires `users.view`. DEC-CLI-32: every `customers.*` permission other than
-     * `customers.view` requires `customers.view`. The whole submitted set is checked and all
+     * `customers.view` requires `customers.view`. DEC-PRD-23: every `products.*` permission other than
+     * `products.view` requires `products.view`. The whole submitted set is checked and all
      * violations are reported together, so the role never changes when the assignment is
      * incoherent.
      *
@@ -108,6 +109,18 @@ class SyncRolePermissions
 
         if (! $has(PermissionName::CustomersView) && array_filter($customersDependents, $has) !== []) {
             $messages[] = 'Los permisos de clientes requieren también «Ver el listado y la ficha de todos los clientes».';
+        }
+
+        $productsDependents = [
+            PermissionName::ProductsCreate,
+            PermissionName::ProductsUpdate,
+            PermissionName::ProductsDeactivate,
+            PermissionName::ProductsDelete,
+            PermissionName::ProductsCatalog,
+        ];
+
+        if (! $has(PermissionName::ProductsView) && array_filter($productsDependents, $has) !== []) {
+            $messages[] = 'Los permisos de productos requieren también «Ver categorías, atributos, productos, combinaciones y combos».';
         }
 
         if ($messages !== []) {

@@ -40,19 +40,25 @@ it('E-24 rejects an operation protected by a new permission until it is assigned
     $this->actingAs($admin)->get('/_test/e24')->assertOk();
 });
 
-it('FND-017 seeds 7 roles and the catalog; 001 permissions only on the protected role, customers.* per the DEC-CLI-11 matrix', function () {
+it('FND-017 seeds 7 roles and the catalog; 001 permissions only on the protected role, customers.* and products.* per their matrices', function () {
     $protected = Role::query()->where('is_protected', true)->sole();
     $all = array_map(fn (PermissionName $p) => $p->value, PermissionName::cases());
-    $foundation = array_values(array_filter($all, fn (string $name) => ! str_starts_with($name, 'customers.')));
+    $foundation = array_values(array_filter(
+        $all,
+        fn (string $name) => ! str_starts_with($name, 'customers.') && ! str_starts_with($name, 'products.'),
+    ));
+    $productsFull = ['products.view', 'products.create', 'products.update', 'products.deactivate', 'products.catalog'];
 
     $administratorSet = array_merge($foundation, [
         'customers.view', 'customers.create', 'customers.update',
         'customers.deactivate', 'customers.delete', 'customers.assign',
-    ]);
+    ], $productsFull, ['products.delete']);
     $expectedOthers = [
-        'Gerente' => ['customers.view', 'customers.create', 'customers.update', 'customers.deactivate', 'customers.assign'],
-        'Asesora de Ventas' => ['customers.view', 'customers.create', 'customers.update', 'customers.portfolio'],
-        'Finanzas' => ['customers.view'],
+        'Gerente' => array_merge(['customers.view', 'customers.create', 'customers.update', 'customers.deactivate', 'customers.assign'], $productsFull),
+        'Asesora de Ventas' => array_merge(['customers.view', 'customers.create', 'customers.update', 'customers.portfolio'], $productsFull),
+        'Finanzas' => ['customers.view', 'products.view'],
+        'Supervisor de Producción' => ['products.view'],
+        'Responsable de Calidad' => ['products.view'],
     ];
 
     expect(Role::count())->toBe(7)
