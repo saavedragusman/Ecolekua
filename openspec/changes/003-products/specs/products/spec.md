@@ -1,6 +1,6 @@
 # Products Specification
 
-> Transcribed from `docs/specs/003-products.md` (status "Lista para Design"; §4 permissions, §5 conceptual model, §6 requirements PRD-001..PRD-020 (no PRD-006), §7 scenarios E-01..E-72 (no E-12, E-13, E-18), §9 decisions DEC-PRD-01..DEC-PRD-53, technical decisions DT-01..DT-03). Faithful transcription: no added, removed, or reinterpreted behavior. Original IDs preserved verbatim; numbering gaps are kept as gaps. User-visible strings and example data quoted from the source stay in Spanish. A scenario that cites several requirements is placed under the first cited requirement and lists the others in its `Source citation` line. Prices are out of scope of this capability (DEC-PRD-25).
+> Transcribed from `docs/specs/003-products.md` (status "Lista para Design"; §4 permissions, §5 conceptual model, §6 requirements PRD-001..PRD-020 (no PRD-006), §7 scenarios E-01..E-73 (no E-12, E-13, E-18), §9 decisions DEC-PRD-01..DEC-PRD-105, technical decisions DT-01..DT-03). Faithful transcription: no added, removed, or reinterpreted behavior. Original IDs preserved verbatim; numbering gaps are kept as gaps. User-visible strings and example data quoted from the source stay in Spanish. A scenario that cites several requirements is placed under the first cited requirement and lists the others in its `Source citation` line. Prices are out of scope of this capability (DEC-PRD-25).
 
 ## Purpose
 
@@ -718,6 +718,12 @@ The technical team SHALL load the existing catalog once through a console comman
 - **Source**: a UTF-8 CSV prepared from the sheets "Uniformes" and "Pañales para adultos" and validated by Ecolekua. Each row is a combination and indicates product, category, line, mode, minimum stock, code, axis values, admitted values of the order attributes and the original description from the list. When the order values of a row are a subset of those of the product, they are loaded as a restriction of that combination (DEC-PRD-36). The minimum stock of each row is the product's default minimum (DEC-PRD-46): if the rows of one product carry different values, the load MUST be rejected with row, field and reason. Own values per article are loaded later from the ERP (DEC-PRD-48). Combos go in a second file with their components. A third file brings the color palette (name and tone) and the colors offered in each fabric, prepared from the fabric and color cleanup file validated by Ecolekua. The columns are defined in `design.md`.
 - **Normalization** (Anexo B): fabric and value names are unified, and the corrections confirmed by Ecolekua are applied. Codes are loaded as they are.
 - Each record MUST go through the same validations as creation (PRD-002 to PRD-010).
+- **Color of a product with fabric**: the color of a product that declares fabric MUST come empty; if it carries values, the load MUST be rejected with row, field and reason (DEC-PRD-35).
+- **Order attributes without values** (DEC-PRD-101): an order attribute of a product with no admitted values MUST be rejected with row, field and reason, except the color of a product with fabric, which MUST come empty (DEC-PRD-35).
+- **Colors of a product without fabric** (DEC-PRD-102): the color values MUST exist in the palette of the color file; otherwise the load MUST be rejected with row, field and reason. They are not created as new palette colors.
+- **Consistency of the rows of one product** (DEC-PRD-103): all the rows of a product MUST repeat the same axes, in the same order, and the same declared order attributes. The admitted order values of the product are common to all its rows, and each row MAY indicate its optional restriction (DEC-PRD-36). A row that declares different axes or order attributes MUST cause the load to be rejected.
+- **Special uses** (DEC-PRD-104, DEC-PRD-49): the exact names `tela`, `genero` and `talla` (case- and accent-insensitive) are used only when the attribute is created, which from then on keeps the special-use mark. An attribute with a name similar to a special use (e.g., "tallas", "sexo") MUST cause the load to be rejected with row, field and reason, instead of being created without the mark. The exact names are documented in the CSV format (`design.md`).
+- **State of the combos** (DEC-PRD-105): the combos created by the load MUST be created active and visible in the portal, because the combos file is already validated by Ecolekua.
 - **All or nothing**: the command MUST first validate all rows, including codes repeated within the file. If any fails, it MUST import nothing and deliver a report with row, field and reason. If all are valid, it MUST import in a single transaction.
 - The command MUST require an active internal user to be indicated as author. Each record MUST be audited as a creation marked as import.
 - Prices and costs MUST NOT be imported. `004` loads them using the code as reference (§10 of the source spec).
@@ -797,7 +803,7 @@ A user with `products.catalog` SHALL manage the images and layers of values and 
 
 **Visual templates (DEC-PRD-29)**
 
-- A product MAY have a general SVG template or, if its cut changes by gender, one template for each Género value it admits. When there are templates per gender, the preview uses the one of the chosen gender.
+- A product MAY have a general SVG template or, if its cut changes by gender, one template for each Género value it admits. When there are templates per gender, the preview uses the one of the chosen gender. The general template and the templates per gender coexist in the same product: if the chosen gender has no template, the preview uses the general one (DEC-PRD-99).
 - An attribute value and a detail location MAY have an SVG layer assigned (e.g., Manga corta → `manga-corta`; Orilla de mangas → `orilla-mangas`). The values of an attribute with the "color" presentation do not carry a layer: their reference tone paints the `cuerpo` layer, and the backend MUST reject assigning one to them (DEC-PRD-97). Neither do the values of an attribute with the special use Tela, Talla or Género: the size is not drawn, the gender selects the product's template and the fabric shows in its option thumbnail; the backend MUST reject assigning one to them (DEC-PRD-100).
 - When uploading a template, the backend MUST:
   1. **sanitize** it: remove scripts, event attributes (`on…`), `foreignObject` and references to external files or sites (DT-03);
@@ -862,11 +868,12 @@ Source citation: (PRD-020, PRD-004)
 
 #### Scenario: E-41 — Plantillas por género
 
-Source citation: (PRD-020)
+Source citation: (PRD-020, DEC-PRD-99)
 
-- GIVEN the camisa corporativa with a template for Caballero and another for Dama
+- GIVEN the camisa corporativa, which admits the genders Caballero, Dama and Unisex, with a general template, one for Caballero and another for Dama
 - WHEN the template of combination `110-1` (Dama) is requested
 - THEN the Dama template is obtained
+- AND a Unisex combination, which has no template of its own, obtains the general template (DEC-PRD-99)
 - AND uploading a template associated with a gender the product does not admit is rejected
 
 #### Scenario: E-42 — Recursos visuales sin permiso

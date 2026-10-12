@@ -355,6 +355,12 @@ El equipo técnico carga una única vez el catálogo existente mediante un coman
 - **Origen**: un CSV en UTF-8 preparado a partir de las hojas "Uniformes" y "Pañales para adultos" y validado por Ecolekua. Cada fila es una combinación e indica producto, categoría, línea, modo, stock mínimo, código, valores de eje, valores admitidos de los atributos de pedido y la descripción original de la lista. Cuando los valores de pedido de una fila son un subconjunto de los del producto, se cargan como restricción de esa combinación (DEC-PRD-36). El stock mínimo de cada fila es el mínimo por defecto del producto (DEC-PRD-46): si las filas de un mismo producto traen valores distintos, la carga se rechaza con fila, campo y motivo. Los valores propios por artículo se cargan después desde el ERP (DEC-PRD-48). Los combos van en un segundo archivo con sus componentes. Un tercer archivo trae la paleta de colores (nombre y tono) y los colores ofrecidos en cada tela, preparado a partir del archivo de limpieza de telas y colores validado por Ecolekua. Las columnas se definen en `design.md`.
 - **Normalización** (Anexo B): se unifican los nombres de telas y valores, y se aplican las correcciones confirmadas por Ecolekua. Los códigos se cargan tal como están.
 - Cada registro pasa por las mismas validaciones del alta (PRD-002 a PRD-010).
+- **Color de un producto con tela**: el color de un producto que declara tela debe venir vacío; si trae valores, la carga se rechaza con fila, campo y motivo (DEC-PRD-35).
+- **Atributos de pedido sin valores** (DEC-PRD-101): un atributo de pedido sin valores admitidos se rechaza con fila, campo y motivo, salvo el color de un producto con tela, que debe venir vacío (DEC-PRD-35).
+- **Colores de un producto sin tela** (DEC-PRD-102): los valores de color deben existir en la paleta del archivo de colores; si no, la carga se rechaza con fila, campo y motivo. No se crean como colores nuevos de la paleta.
+- **Coherencia de las filas de un mismo producto** (DEC-PRD-103): todas las filas repiten los mismos ejes, en el mismo orden, y los mismos atributos de pedido declarados. Los valores admitidos de pedido del producto son comunes y cada fila puede indicar su restricción opcional (DEC-PRD-36). Una fila que declara ejes o atributos de pedido distintos rechaza la carga.
+- **Usos especiales** (DEC-PRD-104, DEC-PRD-49): los nombres exactos `tela`, `genero` y `talla` (sin distinguir mayúsculas ni tildes) se usan solo al crear el atributo, que desde ahí guarda la marca de uso especial. Un atributo con un nombre parecido a un uso especial (p. ej. «tallas», «sexo») rechaza la carga con fila, campo y motivo, en lugar de crearse sin marca. Los nombres exactos se documentan en el formato del CSV (`design.md`).
+- **Estado de los combos** (DEC-PRD-105): los combos creados por la carga quedan activos y visibles en el portal, porque el archivo de combos ya viene validado por Ecolekua.
 - **Todo o nada**: el comando valida primero todas las filas, incluidos los códigos repetidos dentro del archivo. Si alguna falla, no importa nada y entrega un informe con fila, campo y motivo. Si todas son válidas, importa en una sola transacción.
 - El comando exige indicar un usuario interno activo como autor. Cada registro queda auditado como alta marcada como importación.
 - No se importan precios ni costos. `004` los carga usando el código como referencia (§10).
@@ -391,7 +397,7 @@ Un usuario con `products.catalog` gestiona las imágenes y capas de los valores 
 
 **Plantillas visuales (DEC-PRD-29)**
 
-- Un producto puede tener una plantilla SVG general o, si su corte cambia por género, una plantilla por cada valor de Género que admite. Cuando hay plantillas por género, la vista previa usa la del género elegido.
+- Un producto puede tener una plantilla SVG general o, si su corte cambia por género, una plantilla por cada valor de Género que admite. Cuando hay plantillas por género, la vista previa usa la del género elegido. La plantilla general y las plantillas por género conviven en un mismo producto: si el género elegido no tiene plantilla propia, la vista previa usa la general (DEC-PRD-99).
 - Un valor de atributo y una ubicación de detalle pueden tener asignada una capa SVG (p. ej., Manga corta → `manga-corta`; Orilla de mangas → `orilla-mangas`). Los valores de un atributo de presentación «color» no llevan capa: su tono de referencia pinta la capa `cuerpo` y el backend rechaza asignarles una (DEC-PRD-97). Tampoco la llevan los valores de los atributos con uso especial Tela, Talla o Género: la talla no se dibuja, el género elige la plantilla del producto y la tela se ve en la miniatura de su opción; el backend rechaza asignarles una (DEC-PRD-100).
 - Al subir una plantilla, el backend:
   1. la **sanea**: elimina scripts, atributos de evento (`on…`), `foreignObject` y referencias a archivos o sitios externos (DT-03);
@@ -658,11 +664,12 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 - **WHEN** se añade a sus valores admitidos un valor de Manga con la capa `manga-tres-cuartos`, que no existe en la plantilla
 - **THEN** el backend rechaza el cambio e indica la capa que falta
 
-### E-41 — Plantillas por género (PRD-020)
+### E-41 — Plantillas por género (PRD-020, DEC-PRD-99)
 
-- **GIVEN** la camisa corporativa con una plantilla para Caballero y otra para Dama
+- **GIVEN** la camisa corporativa, que admite los géneros Caballero, Dama y Unisex, con una plantilla general, una para Caballero y otra para Dama
 - **WHEN** se consulta la plantilla de la combinación `110-1` (Dama)
 - **THEN** se obtiene la plantilla de Dama
+- **AND** una combinación Unisex, que no tiene plantilla propia, obtiene la plantilla general (DEC-PRD-99)
 - **AND** subir una plantilla asociada a un género que el producto no admite se rechaza
 
 ### E-42 — Recursos visuales sin permiso (PRD-020, PRD-016)
