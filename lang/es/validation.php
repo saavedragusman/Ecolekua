@@ -46,6 +46,16 @@ return [
 
     // Catalog (spec 003).
     'category_name_unique' => 'Ya existe una categoría con ese nombre.',
+    'attribute_name_unique' => 'Ya existe un atributo con ese nombre.',
+    'attribute_special_use_unique' => 'Otro atributo ya tiene ese uso especial.',
+    'attribute_color_unique' => 'Ya existe un atributo con presentación de color.',
+    'attribute_color_requires_tones' => 'Todos los valores del atributo deben tener un tono antes de usar la presentación de color.',
+    'attribute_fabric_not_color' => 'El atributo de tela no puede tener presentación de color.',
+    'value_name_unique' => 'Ya existe un valor con ese nombre en este atributo.',
+    'value_layer_reserved' => 'Esa capa está reservada para la vista previa de la plantilla.',
+    'offered_colors_not_fabric' => 'Solo los valores del atributo de tela tienen colores ofrecidos.',
+    'offered_colors_invalid' => 'Solo se pueden elegir valores del atributo de color.',
+    'offered_colors_inactive' => 'No se puede ofrecer un color inactivo.',
 
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
@@ -92,5 +102,11 @@ return [
         'address.state' => 'estado',
         'address.reference' => 'referencia',
         'confirm_duplicate_phone' => 'confirmación de teléfono repetido',
+        'presentation' => 'presentación',
+        'special_use' => 'uso especial',
+        'tone' => 'tono',
+        'svg_layer' => 'capa SVG',
+        'color_ids' => 'colores ofrecidos',
+        'direction' => 'dirección',
     ],
 ];

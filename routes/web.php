@@ -4,7 +4,10 @@ use App\Http\Controllers\Audit\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Catalog\AttributeController;
+use App\Http\Controllers\Catalog\AttributeValueController;
 use App\Http\Controllers\Catalog\CategoryController;
+use App\Http\Controllers\Catalog\FabricOfferedColorController;
 use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
@@ -61,6 +64,20 @@ Route::put('/catalog/categories/{category}', [CategoryController::class, 'update
 Route::post('/catalog/categories/{category}/move', [CategoryController::class, 'move'])->name('catalog.categories.move');
 Route::post('/catalog/categories/{category}/activate', [CategoryController::class, 'activate'])->name('catalog.categories.activate');
 Route::post('/catalog/categories/{category}/deactivate', [CategoryController::class, 'deactivate'])->name('catalog.categories.deactivate');
+
+// Catalog attributes and their values (PRD-002). Values are created under their attribute and
+// addressed by their own id afterwards; neither is ever deleted.
+Route::post('/catalog/attributes', [AttributeController::class, 'store'])->name('catalog.attributes.store');
+Route::put('/catalog/attributes/{attribute}', [AttributeController::class, 'update'])->name('catalog.attributes.update');
+Route::post('/catalog/attributes/{attribute}/move', [AttributeController::class, 'move'])->name('catalog.attributes.move');
+Route::post('/catalog/attributes/{attribute}/activate', [AttributeController::class, 'activate'])->name('catalog.attributes.activate');
+Route::post('/catalog/attributes/{attribute}/deactivate', [AttributeController::class, 'deactivate'])->name('catalog.attributes.deactivate');
+Route::post('/catalog/attributes/{attribute}/values', [AttributeValueController::class, 'store'])->name('catalog.attributes.values.store');
+Route::put('/catalog/values/{value}', [AttributeValueController::class, 'update'])->name('catalog.values.update');
+Route::post('/catalog/values/{value}/move', [AttributeValueController::class, 'move'])->name('catalog.values.move');
+Route::post('/catalog/values/{value}/activate', [AttributeValueController::class, 'activate'])->name('catalog.values.activate');
+Route::post('/catalog/values/{value}/deactivate', [AttributeValueController::class, 'deactivate'])->name('catalog.values.deactivate');
+Route::put('/catalog/values/{value}/offered-colors', [FabricOfferedColorController::class, 'update'])->name('catalog.values.offered-colors.update');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
