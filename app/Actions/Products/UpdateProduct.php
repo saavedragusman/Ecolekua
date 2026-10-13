@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Support\Products\CatalogUsage;
 use App\Support\Products\ProductAudit;
+use App\Support\Products\StockMinimum;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,9 +23,9 @@ use Illuminate\Validation\ValidationException;
  *
  * Mode changes keep the supply mode rules (PRD-009, DEC-PRD-46, DEC-PRD-34): leaving
  * `stock_with_minimum` clears the default minimum (the audit row carries the previous value) and
- * returning to it requires a new one; leaving `on_demand` clears custom color. The deletion of the
- * own minimum overrides of the combinations (E-66) is completed in Phase 12, when that table exists.
- * The audit row carries only the fields that changed and nothing is written when nothing changed
+ * returning to it requires a new one; leaving `on_demand` clears custom color. Leaving
+ * `stock_with_minimum` also deletes the own minimum overrides of the combinations in the same
+ * transaction, and the audit row lists them (E-66). The audit row carries only the fields that changed and nothing is written when nothing changed
  * (E-68, as `UpdateCustomer`).
  */
 class UpdateProduct
@@ -69,6 +70,10 @@ class UpdateProduct
             'allows_custom_color' => $this->customColor($product, $mode, $data['allows_custom_color'] ?? null),
             'portal_visible' => $data['portal_visible'] ?? $product->portal_visible,
         ])->save();
+
+        if ($mode !== SupplyMode::StockWithMinimum) {
+            StockMinimum::deleteOverrides($product);
+        }
 
         $this->syncRelations($product, $data);
 
@@ -207,6 +212,7 @@ class UpdateProduct
             ...ProductAudit::snapshot($product),
             'detail_locations' => $names('detailLocations'),
             'customizations' => $names('customizations'),
+            'stock_minimum_overrides' => StockMinimum::snapshot($product),
         ];
     }
 }
