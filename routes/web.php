@@ -119,6 +119,9 @@ Route::scopeBindings()->group(function () {
 // Combos (spec 003, PRD-010). Authorization lives in ComboPolicy. The read pages (`combos.index`,
 // `combos.show`, `combos.create`, `combos.edit`) are declared with their pages in Phase 20.
 Route::post('/combos', [ComboController::class, 'store'])->name('combos.store');
+Route::put('/combos/{combo}', [ComboController::class, 'update'])->name('combos.update');
+Route::post('/combos/{combo}/activate', [ComboController::class, 'activate'])->name('combos.activate');
+Route::post('/combos/{combo}/deactivate', [ComboController::class, 'deactivate'])->name('combos.deactivate');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
