@@ -225,4 +225,53 @@ Created: `app/Actions/Pricing/SyncCombinationPrices.php`, `app/Http/Requests/Pri
 Authored changed lines (excluding `tasks.md`, `apply-progress.md`): about 789 (30 additions + 1 deletion in 3 modified files; 758 in 4 new files: production about 315, tests 443). Under the 1,100 split threshold; `size:exception` per the accepted 004 policy.
 
 ### Remaining
-Next: PR 8 (Phase 5b1 plus tasks 5a.3 and 5a.4).
+PR 8 (Phase 5b1 plus tasks 5a.3 and 5a.4): see the next section. (Earlier note: "Next: PR 8".)
+
+## Phase 5b1 + 5a.3/5a.4 (PR 8, `feat/004-pricing-and-quotations-5b1-size-group-core`, base PR 7): tasks 5b.1, 5b.2, 5a.3, 5a.4 done; gate green; NOT committed (size rule)
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 5b.1/5b.2 (label, rules, plan) | `tests/Unit/Pricing/{SizeGroupLabelTest,SizeGroupRulesTest,SizeGroupPlanTest}.php` | Unit (pure) | N/A (new) | 40 tests, 0 passed: 38 errors (`SizeGroupLabel`, `SizeGroupRules`, `SizeGroupPlan` not found) and 2 failures (an `Error` instead of `InvalidArgumentException`) | First GREEN attempt: the whole suite died silently (PHP fatal, `keptGroups()` declared twice, public accessor and private helper); fixed by renaming the helper to `matchStoredGroups`, then 39/40; the one failure was a test bug (a price without group is rightly listed when the proposal has groups), fixed in the test; then 40/40 | label: single run, runs with gaps, lone size, two neighbours, input order, palette gaps, repeated id, non numeric sizes, unknown size and empty group refused. rules: valid partitions in any order, empty list, repeated size, size left out, order of the names, both errors together, repeat inside one group, empty group, foreign size. plan: equal set, order-insensitive, DEC-COT-58 assign (one and several ungrouped sizes), move between groups, move plus join, merge, split, ungrouped to grouped (with and without prices), grouped to ungrouped, null prices left alone when ungrouping, kept group keeps its prices, one claim per stored group, empty stored group, extra size from another group, listing order, labels, token (sha256, null, order independent, value, updated_at, added/missing price, ignores kept prices) | none needed |
+| 5a.3/5a.4 | `tests/Feature/Pricing/CombinationPriceTest.php` (`E-26`) | Integration (DB, query log) | 32 tests of the file green before | 12 tests, 12 errors (`MissingPrices` not found) | 12/12 on the first run | missing tier, all priced tiers without prices and no negotiation tier, inactive ignored, complete and not-requested products left out, per-group cells, ungrouped sizes, size restriction of the combination, ungrouped combination reports no sizes, inactive grouped combination, product without scheme, many products, empty list (0 queries); every case with data asserts 2 queries | PHPStan: 4 errors (`??=` on a reference, `stdClass` rows typed as shaped objects) fixed by indexing the array directly and typing rows `stdClass` |
+| refactor | all of the above | Refactor | green | n/a | `pint`, `types:check` 0 errors; focused 52 tests green; `CombinationPriceTest` 44 green | n/a | n/a |
+
+### Gate (2026-10-13)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.25s)
+- `sail artisan test`: passed, 1972 tests (1970 passed, 2 skipped, 10556 assertions)
+- Harness: N/A (pure classes and one query class, no route); `E-26` runs `MissingPrices` against MySQL and counts the SQL statements.
+
+### Files
+Modified: `tests/Feature/Pricing/CombinationPriceTest.php` (+269: E-26 tests and their helpers), `openspec/changes/004-pricing-and-quotations/tasks.md`.
+Created: `app/Support/Pricing/{SizeGroupLabel,SizeGroupRules,SizeGroupPlan,MissingPrices}.php`, `tests/Unit/Pricing/{SizeGroupLabelTest,SizeGroupRulesTest,SizeGroupPlanTest}.php`.
+
+### Design choices and deviations
+1. `SizeGroupLabel::of(list<int> $sizeIds, array<int,string> $palette)`: the design only says "from its sizes in size-value order"; contiguity needs the sizes the combination admits, so the palette (id => name, in size order) is a parameter. Throws `InvalidArgumentException` for an empty group or a size outside the palette. The CSV normalization of "-" versus "–" is not included (CSV phase).
+2. `SizeGroupPlan::diff(stored, proposed, ungrouped, prices, palette)`: `$prices` is a list of plain rows `{id, size_group_id, tier, tier_order, price, updated_at}` (strings), not an Eloquent `Collection` as in the design signature, so the class is pure and unit-testable without the app container (`Unit` tests are plain). The Action of PR 9 maps `CombinationPrice` + tier to the rows. The extra `palette` parameter labels the dropped groups. Extra accessors: `keptGroups()` (proposed index => stored id), `droppedGroupIds()`, `newGroupIndexes()`, `deletedPriceIds()`, `requiresConfirmation()`.
+3. Prices without group are deleted whenever the proposal has groups (they cannot coexist with groups); with an empty proposal they are left alone. The listing order puts the "Sin grupo" prices first, then the stored group order, then tier order. The confirm token only hashes the deleted prices (id, price string, `updated_at`), sorted by id, so it is stable under input order and ignores kept groups.
+4. `SizeGroupRules::validate(groups, admitted)`: errors `groups` (repeated or missing sizes, one Spanish message naming the sizes) and `groups.{i}` (empty group, foreign size). Same shape as `SchemeRules`.
+5. `MissingPrices::forProducts()` returns `array<productId, list<{combination_id, code, missing: list<{size_group_id, price_tier_id, tier}>, ungrouped_sizes: array<sizeId, name>}>>`, only incomplete combinations. Admitted sizes follow the `ProductPresenter::stockEditor` rule (restriction of the combination on the size attribute, otherwise every allowed size of the product's size order attribute). Products without a scheme are not listed (they are not quotable for another reason, COT-025 first clause). Two raw queries (`DB::table`), no Eloquent hydration.
+6. `AffectedPrices::sizeGroupName()` (sizes joined by ", ") is NOT replaced by `SizeGroupLabel` in this PR: tasks.md does not say where, and a faithful label needs the admitted sizes of the combination, which PR 9 loads for the Actions. Replace it there (the audits of `SyncCombinationPrices` and the scheme changes then use the label).
+7. Process slip to disclose: the E-26 tests were appended to `CombinationPriceTest.php` with a shell heredoc (one `cat >>` command) instead of the Edit tool. The content is a pure append reviewed afterwards; nothing else was edited that way.
+8. `.codegraph/` was created by `gentle-ai codegraph init` (project rule) and is untracked; it is not part of the PR files.
+
+### Work unit evidence
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest --group=cot --filter='SizeGroupPlan\|SizeGroupLabel\|SizeGroupRules\|E-26 \|DEC-COT-53\|DEC-COT-58\|E-08 '`: passed, 52 tests, 137 assertions; `CombinationPriceTest.php`: 44 passed |
+| Runtime harness | N/A: pure classes and one query class, no route; E-26 exercises the query on MySQL |
+| Rollback boundary | revert the four Support classes, the three unit test files and the E-26 block (plus its imports) of `CombinationPriceTest.php` |
+
+### Size and proposed split (commit withheld)
+Authored changed lines (excluding `tasks.md`, `apply-progress.md`): **1,271** (269 additions in the modified test file; new files: production 549 = `SizeGroupPlan` 221, `MissingPrices` 171, `SizeGroupRules` 84, `SizeGroupLabel` 73; tests 453 = `SizeGroupPlanTest` 312, `SizeGroupRulesTest` 77, `SizeGroupLabelTest` 64). The estimate was ~700; the tests are the bulk (722). Over the 1,100 rule, so nothing was committed. Proposed split, both halves already green independently (no shared code between them):
+- **PR 8a** (~830): `SizeGroupLabel`, `SizeGroupRules`, `SizeGroupPlan` and their three unit test files (tasks 5b.1, 5b.2). Commit: `feat(004): derivar etiquetas, validar particiones y planificar el cambio de grupos de talla [DEC-COT-53, DEC-COT-58, E-08]`.
+- **PR 8b** (~440): `MissingPrices` and the E-26 block of `CombinationPriceTest.php` (tasks 5a.3, 5a.4). Commit: `feat(004): marcar combinaciones activas con precios y tallas sin definir [COT-025, E-26]`.
+Everything is in the working tree on `feat/004-pricing-and-quotations-5b1-size-group-core`; 8b would branch from 8a (PR 9 then targets 8b).
+
+### Remaining
+Decision needed on the split (or an explicit `size:exception` for the 1,271 lines). Then PR 9 (5b.3-5b.7).
