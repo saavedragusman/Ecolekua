@@ -20,7 +20,7 @@ use Illuminate\Validation\ValidationException;
  * only assigned automatically where its spec states an initial grant (FND-017, DEC-CLI-11,
  * see InitialRolePermissions); every later change goes through this Action. Removing users.assign_roles
  * or roles.manage from the last administrator's roles is rejected (FND-020, E-25). The submitted
- * set must also be coherent (DEC-022, DEC-CLI-32, DEC-PRD-23), otherwise a validation error on `permissions` is raised.
+ * set must also be coherent (DEC-022, DEC-CLI-32, DEC-PRD-23, spec 004 section 4), otherwise a validation error on `permissions` is raised.
  */
 class SyncRolePermissions
 {
@@ -69,7 +69,9 @@ class SyncRolePermissions
      * DEC-022: `roles.manage` requires `roles.view`, and every `users.*` permission other than
      * `users.view` requires `users.view`. DEC-CLI-32: every `customers.*` permission other than
      * `customers.view` requires `customers.view`. DEC-PRD-23: every `products.*` permission other than
-     * `products.view` requires `products.view`. The whole submitted set is checked and all
+     * `products.view` requires `products.view`. Spec 004 section 4 (E-47): every `quotations.*`
+     * permission other than `quotations.view` requires `quotations.view`, and `pricing.manage`
+     * requires `pricing.view`; `pricing.*` never requires `products.view` (DEC-COT-52). The whole submitted set is checked and all
      * violations are reported together, so the role never changes when the assignment is
      * incoherent.
      *
@@ -111,17 +113,33 @@ class SyncRolePermissions
             $messages[] = 'Los permisos de clientes requieren también «Ver el listado y la ficha de todos los clientes».';
         }
 
-        $productsDependents = array_filter(
-            PermissionName::cases(),
-            fn (PermissionName $permission): bool => str_starts_with($permission->value, 'products.') && $permission !== PermissionName::ProductsView,
-        );
-
-        if (! $has(PermissionName::ProductsView) && array_filter($productsDependents, $has) !== []) {
+        if (! $has(PermissionName::ProductsView) && array_filter($this->dependentsOf('products.', PermissionName::ProductsView), $has) !== []) {
             $messages[] = 'Los permisos de productos requieren también «Ver categorías, atributos, productos, combinaciones y combos».';
+        }
+
+        if (! $has(PermissionName::QuotationsView) && array_filter($this->dependentsOf('quotations.', PermissionName::QuotationsView), $has) !== []) {
+            $messages[] = 'Los permisos de cotizaciones requieren también «'.PermissionName::QuotationsView->description().'».';
+        }
+
+        if ($has(PermissionName::PricingManage) && ! $has(PermissionName::PricingView)) {
+            $messages[] = 'El permiso «'.PermissionName::PricingManage->description().'» requiere también «'.PermissionName::PricingView->description().'».';
         }
 
         if ($messages !== []) {
             throw ValidationException::withMessages(['permissions' => $messages]);
         }
+    }
+
+    /**
+     * Every catalog permission under `$prefix` other than its `$view` permission.
+     *
+     * @return list<PermissionName>
+     */
+    private function dependentsOf(string $prefix, PermissionName $view): array
+    {
+        return array_values(array_filter(
+            PermissionName::cases(),
+            fn (PermissionName $permission): bool => str_starts_with($permission->value, $prefix) && $permission !== $view,
+        ));
     }
 }

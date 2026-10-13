@@ -3,7 +3,7 @@
 namespace App\Enums;
 
 /**
- * Permission catalog of spec 001 (section 9) and spec 002 (section 4) and spec 003 (section 4). Copied into the `permissions` table by
+ * Permission catalog of spec 001 (section 9), spec 002 (section 4), spec 003 (section 4) and spec 004 (section 4). Copied into the `permissions` table by
  * PermissionCatalogSeeder; code asks for permissions, never for role names.
  */
 enum PermissionName: string
@@ -30,6 +30,12 @@ enum PermissionName: string
     case ProductsDeactivate = 'products.deactivate';
     case ProductsDelete = 'products.delete';
     case ProductsCatalog = 'products.catalog';
+    case QuotationsView = 'quotations.view';
+    case QuotationsCreate = 'quotations.create';
+    case QuotationsNegotiate = 'quotations.negotiate';
+    case QuotationsCancel = 'quotations.cancel';
+    case PricingView = 'pricing.view';
+    case PricingManage = 'pricing.manage';
 
     /**
      * Spanish description stored in `permissions.description`.
@@ -59,6 +65,12 @@ enum PermissionName: string
             self::ProductsDeactivate => 'Desactivar y reactivar productos, combinaciones y combos',
             self::ProductsDelete => 'Eliminar productos, combinaciones y combos sin historial',
             self::ProductsCatalog => 'Gestionar categorías, atributos y sus valores, y ubicaciones de detalle, incluidos sus tonos, imágenes y capas',
+            self::QuotationsView => 'Ver cotizaciones, su detalle, su vista imprimible y el historial de cotizaciones en la ficha del cliente',
+            self::QuotationsCreate => 'Crear y editar borradores, emitirlos, reenviarlos por correo, duplicar cotizaciones y descartar borradores',
+            self::QuotationsNegotiate => 'Fijar o confirmar el precio de las líneas que requieren asesora y acordar su anticipo',
+            self::QuotationsCancel => 'Anular cotizaciones emitidas',
+            self::PricingView => 'Ver esquemas, precios, precios de combos, parámetros comerciales y tasas; exportar los precios a CSV y ver el historial de importaciones',
+            self::PricingManage => 'Gestionar esquemas, asignarlos a productos, editar precios y parámetros comerciales, registrar la tasa manualmente, importar y aplicar actualizaciones masivas',
         };
     }
 }

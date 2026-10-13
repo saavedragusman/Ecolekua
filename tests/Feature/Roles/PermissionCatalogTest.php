@@ -45,18 +45,23 @@ it('FND-017 seeds 7 roles and the catalog; 001 permissions only on the protected
     $all = array_map(fn (PermissionName $p) => $p->value, PermissionName::cases());
     $foundation = array_values(array_filter(
         $all,
-        fn (string $name) => ! str_starts_with($name, 'customers.') && ! str_starts_with($name, 'products.'),
+        fn (string $name) => ! str_starts_with($name, 'customers.')
+            && ! str_starts_with($name, 'products.')
+            && ! str_starts_with($name, 'quotations.')
+            && ! str_starts_with($name, 'pricing.'),
     ));
     $productsFull = ['products.view', 'products.create', 'products.update', 'products.deactivate', 'products.catalog'];
+
+    $quotationsFull = ['quotations.view', 'quotations.create', 'quotations.negotiate', 'quotations.cancel'];
 
     $administratorSet = array_merge($foundation, [
         'customers.view', 'customers.create', 'customers.update',
         'customers.deactivate', 'customers.delete', 'customers.assign',
-    ], $productsFull, ['products.delete']);
+    ], $productsFull, ['products.delete'], $quotationsFull, ['pricing.view', 'pricing.manage']);
     $expectedOthers = [
-        'Gerente' => array_merge(['customers.view', 'customers.create', 'customers.update', 'customers.deactivate', 'customers.assign'], $productsFull),
-        'Asesora de Ventas' => array_merge(['customers.view', 'customers.create', 'customers.update', 'customers.portfolio'], $productsFull),
-        'Finanzas' => ['customers.view', 'products.view'],
+        'Gerente' => array_merge(['customers.view', 'customers.create', 'customers.update', 'customers.deactivate', 'customers.assign'], $productsFull, $quotationsFull, ['pricing.view', 'pricing.manage']),
+        'Asesora de Ventas' => array_merge(['customers.view', 'customers.create', 'customers.update', 'customers.portfolio'], $productsFull, $quotationsFull, ['pricing.view']),
+        'Finanzas' => ['customers.view', 'products.view', 'quotations.view', 'pricing.view'],
         'Supervisor de Producción' => ['products.view'],
         'Responsable de Calidad' => ['products.view'],
     ];
