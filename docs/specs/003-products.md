@@ -953,6 +953,14 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | DEC-PRD-60 | Talla del mínimo propio cuando el producto no declara la talla como atributo de pedido | A) El mínimo propio va sin talla; si se envía una talla, se rechaza · B) La talla se ignora | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-61 | Rango del mínimo propio | A) De 0 a 9999, igual que el mínimo por defecto · B) Rango propio | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-62 | Auditoría de los mínimos propios | A) Clave `stock_minimum_overrides` con filas {código, talla, mínimo}; el evento distingue la edición (`products.stock_minimums_updated`), el borrado por cambio de modo (`products.updated`) y el borrado por talla retirada (`products.attributes_updated`) · B) Un evento único | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-63 | Mensaje del rechazo cuando un combo usa el producto (E-70 y guardas de combo) | A) Cada combo se muestra como «código (nombre)», igual que DEC-PRD-57 · B) Solo el nombre | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-64 | Estado del producto componente de un combo | A) Al agregar un componente, el producto debe estar activo; los componentes existentes se conservan si el producto se desactiva después y el combo deja de ofrecerse (PRD-010) · B) Se admite cualquier producto | **Confirmada** (2026-10-08): **A** (alineada con DEC-PRD-55 y DEC-PRD-56) | — |
+| DEC-PRD-65 | Valores de la restricción de un componente | A) Basta con que el producto los admita, sin exigir que estén activos (igual que las restricciones de combinación); para el color de un producto con tela vale cualquier color ofrecido por alguna de sus telas admitidas · B) Solo valores activos | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-66 | Retirar de un producto un atributo que restringe un componente de combo | A) Se rechaza indicando el combo · B) Se quita también de la restricción | **Confirmada** (2026-10-08): **A** (Decisión 11, paso 5 del design) | — |
+| DEC-PRD-67 | Visibilidad en el portal de un combo | A) Opcional; por defecto visible al crear y se conserva al editar si no se envía · B) Obligatoria | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-68 | Valor retirado usado por una combinación y por un combo | A) Se informa primero el error de la combinación · B) Ambos errores | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-69 | Cantidad de un componente | A) Entero de 1 a 999 · B) Sin máximo | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-70 | Restricción de color de un componente que el producto deja de ofrecer (se retira una tela del producto o un color de una tela) | A) Sin regla nueva: no se bloquea el retiro; el combo queda con menos opciones y, si se queda sin ninguna, deja de ofrecerse (PRD-010) · B) Rechazar el retiro | **Confirmada** (2026-10-08): **A**. Retirar telas o colores es una decisión del negocio que no se bloquea | — |
 
 ### Decisiones técnicas
 

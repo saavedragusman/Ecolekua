@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Combination|null $combination
+ * @property-read Combo|null $combo
  */
 #[Fillable(['code', 'combination_id', 'combo_id'])]
 class CatalogCode extends Model
@@ -34,5 +35,13 @@ class CatalogCode extends Model
     public function combination(): BelongsTo
     {
         return $this->belongsTo(Combination::class);
+    }
+
+    /**
+     * @return BelongsTo<Combo, $this>
+     */
+    public function combo(): BelongsTo
+    {
+        return $this->belongsTo(Combo::class);
     }
 }
