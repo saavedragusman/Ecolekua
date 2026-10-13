@@ -100,6 +100,15 @@ return [
     'service_in_use_combinations' => 'No se puede sacar el producto del modo «Servicio»: lo incluyen las combinaciones :combinations.',
     'service_in_use_both' => 'No se puede sacar el producto del modo «Servicio»: lo admiten los productos :products y lo incluyen las combinaciones :combinations.',
 
+    // Own minimum stock per article (spec 003, PRD-009, DEC-PRD-46).
+    'stock_minimum_mode' => 'El stock mínimo por artículo solo se admite en el modo «Stock con mínimo».',
+    'stock_minimum_combination_foreign' => 'La combinación no pertenece a este producto.',
+    'stock_minimum_repeated' => 'El artículo ya tiene un stock mínimo propio en esta lista.',
+    'stock_minimum_size_required' => 'Elija la talla del artículo.',
+    'stock_minimum_size_unexpected' => 'Este producto no declara la talla como atributo de pedido.',
+    'stock_minimum_size_not_allowed' => 'La talla no está admitida por el producto.',
+    'stock_minimum_size_restricted' => 'La talla está fuera de la restricción de la combinación.',
+
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
         'mixed' => 'El campo :attribute debe contener al menos una mayúscula y una minúscula.',

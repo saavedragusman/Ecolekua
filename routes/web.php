@@ -16,6 +16,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Products\ProductStatusController;
+use App\Http\Controllers\Products\ProductStockMinimumController;
 use App\Http\Controllers\Products\ProductStructureController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
@@ -103,6 +104,7 @@ Route::put('/products/{product}', [ProductController::class, 'update'])->name('p
 Route::post('/products/{product}/activate', [ProductStatusController::class, 'activate'])->name('products.activate');
 Route::post('/products/{product}/deactivate', [ProductStatusController::class, 'deactivate'])->name('products.deactivate');
 Route::put('/products/{product}/attributes', [ProductStructureController::class, 'update'])->name('products.attributes.update');
+Route::put('/products/{product}/stock-minimums', [ProductStockMinimumController::class, 'update'])->name('products.stock-minimums.update');
 
 // Combinations of a product (PRD-005). Scoped bindings: a combination of another product is a 404.
 // The editor pages (`create`, `edit`) are declared with their pages in Phase 19.
