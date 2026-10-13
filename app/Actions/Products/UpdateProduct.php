@@ -15,8 +15,9 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Edits the general data of a product (PRD-012, design Decision 10): name, category, business
- * line, supply mode, minimum stock, custom color and portal visibility. Status has its own Actions;
- * structure, details, customizations and minimum overrides arrive in later phases.
+ * line, supply mode, minimum stock, custom color and portal visibility, plus the admitted detail
+ * locations (PRD-007), which replace the stored set when sent. Status has its own Actions;
+ * structure, customizations and minimum overrides arrive in later phases.
  *
  * Mode changes keep the supply mode rules (PRD-009, DEC-PRD-46, DEC-PRD-34): leaving
  * `stock_with_minimum` clears the default minimum (the audit row carries the previous value) and
@@ -49,7 +50,7 @@ class UpdateProduct
     private function update(Product $product, array $data, User $actor): Product
     {
         $product = Product::query()->lockForUpdate()->findOrFail($product->id)->load('category');
-        $before = ProductAudit::snapshot($product);
+        $before = $this->snapshot($product);
 
         $mode = SupplyMode::from($data['supply_mode']);
         $line = BusinessLine::from($data['business_line']);
@@ -68,9 +69,11 @@ class UpdateProduct
             'portal_visible' => $data['portal_visible'] ?? $product->portal_visible,
         ])->save();
 
+        $this->syncRelations($product, $data);
+
         $product->load('category');
 
-        $after = ProductAudit::snapshot($product);
+        $after = $this->snapshot($product);
         $changed = array_keys(array_filter($after, fn (mixed $value, string $field): bool => $value !== $before[$field], ARRAY_FILTER_USE_BOTH));
 
         if ($changed !== []) {
@@ -121,5 +124,58 @@ class UpdateProduct
     private function ensureNotServiceReferenced(Product $product, SupplyMode $mode): void
     {
         // Intentionally empty until task 11.2.
+    }
+
+    /**
+     * Full replace of the detail locations (PRD-007) when the request sends them; an omitted list
+     * keeps the stored set, like `description`. The ids were validated by
+     * `CatalogRules::productRelationRules()`.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function syncRelations(Product $product, array $data): void
+    {
+        if (array_key_exists('detail_location_ids', $data)) {
+            $ids = $this->ids($data['detail_location_ids']);
+            $this->ensureNoDetailLocationLayerGap($product, array_values(array_diff($ids, $product->detailLocations()->pluck('detail_locations.id')->all())));
+            $product->detailLocations()->sync($ids);
+        }
+    }
+
+    /**
+     * Hook for PRD-020 / DEC-PRD-52: adding a location whose `svg_layer` is missing from any
+     * template of the product is rejected with the missing layer. Templates arrive in Phase 21;
+     * task 22.7 fills this hook with the layer requirements check.
+     *
+     * @param  list<int>  $addedLocationIds
+     */
+    private function ensureNoDetailLocationLayerGap(Product $product, array $addedLocationIds): void
+    {
+        // Intentionally empty until task 22.7.
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function ids(mixed $value): array
+    {
+        return array_values(array_unique(array_map('intval', (array) $value)));
+    }
+
+    /**
+     * Audit form of the product: the general data plus the detail locations as a sorted name list
+     * (design "Audit payloads").
+     *
+     * @return array<string, mixed>
+     */
+    private function snapshot(Product $product): array
+    {
+        $locations = $product->detailLocations()->pluck('detail_locations.name')->map(fn (mixed $name): string => (string) $name)->all();
+        sort($locations, SORT_STRING | SORT_FLAG_CASE);
+
+        return [
+            ...ProductAudit::snapshot($product),
+            'detail_locations' => $locations,
+        ];
     }
 }
