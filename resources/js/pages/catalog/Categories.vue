@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
+import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import CatalogSections from '@/components/catalog/CatalogSections.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DataTable from '@/components/DataTable.vue';
@@ -82,10 +83,12 @@ function moveCategory(
     direction: 'up' | 'down',
 ): void {
     moveForm.direction = direction;
+    moveForm.clearErrors();
     moveForm.submit(move(category.id), { preserveScroll: true });
 }
 
 // Deactivating asks for confirmation (design-system §7.10); reactivating is reversible and does not.
+// A rejection closes the dialog so the backend message shows on the page.
 const deactivating = ref<CatalogCategory | null>(null);
 const confirmingDeactivate = computed({
     get: () => deactivating.value !== null,
@@ -103,15 +106,17 @@ function deactivateCategory(): void {
         return;
     }
 
+    statusForm.clearErrors();
     statusForm.submit(deactivate(target.id), {
         preserveScroll: true,
-        onSuccess: () => {
+        onFinish: () => {
             deactivating.value = null;
         },
     });
 }
 
 function reactivateCategory(category: CatalogCategory): void {
+    statusForm.clearErrors();
     statusForm.submit(activate(category.id), { preserveScroll: true });
 }
 </script>
@@ -160,6 +165,8 @@ function reactivateCategory(category: CatalogCategory): void {
                 </div>
             </AppCard>
         </form>
+
+        <ActionErrors :errors="{ ...moveForm.errors, ...statusForm.errors }" />
 
         <p class="font-body-md text-body-md text-on-surface-variant">
             Cambie el orden con las flechas. Las categorías no se eliminan: se

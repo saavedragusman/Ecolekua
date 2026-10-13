@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function attributeManager(): User
 {
@@ -784,4 +785,168 @@ it('PRD-016 denies offered color changes to a user without products.catalog and 
     expect($fabric->offeredColors()->count())->toBe(3)
         ->and(attributeAuditRows(AuditAction::CatalogFabricColorsUpdated))->toHaveCount(0)
         ->and(AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole()->context['route'])->toBe('catalog.values.offered-colors.update');
+});
+
+// --- Pages (PRD-002, spec section 8) ----------------------------------------------------------
+
+it('PRD-002 page GET /catalog/attributes lists the attributes in sort order with labels and value counts, inactive ones included', function () {
+    $size = CatalogAttribute::factory()->size()->create(['sort_order' => 3]);
+    $fabric = CatalogAttribute::factory()->fabric()->create(['sort_order' => 1]);
+    $color = CatalogAttribute::factory()->color()->inactive()->create(['sort_order' => 2]);
+    AttributeValue::factory()->for($fabric)->count(2)->create();
+    AttributeValue::factory()->for($fabric)->inactive()->create();
+    AttributeValue::factory()->for($color)->withTone()->create();
+
+    $this->actingAs(attributeManager())->get('/catalog/attributes')->assertOk()->assertInertia(function (Assert $page) use ($fabric, $size) {
+        $page->component('catalog/Attributes')
+            ->has('attributes', 3)
+            ->where('attributes.0', [
+                'id' => $fabric->id,
+                'name' => 'Tela',
+                'presentation' => 'text',
+                'presentation_label' => 'Texto',
+                'special_use' => 'fabric',
+                'special_use_label' => 'Tela',
+                'status' => 'active',
+                'status_label' => 'Activo',
+                'sort_order' => 1,
+                'values_count' => 3,
+            ])
+            ->where('attributes.1.presentation', 'color')
+            ->where('attributes.1.presentation_label', 'Color')
+            ->where('attributes.1.special_use', null)
+            ->where('attributes.1.special_use_label', null)
+            ->where('attributes.1.status', 'inactive')
+            ->where('attributes.1.status_label', 'Inactivo')
+            ->where('attributes.1.values_count', 1)
+            ->where('attributes.2.id', $size->id)
+            ->where('attributes.2.values_count', 0)
+            ->where('options.presentations', [
+                ['value' => 'text', 'label' => 'Texto'],
+                ['value' => 'image', 'label' => 'Imagen'],
+                ['value' => 'color', 'label' => 'Color'],
+            ])
+            ->where('options.special_uses', [
+                ['value' => 'fabric', 'label' => 'Tela'],
+                ['value' => 'size', 'label' => 'Talla'],
+                ['value' => 'gender', 'label' => 'Género'],
+            ])
+            ->where('can.manage', true);
+    });
+});
+
+it('PRD-002 page renders an empty list of attributes', function () {
+    $this->actingAs(attributeManager())->get('/catalog/attributes')->assertInertia(
+        fn (Assert $page) => $page->component('catalog/Attributes')->has('attributes', 0)->where('can.manage', true)
+    );
+});
+
+it('PRD-002 page GET /catalog/attributes/{attribute} lists the ordered values of a color attribute with tone, description, layer and status', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    CatalogAttribute::factory()->fabric()->create();
+    $second = AttributeValue::factory()->for($color)->withTone('#1f3a5f')->inactive()->create(['name' => 'Azul marino', 'description' => 'Oscuro', 'svg_layer' => 'azul', 'sort_order' => 2]);
+    $first = AttributeValue::factory()->for($color)->withTone('#FFFFFF')->create(['name' => 'Blanco', 'sort_order' => 1]);
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$color->id}")->assertOk()->assertInertia(function (Assert $page) use ($color, $first, $second) {
+        $page->component('catalog/AttributeShow')
+            ->where('attribute', [
+                'id' => $color->id,
+                'name' => 'Color',
+                'presentation' => 'color',
+                'presentation_label' => 'Color',
+                'special_use' => null,
+                'special_use_label' => null,
+                'status' => 'active',
+                'status_label' => 'Activo',
+                'sort_order' => $color->sort_order,
+                'values_count' => 2,
+            ])
+            ->has('values', 2)
+            ->where('values.0', [
+                'id' => $first->id,
+                'name' => 'Blanco',
+                'description' => null,
+                'tone' => '#FFFFFF',
+                'svg_layer' => null,
+                'status' => 'active',
+                'status_label' => 'Activo',
+                'sort_order' => 1,
+                'offered_colors' => null,
+            ])
+            ->where('values.1.id', $second->id)
+            ->where('values.1.description', 'Oscuro')
+            ->where('values.1.svg_layer', 'azul')
+            ->where('values.1.status', 'inactive')
+            ->where('values.1.status_label', 'Inactivo')
+            ->where('palette', [])
+            ->where('can.manage', true);
+    });
+});
+
+it('E-46 page of the fabric attribute exposes each value\'s offered colors and the active palette to choose from', function () {
+    ['fabric' => $fabric, 'navy' => $navy, 'white' => $white, 'green' => $green, 'pearl' => $pearl, 'palette' => $palette] = fabricWithOfferedColors();
+    $navy->update(['sort_order' => 1]);
+    $white->update(['sort_order' => 2]);
+    $green->update(['sort_order' => 3]);
+    $pearl->update(['sort_order' => 4]);
+    $inactiveColor = AttributeValue::factory()->for($palette)->withTone('#000000')->inactive()->create(['name' => 'Negro', 'sort_order' => 5]);
+    $fabric->offeredColors()->attach($inactiveColor->id);
+    $plain = AttributeValue::factory()->for($fabric->catalogAttribute)->create(['name' => 'DRILL', 'sort_order' => 2]);
+    $fabric->update(['sort_order' => 1]);
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$fabric->catalog_attribute_id}")->assertOk()->assertInertia(function (Assert $page) use ($fabric, $navy, $white, $green, $pearl, $inactiveColor, $plain) {
+        $page->component('catalog/AttributeShow')
+            ->where('attribute.special_use', 'fabric')
+            ->where('values.0.id', $fabric->id)
+            ->where('values.0.offered_colors', [
+                ['id' => $navy->id, 'name' => 'Azul marino', 'tone' => '#1F3A5F', 'status' => 'active'],
+                ['id' => $white->id, 'name' => 'Blanco', 'tone' => '#FFFFFF', 'status' => 'active'],
+                ['id' => $green->id, 'name' => 'Verde', 'tone' => '#2E7D32', 'status' => 'active'],
+                ['id' => $inactiveColor->id, 'name' => 'Negro', 'tone' => '#000000', 'status' => 'inactive'],
+            ])
+            ->where('values.1.id', $plain->id)
+            ->where('values.1.offered_colors', [])
+            ->where('palette', [
+                ['id' => $navy->id, 'name' => 'Azul marino', 'tone' => '#1F3A5F', 'status' => 'active'],
+                ['id' => $white->id, 'name' => 'Blanco', 'tone' => '#FFFFFF', 'status' => 'active'],
+                ['id' => $green->id, 'name' => 'Verde', 'tone' => '#2E7D32', 'status' => 'active'],
+                ['id' => $pearl->id, 'name' => 'Gris perla', 'tone' => '#C9CCD1', 'status' => 'active'],
+            ]);
+    });
+});
+
+it('E-46 page of the fabric attribute has an empty palette when no color attribute exists', function () {
+    $fabric = AttributeValue::factory()->for(CatalogAttribute::factory()->fabric())->create();
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$fabric->catalog_attribute_id}")->assertInertia(
+        fn (Assert $page) => $page->component('catalog/AttributeShow')->where('palette', [])->where('values.0.offered_colors', [])
+    );
+});
+
+it('PRD-016 pages of the attribute catalog are forbidden without products.catalog, even with products.view, and audit the denial', function (array $permissions, string $path, string $route) {
+    $actor = userWithPermissions(...$permissions);
+    $attribute = CatalogAttribute::factory()->create();
+
+    $this->actingAs($actor)->get(str_replace('{id}', (string) $attribute->id, $path))->assertForbidden();
+
+    $audit = AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole();
+
+    expect($audit->actor_id)->toBe($actor->id)
+        ->and($audit->context['route'])->toBe($route);
+})->with([
+    'index, products.view alone' => [[PermissionName::ProductsView], '/catalog/attributes', 'catalog.attributes.index'],
+    'index, every product permission but catalog' => [[PermissionName::ProductsView, PermissionName::ProductsCreate, PermissionName::ProductsUpdate, PermissionName::ProductsDeactivate, PermissionName::ProductsDelete], '/catalog/attributes', 'catalog.attributes.index'],
+    'show, products.view alone' => [[PermissionName::ProductsView], '/catalog/attributes/{id}', 'catalog.attributes.show'],
+    'show, every product permission but catalog' => [[PermissionName::ProductsView, PermissionName::ProductsCreate, PermissionName::ProductsUpdate, PermissionName::ProductsDeactivate, PermissionName::ProductsDelete], '/catalog/attributes/{id}', 'catalog.attributes.show'],
+]);
+
+it('PRD-016 pages of the attribute catalog redirect a guest to the login', function () {
+    $attribute = CatalogAttribute::factory()->create();
+
+    $this->get('/catalog/attributes')->assertRedirect('/login');
+    $this->get("/catalog/attributes/{$attribute->id}")->assertRedirect('/login');
+});
+
+it('PRD-002 page of an unknown attribute is not found', function () {
+    $this->actingAs(attributeManager())->get('/catalog/attributes/999999')->assertNotFound();
 });

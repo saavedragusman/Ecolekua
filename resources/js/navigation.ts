@@ -1,6 +1,8 @@
 import { home } from '@/routes';
 import { index as auditIndex } from '@/routes/audit';
+import { index as attributesIndex } from '@/routes/catalog/attributes';
 import { index as categoriesIndex } from '@/routes/catalog/categories';
+import { index as locationsIndex } from '@/routes/catalog/detail-locations';
 import { index as customersIndex } from '@/routes/customers';
 import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
@@ -32,6 +34,8 @@ export type NavEntry = {
     priority: number;
     // Exact path match (landing page); prefix match otherwise.
     exact?: boolean;
+    // Other paths that keep the entry highlighted (prefix match), for sections reached from it.
+    alsoActiveOn?: string[];
 };
 
 // Single source of truth for the sidebar, the bottom bar and the "Más" sheet.
@@ -61,7 +65,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     },
     {
         // Entry point of the catalog (spec 003): lands on categories; the other sections are
-        // reached from the page. Active only on this page because the match is by `href`.
+        // reached from the page and keep the entry highlighted through `alsoActiveOn`.
         key: 'catalog',
         label: 'Catálogo',
         icon: 'category',
@@ -69,6 +73,7 @@ export const NAV_ENTRIES: NavEntry[] = [
         permission: 'products.catalog',
         group: 'Comercial',
         priority: 30,
+        alsoActiveOn: [attributesIndex.url(), locationsIndex.url()],
     },
     {
         key: 'users',

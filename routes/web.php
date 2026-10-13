@@ -69,6 +69,8 @@ Route::post('/catalog/categories/{category}/deactivate', [CategoryController::cl
 
 // Catalog attributes and their values (PRD-002). Values are created under their attribute and
 // addressed by their own id afterwards; neither is ever deleted.
+Route::get('/catalog/attributes', [AttributeController::class, 'index'])->name('catalog.attributes.index');
+Route::get('/catalog/attributes/{attribute}', [AttributeController::class, 'show'])->name('catalog.attributes.show');
 Route::post('/catalog/attributes', [AttributeController::class, 'store'])->name('catalog.attributes.store');
 Route::put('/catalog/attributes/{attribute}', [AttributeController::class, 'update'])->name('catalog.attributes.update');
 Route::post('/catalog/attributes/{attribute}/move', [AttributeController::class, 'move'])->name('catalog.attributes.move');
