@@ -113,6 +113,13 @@ return [
     'product_in_combos_service' => 'No se puede pasar el producto al modo «Servicio»: es componente de los combos :combos.',
     'structure_value_in_combos' => 'No se puede retirar el valor ni el atributo admitido: lo restringen los componentes de los combos :combos.',
 
+    // Restricted delete (spec 003, PRD-014, DEC-PRD-42, DEC-PRD-52).
+    'delete_product_in_combos' => 'No se puede eliminar el producto: es componente de los combos :combos. Puede desactivarlo.',
+    'delete_combination_in_combos' => 'No se puede eliminar la combinación: forma parte de los combos :combos. Puede desactivarla.',
+    'delete_service_in_use_products' => 'No se puede eliminar el servicio: lo admiten los productos :products. Puede desactivarlo.',
+    'delete_service_in_use_combinations' => 'No se puede eliminar el servicio: lo incluyen las combinaciones :combinations. Puede desactivarlo.',
+    'delete_service_in_use_both' => 'No se puede eliminar el servicio: lo admiten los productos :products y lo incluyen las combinaciones :combinations. Puede desactivarlo.',
+
     // Own minimum stock per article (spec 003, PRD-009, DEC-PRD-46).
     'stock_minimum_mode' => 'El stock mínimo por artículo solo se admite en el modo «Stock con mínimo».',
     'stock_minimum_combination_foreign' => 'La combinación no pertenece a este producto.',

@@ -102,6 +102,7 @@ Route::post('/catalog/detail-locations/{location}/deactivate', [DetailLocationCo
 // `/create` routes go before `/{product}` routes when they arrive.
 Route::post('/products', [ProductController::class, 'store'])->name('products.store');
 Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
 Route::post('/products/{product}/activate', [ProductStatusController::class, 'activate'])->name('products.activate');
 Route::post('/products/{product}/deactivate', [ProductStatusController::class, 'deactivate'])->name('products.deactivate');
 Route::put('/products/{product}/attributes', [ProductStructureController::class, 'update'])->name('products.attributes.update');
@@ -114,12 +115,14 @@ Route::scopeBindings()->group(function () {
     Route::put('/products/{product}/combinations/{combination}', [CombinationController::class, 'update'])->name('products.combinations.update');
     Route::post('/products/{product}/combinations/{combination}/activate', [CombinationController::class, 'activate'])->name('products.combinations.activate');
     Route::post('/products/{product}/combinations/{combination}/deactivate', [CombinationController::class, 'deactivate'])->name('products.combinations.deactivate');
+    Route::delete('/products/{product}/combinations/{combination}', [CombinationController::class, 'destroy'])->name('products.combinations.destroy');
 });
 
 // Combos (spec 003, PRD-010). Authorization lives in ComboPolicy. The read pages (`combos.index`,
 // `combos.show`, `combos.create`, `combos.edit`) are declared with their pages in Phase 20.
 Route::post('/combos', [ComboController::class, 'store'])->name('combos.store');
 Route::put('/combos/{combo}', [ComboController::class, 'update'])->name('combos.update');
+Route::delete('/combos/{combo}', [ComboController::class, 'destroy'])->name('combos.destroy');
 Route::post('/combos/{combo}/activate', [ComboController::class, 'activate'])->name('combos.activate');
 Route::post('/combos/{combo}/deactivate', [ComboController::class, 'deactivate'])->name('combos.deactivate');
 

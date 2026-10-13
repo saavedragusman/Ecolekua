@@ -2,7 +2,9 @@
 
 namespace App\Support\Products;
 
+use App\Models\AttributeValue;
 use App\Models\Product;
+use App\Models\ProductAttribute;
 
 /**
  * Audit form of the general data of a product (design "Audit payloads"): enum values as strings
@@ -28,5 +30,30 @@ final class ProductAudit
             'portal_visible' => $product->portal_visible,
             'status' => $product->status->value,
         ];
+    }
+
+    /**
+     * Audit form of the structure: attribute name, role and sorted value names, in display order.
+     * The attributes must be loaded with `catalogAttribute` and `allowedValues`.
+     *
+     * @param  iterable<ProductAttribute>  $declaredAttributes
+     * @return list<array{attribute: string, role: string, values: list<string>}>
+     */
+    public static function structure(iterable $declaredAttributes): array
+    {
+        $structure = [];
+
+        foreach ($declaredAttributes as $declaredAttribute) {
+            $names = array_map(fn (AttributeValue $value): string => $value->name, $declaredAttribute->allowedValues->all());
+            sort($names);
+
+            $structure[] = [
+                'attribute' => $declaredAttribute->catalogAttribute->name,
+                'role' => $declaredAttribute->role->value,
+                'values' => $names,
+            ];
+        }
+
+        return $structure;
     }
 }

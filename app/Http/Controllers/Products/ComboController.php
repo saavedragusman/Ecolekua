@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Products;
 use App\Actions\Products\ActivateCombo;
 use App\Actions\Products\CreateCombo;
 use App\Actions\Products\DeactivateCombo;
+use App\Actions\Products\DeleteCombo;
 use App\Actions\Products\UpdateCombo;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Products\StoreComboRequest;
@@ -62,5 +63,20 @@ class ComboController extends Controller
         Inertia::flash(['type' => 'success', 'message' => 'El combo fue desactivado.']);
 
         return redirect()->back();
+    }
+
+    /**
+     * Restricted delete (PRD-014): a rejection is a `BusinessRuleViolation` rendered back with an
+     * error flash (422 for JSON). Until the list page exists (Phase 20) it redirects to `/combos`.
+     */
+    public function destroy(Request $request, Combo $combo, DeleteCombo $deleteCombo): RedirectResponse
+    {
+        Gate::authorize('delete', $combo);
+
+        $deleteCombo->handle($combo, $request->user());
+
+        Inertia::flash(['type' => 'success', 'message' => 'El combo fue eliminado.']);
+
+        return redirect('/combos');
     }
 }

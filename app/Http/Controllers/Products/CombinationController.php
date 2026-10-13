@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Products;
 use App\Actions\Products\ActivateCombination;
 use App\Actions\Products\CreateCombination;
 use App\Actions\Products\DeactivateCombination;
+use App\Actions\Products\DeleteCombination;
 use App\Actions\Products\UpdateCombination;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Products\StoreCombinationRequest;
@@ -65,5 +66,20 @@ class CombinationController extends Controller
         Inertia::flash(['type' => 'success', 'message' => 'La combinación fue desactivada.']);
 
         return redirect()->back();
+    }
+
+    /**
+     * Restricted delete (PRD-014, E-61): a rejection is a `BusinessRuleViolation` rendered back with
+     * an error flash (422 for JSON). Success goes to the product path, like the other writes.
+     */
+    public function destroy(Request $request, Product $product, Combination $combination, DeleteCombination $deleteCombination): RedirectResponse
+    {
+        Gate::authorize('delete', $combination);
+
+        $deleteCombination->handle($combination, $request->user());
+
+        Inertia::flash(['type' => 'success', 'message' => 'La combinación fue eliminada.']);
+
+        return redirect("/products/{$product->id}");
     }
 }
