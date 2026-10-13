@@ -45,6 +45,22 @@ pest()->group('cot')
 
 /*
 |--------------------------------------------------------------------------
+| Expectations
+|--------------------------------------------------------------------------
+|
+| Money always travels as a canonical string (DT-01, spec 004 design Decision 3): `"40.00"`, a rate
+| `"875.6505"` with scale 4. Never a JSON number, never a float.
+|
+*/
+
+expect()->extend('toBeMoneyString', function (int $scale = 2) {
+    expect($this->value)->toBeString()->toMatch('/^\d+\.\d{'.$scale.'}$/');
+
+    return $this;
+});
+
+/*
+|--------------------------------------------------------------------------
 | Functions
 |--------------------------------------------------------------------------
 |
