@@ -3,10 +3,13 @@
 namespace App\Support\Products;
 
 use App\Enums\AttributePresentation;
+use App\Enums\AttributeRole;
 use App\Enums\AttributeSpecialUse;
 use App\Enums\CatalogStatus;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
+use App\Models\Combination;
+use App\Models\Product;
 
 /**
  * Turns catalog models into the plain arrays the Inertia pages receive (design Decision 20). Every
@@ -75,6 +78,47 @@ final class ProductPresenter
             ->get();
 
         return array_values($colors->map(self::colorRef(...))->all());
+    }
+
+    /**
+     * Descriptive name of a combination (spec section 5, E-07): the product name followed by the
+     * value names of each axis in axis order, joined by " · "; several values of one axis are joined
+     * by " o " (DEC-PRD-33).
+     *
+     * @param  list<list<string>>  $axes  value names of each axis, in axis order
+     */
+    public static function descriptiveName(Product $product, array $axes): string
+    {
+        $parts = array_map(fn (array $names): string => implode(' o ', $names), array_filter($axes, fn (array $names): bool => $names !== []));
+
+        return implode(' · ', [$product->name, ...$parts]);
+    }
+
+    /**
+     * Descriptive name of a stored combination: its axis values by the display order of the
+     * attributes and of the values.
+     */
+    public static function combinationName(Combination $combination): string
+    {
+        $combination->load('values');
+        $product = $combination->product;
+        $axes = [];
+
+        $axisAttributes = $product->productAttributes()
+            ->where('role', AttributeRole::Axis->value)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($axisAttributes as $row) {
+            $axes[] = array_values($combination->values
+                ->filter(fn (AttributeValue $value): bool => $value->catalog_attribute_id === $row->catalog_attribute_id)
+                ->sortBy(['sort_order', 'id'])
+                ->map(fn (AttributeValue $value): string => $value->name)
+                ->all());
+        }
+
+        return self::descriptiveName($product, $axes);
     }
 
     /**
