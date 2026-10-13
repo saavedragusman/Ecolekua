@@ -435,7 +435,7 @@ it('PRD-019 gives every option id, name, sort order, description, image URLs, to
     $short = $catalog['vals']['Manga corta'];
     $white = $catalog['vals']['Blanco'];
     $short->update(['description' => 'Manga al codo', 'svg_layer' => 'manga-corta']);
-    $white->update(['description' => 'Blanco óptico', 'svg_layer' => 'color-blanco']);
+    $white->update(['description' => 'Blanco óptico']);
     $pechera = $catalog['locations']['Pechera'];
     $pechera->update(['svg_layer' => 'pechera']);
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
@@ -11,6 +11,7 @@ import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
 import IconButton from '@/components/IconButton.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { useScrollToForm } from '@/composables/useScrollToForm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     activate,
@@ -40,6 +41,8 @@ const columns = computed<DataTableColumn[]>(() => [
 const formOpen = ref(false);
 const editing = ref<CatalogCategory | null>(null);
 const form = useForm({ name: '' });
+const formElement = useTemplateRef<HTMLFormElement>('formElement');
+const { scrollToForm } = useScrollToForm(formElement);
 
 const moveForm = useForm<{ direction: 'up' | 'down' }>({ direction: 'up' });
 const statusForm = useForm({});
@@ -56,6 +59,7 @@ function openEdit(category: CatalogCategory): void {
     form.name = category.name;
     form.clearErrors();
     formOpen.value = true;
+    void scrollToForm();
 }
 
 function closeForm(): void {
@@ -138,7 +142,12 @@ function reactivateCategory(category: CatalogCategory): void {
 
         <CatalogSections current="categories" />
 
-        <form v-if="can.manage && formOpen" novalidate @submit.prevent="submit">
+        <form
+            v-if="can.manage && formOpen"
+            ref="formElement"
+            novalidate
+            @submit.prevent="submit"
+        >
             <AppCard>
                 <h2 class="font-headline-sm text-headline-sm text-primary">
                     {{
@@ -174,6 +183,7 @@ function reactivateCategory(category: CatalogCategory): void {
         </p>
 
         <DataTable
+            fit
             :columns="columns"
             :rows="categories"
             row-key="id"
@@ -186,17 +196,19 @@ function reactivateCategory(category: CatalogCategory): void {
                 />
             </template>
             <template #cell-actions="{ row }">
-                <div class="flex flex-wrap items-center gap-space-sm">
+                <div
+                    class="flex flex-wrap items-center gap-x-space-md gap-y-space-sm"
+                >
                     <IconButton
                         icon="arrow_upward"
-                        variant="tool"
+                        variant="reorder"
                         :label="`Subir ${row.name}`"
                         :disabled="position(row) === 0 || moveForm.processing"
                         @click="moveCategory(row, 'up')"
                     />
                     <IconButton
                         icon="arrow_downward"
-                        variant="tool"
+                        variant="reorder"
                         :label="`Bajar ${row.name}`"
                         :disabled="
                             position(row) === categories.length - 1 ||

@@ -101,7 +101,10 @@ final class CatalogRules
             'name' => ['required', 'string', 'max:100', Rule::unique('attribute_values', 'name')->where('catalog_attribute_id', $attribute->id)->ignore($value?->id)],
             'description' => [...$optional, 'nullable', 'string', 'max:255'],
             'tone' => $tone,
-            'svg_layer' => self::layerRules($optional),
+            // DEC-PRD-97: the tone of a color value paints the `cuerpo` layer, so it never carries one.
+            'svg_layer' => $attribute->presentation === AttributePresentation::Color
+                ? [...$optional, 'prohibited']
+                : self::layerRules($optional),
         ];
     }
 

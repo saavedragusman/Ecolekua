@@ -97,9 +97,11 @@ Route::put('/catalog/detail-locations/{location}', [DetailLocationController::cl
 Route::post('/catalog/detail-locations/{location}/activate', [DetailLocationController::class, 'activate'])->name('catalog.detail-locations.activate');
 Route::post('/catalog/detail-locations/{location}/deactivate', [DetailLocationController::class, 'deactivate'])->name('catalog.detail-locations.deactivate');
 
-// Products (spec 003, PRD-003). Authorization lives in ProductPolicy. The read pages (`products.index`,
-// `products.show`, `products.create`, `products.edit`) are declared with their pages in Phases 17-18;
-// `/create` routes go before `/{product}` routes when they arrive.
+// Products (spec 003, PRD-003, PRD-015). Authorization lives in ProductPolicy. The form pages
+// (`products.create`, `products.edit`) are declared with their pages in Phase 18; the `/create` route
+// goes before `/{product}` when it arrives.
+Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
 Route::post('/products', [ProductController::class, 'store'])->name('products.store');
 Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
 Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');

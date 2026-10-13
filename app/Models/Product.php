@@ -156,4 +156,30 @@ class Product extends Model
 
         $query->whereRaw("`name` collate utf8mb4_unicode_ci like ? escape '\\\\'", ['%'.addcslashes($term, '\\%_').'%']);
     }
+
+    /**
+     * List search (PRD-015, E-30): the product name (accent- and case-insensitive) or the code of any
+     * of its combinations, so that searching a code leads to the product that contains it. Combo
+     * codes share the registry but belong to no product. `%` and `_` match literally; a blank term
+     * filters nothing.
+     *
+     * @param  Builder<Product>  $query
+     */
+    public function scopeSearchByNameOrCode(Builder $query, string $term): void
+    {
+        $term = trim($term);
+
+        if ($term === '') {
+            return;
+        }
+
+        $pattern = '%'.addcslashes($term, '\\%_').'%';
+
+        $query->where(function (Builder $query) use ($pattern): void {
+            $query->whereRaw("`products`.`name` collate utf8mb4_unicode_ci like ? escape '\\\\'", [$pattern])
+                ->orWhereHas('combinations', function (Builder $combinations) use ($pattern): void {
+                    $combinations->whereHas('catalogCode', fn (Builder $code) => $code->whereRaw("`catalog_codes`.`code` like ? escape '\\\\'", [$pattern]));
+                });
+        });
+    }
 }
