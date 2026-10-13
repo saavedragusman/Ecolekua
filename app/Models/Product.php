@@ -33,11 +33,13 @@ use Illuminate\Support\Carbon;
  * @property bool $allows_custom_color
  * @property bool $portal_visible
  * @property CatalogStatus $status
+ * @property int|null $price_scheme_id
  * @property string|null $image_display_path
  * @property string|null $image_thumb_path
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read ProductCategory $category
+ * @property-read PriceScheme|null $priceScheme
  * @property-read Collection<int, ProductAttribute> $productAttributes
  * @property-read Collection<int, DetailLocation> $detailLocations
  * @property-read Collection<int, ProductTemplate> $templates
@@ -63,6 +65,7 @@ class Product extends Model
             // form sends numbers as strings (no spurious products.updated audit row).
             'product_category_id' => 'integer',
             'min_stock_default' => 'integer',
+            'price_scheme_id' => 'integer',
             'business_line' => BusinessLine::class,
             'supply_mode' => SupplyMode::class,
             'allows_custom_color' => 'boolean',
@@ -77,6 +80,17 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProductCategory::class, 'product_category_id');
+    }
+
+    /**
+     * Price scheme that prices the product (COT-002); null until one is assigned. It is written by the
+     * pricing Actions, so it is not mass assignable.
+     *
+     * @return BelongsTo<PriceScheme, $this>
+     */
+    public function priceScheme(): BelongsTo
+    {
+        return $this->belongsTo(PriceScheme::class);
     }
 
     /**

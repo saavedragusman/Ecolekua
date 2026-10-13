@@ -102,3 +102,19 @@ it('DT-01 finds no float in the money code', function () {
     expect(array_map('basename', $files))->toContain('Money.php', 'AsBigDecimal.php')
         ->and($offenders)->toBe([]);
 });
+
+it('DT-01 declares no float or double column in the 004 migrations', function () {
+    $migrations = glob(database_path('migrations/2026_10_14_*.php')) ?: [];
+    $offenders = [];
+
+    foreach ($migrations as $path) {
+        $found = floatOffendersInPhp(file_get_contents($path));
+
+        if ($found !== []) {
+            $offenders[basename($path)] = $found;
+        }
+    }
+
+    expect(array_map('basename', $migrations))->toContain('2026_10_14_000001_create_pricing_tables.php')
+        ->and($offenders)->toBe([]);
+});

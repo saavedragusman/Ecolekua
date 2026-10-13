@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -23,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Combo $combo
  * @property-read Product $product
+ * @property-read ComboItemPrice|null $price
  */
 #[Fillable(['combo_id', 'product_id', 'quantity', 'sort_order'])]
 class ComboComponent extends Model
@@ -57,6 +59,16 @@ class ComboComponent extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Price of the component, when one is registered (COT-005).
+     *
+     * @return HasOne<ComboItemPrice, $this>
+     */
+    public function price(): HasOne
+    {
+        return $this->hasOne(ComboItemPrice::class);
     }
 
     /**
