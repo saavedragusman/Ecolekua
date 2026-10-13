@@ -61,6 +61,11 @@ return [
 
     // Pricing (spec 004).
     'scheme_name_unique' => 'Ya existe un esquema de precio con ese nombre.',
+    'scheme_type_immutable' => 'El tipo del esquema no se puede cambiar; cree otro esquema y reasigne los productos.',
+    'scheme_tier_foreign' => 'El tramo no pertenece a este esquema.',
+    'scheme_price_count' => '{1} :count precio|[2,*] :count precios',
+    'scheme_product_count' => '{1} :count producto|[2,*] :count productos',
+    'scheme_prices_removal' => 'Esta modificación elimina :prices de :products. Confirme la eliminación de los precios afectados.',
     'offered_colors_invalid' => 'Solo se pueden elegir valores del atributo de color.',
     'offered_colors_inactive' => 'No se puede ofrecer un color inactivo.',
 
@@ -270,9 +275,11 @@ return [
         'components.*.quantity' => 'cantidad',
         'components.*.values' => 'valores admitidos',
         'tiers' => 'tramos',
+        'tiers.*.id' => 'tramo',
         'tiers.*.label' => 'nombre del tramo',
         'tiers.*.min' => 'cantidad mínima del tramo',
         'tiers.*.max' => 'cantidad máxima del tramo',
         'tiers.*.kind' => 'tipo de tramo',
+        'confirm_price_removal' => 'confirmación de eliminación de precios',
     ],
 ];

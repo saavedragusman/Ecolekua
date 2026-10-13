@@ -28,7 +28,7 @@ class StorePriceSchemeRequest extends FormRequest
             'name' => SchemeInput::nameRules(null),
             'type' => ['required', Rule::enum(PriceSchemeType::class)],
             'tiers' => [$this->input('type') === PriceSchemeType::Fixed->value ? 'prohibited' : 'required', 'array', 'min:1'],
-            ...SchemeInput::tierRules(),
+            ...SchemeInput::tierRules(withId: false),
         ];
     }
 

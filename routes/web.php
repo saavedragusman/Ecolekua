@@ -159,6 +159,9 @@ Route::post('/combos/{combo}/deactivate', [ComboController::class, 'deactivate']
 // Price schemes (spec 004, COT-001). Authorization lives in PricingPolicy (`pricing.manage`); the scheme
 // pages arrive with the pricing UI, so only the writes exist for now.
 Route::post('/pricing/schemes', [PriceSchemeController::class, 'store'])->name('pricing.schemes.store');
+Route::put('/pricing/schemes/{scheme}', [PriceSchemeController::class, 'update'])->whereNumber('scheme')->name('pricing.schemes.update');
+Route::post('/pricing/schemes/{scheme}/activate', [PriceSchemeController::class, 'activate'])->whereNumber('scheme')->name('pricing.schemes.activate');
+Route::post('/pricing/schemes/{scheme}/deactivate', [PriceSchemeController::class, 'deactivate'])->whereNumber('scheme')->name('pricing.schemes.deactivate');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

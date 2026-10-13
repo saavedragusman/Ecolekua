@@ -88,4 +88,55 @@ Created: `app/Support/Pricing/{Money,InvalidAmount}.php`, `app/Casts/AsBigDecima
 Authored changed lines (excluding `tasks.md`, `apply-progress.md`, `composer.lock`): 2,241 additions, 0 deletions in 42 files (production about 1,285, tests about 955). The design estimated ~470; the slice carries 10 enums, 6 models, 6 factories, the migration, Money and its tests as one cohesive unit. Recommendation: `size:exception` for this PR.
 
 ### Remaining
-Task 2.13 commit (user authorization). Phase 3 not started.
+Task 2.13 commit: done (PR 2a `fb7abb0`, PR 2b `9a221fb`). Phase 3: see below.
+
+## Phase 3 (PR 3a `feat/004-pricing-and-quotations-3a-scheme-create`, commit `74882d5`; PR 3b `feat/004-pricing-and-quotations-3b-scheme-update`): tasks 3.1 to 3.8 done; each part gated green and committed (user decision 2026-10-13, option A)
+
+Gate per part: 3a: pint, types:check, pnpm check, pnpm types:check, pnpm build all passed, `artisan test` 1843 tests (1841 passed, 2 skipped, 10034 assertions). 3b: same five passed, `artisan test` 1863 tests (1861 passed, 2 skipped, 10156 assertions), as in the Gate section below.
+
+### TDD Cycle Evidence
+
+The run was interrupted by an API rate limit after the Actions were written; the first part of the RED log below was observed before the interruption, the seeder RED after the resume.
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 3.1/3.2 | `tests/Unit/Pricing/SchemeRulesTest.php` | Unit | N/A (new) | Only partial: the first run errored with Pest `DatasetMissing` because `SchemeRules::RESERVED_HEADERS` is read at dataset load and the class did not exist. That is a load error, not per-test failures; no per-test RED output was captured. | 31/31 | one case per invalid rule, all errors in one pass, label length 1/30/31/empty/blank, case and spaces, accent-different positive control, 10 reserved headers (plain and upper-case padded), header only as substring accepted | none |
+| 3.3/3.4 | `tests/Feature/Pricing/PriceSchemeTest.php` (scheme writes) | Integration (HTTP) | N/A (new) | 40/40 failed (404 on the missing routes; one test failed on missing validation errors) | 32/40 on the first GREEN run, then 40/40 after fixing 4 defects found by the tests (audit key order and `toBe` vs `toEqual` on JSON, `Eloquent\Collection::only()` dropping id keys, parked-order duplicate, `validated()` placing tiers without `id` after those with it) | create tiered and fixed, 7 invalid sets, all errors together, malformed input (7), name as_ci, DEC-COT-51 (reject and accept), labels and limits keep prices, swap of labels/order (unique indexes), rename-only audit and no-op, new tier without prices, DEC-COT-23 ask/confirm/no prices, DEC-COT-57, foreign tier id, invalid tiers on update, fixed scheme, E-03 refuse/allow/no-op, 403 on 4 writes plus unrelated permissions | helper `AffectedPrices`, `SchemeAudit`, `SchemeInput` extracted |
+| 3.5/3.6 | same file (seeder) | Integration | N/A (new) | 4 errors (class `PriceSchemeSeeder` absent) + 1 failure (DatabaseSeeder created nothing) | 6/6 seeder tests; file 46/46 | exact 4 schemes and tiers, DEC-COT-26 limits, idempotent second run, existing name in other case skipped, console audit without actor/IP, called from DatabaseSeeder | none |
+| 3.7 | architecture suites | Refactor | green | n/a | `ProtectedByDefaultTest` and `NoManualForbiddenTest` pass in the full suite; PHPStan found 8 type errors, fixed by real typing (`normalizeTiers`, list-building loops), no ignores | n/a | `SchemeInput::normalizeTiers` shared by both Actions |
+
+### Gate (2026-10-13)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.43s)
+- `sail artisan test`: passed, 1863 tests (1861 passed, 2 skipped, 10156 assertions)
+- Harness on the local DB (no reset): `sail artisan route:list --name=pricing.schemes` shows 4 routes; `db:seed --class=PriceSchemeSeeder` twice: counts stay at 4 schemes / 9 tiers / 4 `pricing.scheme_created` audits after both runs.
+
+### Files
+Modified: `lang/es/validation.php`, `routes/web.php`, `database/seeders/DatabaseSeeder.php`, `openspec/changes/004-pricing-and-quotations/tasks.md`.
+Created: `app/Actions/Pricing/{CreatePriceScheme,UpdatePriceScheme,ActivatePriceScheme,DeactivatePriceScheme}.php`, `app/Http/Controllers/Pricing/PriceSchemeController.php`, `app/Http/Requests/Pricing/{StorePriceSchemeRequest,UpdatePriceSchemeRequest}.php`, `app/Support/Pricing/{SchemeRules,SchemeInput,SchemeAudit,AffectedPrices}.php`, `database/seeders/PriceSchemeSeeder.php`, `tests/Unit/Pricing/SchemeRulesTest.php`, `tests/Feature/Pricing/PriceSchemeTest.php`.
+
+### Deviations from design
+1. Helpers beyond the plan: `SchemeInput` (request shape rules and `normalizeTiers`), `SchemeAudit` (tier snapshot), `AffectedPrices` (affected prices, the shared "affected prices" answer that task 4.3 planned to extract: Phase 4 can reuse it directly).
+2. `AffectedPrices` writes `size_group` as the group's size names joined by ", " (null when ungrouped) because `SizeGroupLabel` belongs to Phase 5b; replace with the label then.
+3. Fixed schemes accept no `tiers` (422 `tiers` when sent); the update of a fixed scheme changes only the name.
+4. Deactivation message: "El esquema está asignado a productos activos: <names>." via `BusinessRuleViolation` (422 JSON).
+5. Update locks the scheme row, then the product rows holding affected prices (in id order); the full scheme-products-combos order of Decision 10 only matters when combos get prices (Phase 6).
+
+### Work unit evidence
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest --group=cot`: passed, 219 tests; `PriceSchemeTest` 46, `SchemeRulesTest` 31 |
+| Runtime harness | route list (4 routes) and seeder run twice, second run creates nothing |
+| Rollback boundary | revert the 4 Actions, `SchemeRules/SchemeInput/SchemeAudit/AffectedPrices`, seeder and its `DatabaseSeeder` line, 2 requests, controller, 4 routes, the `validation.php` entries and the 2 test files |
+
+### Size and split (applied)
+Authored changed lines (excluding `tasks.md`, `apply-progress.md`, `composer.lock`): 1,777 additions, 0 deletions in 17 files (production about 994, tests about 783). Over the 600-line rule, so it was split as below (3a: 886 lines, 3b: 891 lines), both `size:exception`, both independently green:
+- **PR 3a** (~890): `SchemeRules`, `SchemeInput`, `SchemeAudit`, `CreatePriceScheme`, `StorePriceSchemeRequest`, controller `store`, the store route, `PriceSchemeSeeder` + `DatabaseSeeder`, lang entries for name/type/tiers, `SchemeRulesTest`, and the E-01/E-02 create, name-uniqueness, 403-create and seeder tests (tasks 3.1, 3.2, 3.5, 3.6 and the create part of 3.3/3.4).
+- **PR 3b** (~890): `UpdatePriceScheme`, `ActivatePriceScheme`, `DeactivatePriceScheme`, `AffectedPrices`, `UpdatePriceSchemeRequest`, controller `update/activate/deactivate`, their routes, remaining lang entries, and the DEC-COT-51/23/57, COT-001 update, E-03 and 403 update/status tests.
+A three-way split (rules + seeder; create; update/status) would bring each part nearer 600 but 3a/3b are the smallest cut with no dead code in either part. Both parts exceed 600 and would need `size:exception`.
+
+### Remaining
+Phase 4 not started (base: PR 3b).
