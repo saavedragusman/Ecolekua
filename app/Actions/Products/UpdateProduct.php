@@ -8,6 +8,7 @@ use App\Enums\BusinessLine;
 use App\Enums\SupplyMode;
 use App\Models\Product;
 use App\Models\User;
+use App\Support\Products\CatalogUsage;
 use App\Support\Products\ProductAudit;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -117,13 +118,34 @@ class UpdateProduct
     }
 
     /**
-     * Hook for DEC-PRD-52 / E-70: taking a product out of mode `service` is rejected while other
-     * products admit it or combinations include it as a customization, naming them. Those tables
-     * arrive in Phase 11, which fills this hook (task 11.2) with `CatalogUsage::productsUsingService()`.
+     * DEC-PRD-52 / E-70: taking a product out of mode `service` is rejected while other products
+     * admit it or combinations include it as a customization, naming the products and the
+     * combination codes. Runs before any write, under the product lock.
+     *
+     * @throws ValidationException on `supply_mode`
      */
     private function ensureNotServiceReferenced(Product $product, SupplyMode $mode): void
     {
-        // Intentionally empty until task 11.2.
+        if ($product->supply_mode !== SupplyMode::Service || $mode === SupplyMode::Service) {
+            return;
+        }
+
+        $usage = CatalogUsage::productsUsingService($product->id);
+        $replace = [
+            'products' => CatalogUsage::quote($usage['products']),
+            'combinations' => CatalogUsage::quote($usage['combinations']),
+        ];
+
+        $message = match (true) {
+            $usage['products'] !== [] && $usage['combinations'] !== [] => __('validation.service_in_use_both', $replace),
+            $usage['products'] !== [] => __('validation.service_in_use_products', $replace),
+            $usage['combinations'] !== [] => __('validation.service_in_use_combinations', $replace),
+            default => null,
+        };
+
+        if ($message !== null) {
+            throw ValidationException::withMessages(['supply_mode' => $message]);
+        }
     }
 
     /**
