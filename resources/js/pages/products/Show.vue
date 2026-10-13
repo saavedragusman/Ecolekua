@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppIcon from '@/components/AppIcon.vue';
@@ -18,7 +18,18 @@ import {
     index,
     structure,
 } from '@/routes/products';
-import type { ProductCan, ProductDetail } from '@/types/products';
+import {
+    activate as activateCombinationRoute,
+    create as createCombination,
+    deactivate as deactivateCombinationRoute,
+    destroy as destroyCombination,
+    edit as editCombination,
+} from '@/routes/products/combinations';
+import type {
+    ProductCan,
+    ProductCombinationRow,
+    ProductDetail,
+} from '@/types/products';
 
 defineOptions({ layout: AppLayout });
 
@@ -51,13 +62,85 @@ function deleteProduct(): void {
     deleteForm.submit(destroy(props.product.id));
 }
 
-const combinationColumns: DataTableColumn[] = [
+// Combination actions (PRD-013, PRD-014). A combination is governed by the same permissions as
+// its product, so the product `can` flags decide what is offered; the backend authorizes each
+// request and a rejection (overlap on reactivation, combo or history on delete) comes back as an
+// error flash on this page.
+const combinationForm = useForm({});
+const combinationToDeactivate = ref<ProductCombinationRow | null>(null);
+const combinationToDelete = ref<ProductCombinationRow | null>(null);
+const confirmingDeactivateCombination = computed({
+    get: () => combinationToDeactivate.value !== null,
+    set: (open: boolean) => {
+        if (!open) {
+            combinationToDeactivate.value = null;
+        }
+    },
+});
+const confirmingDeleteCombination = computed({
+    get: () => combinationToDelete.value !== null,
+    set: (open: boolean) => {
+        if (!open) {
+            combinationToDelete.value = null;
+        }
+    },
+});
+
+function combinationTarget(row: ProductCombinationRow) {
+    return { product: props.product.id, combination: row.id };
+}
+
+function deactivateCombination(): void {
+    const row = combinationToDeactivate.value;
+
+    if (row === null) {
+        return;
+    }
+
+    combinationForm.submit(deactivateCombinationRoute(combinationTarget(row)), {
+        preserveScroll: true,
+        onFinish: () => {
+            combinationToDeactivate.value = null;
+        },
+    });
+}
+
+function reactivateCombination(row: ProductCombinationRow): void {
+    // Reactivating is reversible and has no side effects: no confirmation.
+    combinationForm.submit(activateCombinationRoute(combinationTarget(row)), {
+        preserveScroll: true,
+    });
+}
+
+function deleteCombination(): void {
+    const row = combinationToDelete.value;
+
+    if (row === null) {
+        return;
+    }
+
+    combinationForm.submit(destroyCombination(combinationTarget(row)), {
+        preserveScroll: true,
+        onFinish: () => {
+            combinationToDelete.value = null;
+        },
+    });
+}
+
+// The "Acciones" column only exists when the user can act on combinations.
+const combinationColumns = computed<DataTableColumn[]>(() => [
     { key: 'code', label: 'Código' },
     { key: 'name', label: 'Combinación' },
     { key: 'restrictions', label: 'Restricciones' },
     { key: 'included_customizations', label: 'Incluye' },
     { key: 'status', label: 'Estado' },
-];
+    ...(props.can.update ||
+    props.can.createCombination ||
+    props.can.deactivate ||
+    props.can.delete
+        ? [{ key: 'actions', label: 'Acciones' }]
+        : []),
+]);
 
 const LABEL = 'font-label-md text-label-md text-on-surface-variant';
 const VALUE = 'font-body-md text-body-md text-on-surface';
@@ -200,7 +283,63 @@ const EMPTY = 'No registrado';
                         :label="row.status_label"
                     />
                 </template>
+                <template #cell-actions="{ row }">
+                    <span class="flex flex-col gap-space-xs md:flex-row">
+                        <AppButton
+                            v-if="can.update"
+                            variant="outlined"
+                            :href="
+                                editCombination({
+                                    product: product.id,
+                                    combination: row.id,
+                                }).url
+                            "
+                        >
+                            Editar
+                        </AppButton>
+                        <AppButton
+                            v-if="can.createCombination"
+                            variant="outlined"
+                            :href="
+                                createCombination(product.id, {
+                                    query: { from: row.id },
+                                }).url
+                            "
+                        >
+                            Duplicar
+                        </AppButton>
+                        <AppButton
+                            v-if="can.deactivate && row.status === 'active'"
+                            variant="outlined"
+                            :disabled="combinationForm.processing"
+                            @click="combinationToDeactivate = row"
+                        >
+                            Desactivar
+                        </AppButton>
+                        <AppButton
+                            v-if="can.deactivate && row.status === 'inactive'"
+                            variant="outlined"
+                            :disabled="combinationForm.processing"
+                            @click="reactivateCombination(row)"
+                        >
+                            Reactivar
+                        </AppButton>
+                        <AppButton
+                            v-if="can.delete"
+                            variant="danger"
+                            :disabled="combinationForm.processing"
+                            @click="combinationToDelete = row"
+                        >
+                            Eliminar
+                        </AppButton>
+                    </span>
+                </template>
             </DataTable>
+            <div v-if="can.createCombination">
+                <AppButton :href="createCombination(product.id).url">
+                    Nueva combinación
+                </AppButton>
+            </div>
         </AppCard>
 
         <AppCard>
@@ -354,6 +493,22 @@ const EMPTY = 'No registrado';
             confirm-label="Eliminar"
             :processing="deleteForm.processing"
             @confirm="deleteProduct"
+        />
+        <ConfirmDialog
+            v-model:open="confirmingDeactivateCombination"
+            title="Desactivar combinación"
+            message="La combinación sale de la oferta y no se acepta en cotizaciones ni pedidos nuevos. Lo que esté en curso continúa su flujo normal."
+            confirm-label="Desactivar"
+            :processing="combinationForm.processing"
+            @confirm="deactivateCombination"
+        />
+        <ConfirmDialog
+            v-model:open="confirmingDeleteCombination"
+            title="Eliminar combinación"
+            message="Se eliminará la combinación. Esta acción es irreversible. Si forma parte de un combo o tiene historial no se puede eliminar y deberá desactivarla."
+            confirm-label="Eliminar"
+            :processing="combinationForm.processing"
+            @confirm="deleteCombination"
         />
     </div>
 </template>

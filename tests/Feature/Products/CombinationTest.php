@@ -18,6 +18,7 @@ use App\Support\Products\ProductPresenter;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function combCreator(): User
 {
@@ -748,6 +749,131 @@ it('PRD-016 requires products.deactivate to activate or deactivate a combination
     'deactivate' => ['deactivate', CatalogStatus::Active],
     'activate' => ['activate', CatalogStatus::Inactive],
 ]);
+
+// --- Editor pages (PRD-005, PRD-016, Decision 20) ---------------------------------------------
+
+it('PRD-016 requires products.create for the create page and products.update for the edit page, auditing the denial', function () {
+    $catalog = combCatalog();
+    $combination = makeCombination($catalog, '110');
+    $base = "/products/{$catalog['product']->id}/combinations";
+
+    $this->actingAs(combEditor())->get("{$base}/create")->assertForbidden();
+    $this->actingAs(combCreator())->get("{$base}/{$combination->id}/edit")->assertForbidden();
+    $this->actingAs(combCreator())->get("{$base}/create")->assertOk();
+    $this->actingAs(combEditor())->get("{$base}/{$combination->id}/edit")->assertOk();
+
+    expect(AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->orderBy('id')->get()->map(fn (AuditLog $log): string => $log->context['route'])->all())
+        ->toBe(['products.combinations.create', 'products.combinations.edit']);
+});
+
+it('PRD-005 renders the create page with the axes, the restrictable order attributes and the selectable services', function () {
+    $catalog = combCatalog();
+    $active = Product::factory()->service()->create(['name' => 'Bordado pequeño']);
+    $inactive = Product::factory()->service()->inactive()->create(['name' => 'Bordado grande']);
+    Product::factory()->create(['name' => 'Producto de línea']);
+
+    $this->actingAs(combCreator())->get("/products/{$catalog['product']->id}/combinations/create")->assertInertia(function (Assert $page) use ($catalog, $active) {
+        $page->component('products/combinations/Create')
+            ->where('product', ['id' => $catalog['product']->id, 'name' => 'Camisa corporativa', 'status' => 'active', 'status_label' => 'Activo'])
+            ->where('initial', ['code' => '', 'description' => '', 'axes' => [], 'restrictions' => [], 'included_customization_ids' => []]);
+
+        $props = $page->toArray()['props'];
+        $axes = collect($props['axes']);
+        $labels = fn (array $values): array => collect($values)->pluck('label')->all();
+
+        // Axes in the display order of the product, values limited to the ones it admits (not "Algodón sin declarar").
+        expect($axes->pluck('name')->all())->toBe(['Tela', 'Modelo', 'Manga', 'Género'])
+            ->and($axes->pluck('id')->all())->toBe(array_map(fn (string $name): int => $catalog['attrs'][$name]->id, ['Tela', 'Modelo', 'Manga', 'Género']))
+            ->and($labels($axes[0]['values']))->toBe(['ALG-OXF Pima', 'Drill', 'Gabardina'])
+            ->and($axes[0]['values'][0]['value'])->toBe($catalog['vals']['ALG-OXF Pima']->id)
+            // Only the order attributes that can be restricted: the color of a product with fabric cannot (DEC-PRD-35).
+            ->and(collect($props['order_attributes'])->pluck('name')->all())->toBe(['Talla'])
+            ->and($labels($props['order_attributes'][0]['values']))->toBe(['S', 'M', 'L', 'XL'])
+            // Active services only, never a product of another mode.
+            ->and($props['services'])->toBe([['value' => $active->id, 'label' => 'Bordado pequeño']]);
+    });
+
+    expect($inactive->status)->toBe(CatalogStatus::Inactive);
+});
+
+it('PRD-005 renders the edit page with the stored combination and keeps the services it already includes', function () {
+    $catalog = combCatalog();
+    $held = Product::factory()->service()->create(['name' => 'Bordado pequeño']);
+    $other = Product::factory()->service()->create(['name' => 'Estampado']);
+    $combination = app(CreateCombination::class)->handle(
+        $catalog['product'],
+        combPayload($catalog, ['code' => '110', 'description' => 'Camisa de oficina', 'included_customization_ids' => [$held->id]], restrictions: ['Talla' => ['S', 'M']]),
+        combCreator(),
+    );
+    $held->update(['status' => CatalogStatus::Inactive]);
+    $product = $catalog['product'];
+
+    $this->actingAs(combEditor())->get("/products/{$product->id}/combinations/{$combination->id}/edit")->assertInertia(function (Assert $page) use ($catalog, $combination, $held, $other) {
+        $page->component('products/combinations/Edit')->where('combination.id', $combination->id);
+
+        $props = $page->toArray()['props'];
+        $stored = $props['combination'];
+        $ids = fn (string ...$names): array => array_map(fn (string $name): int => $catalog['vals'][$name]->id, $names);
+
+        expect($stored['code'])->toBe('110')
+            ->and($stored['description'])->toBe('Camisa de oficina')
+            ->and($stored['axes'][$catalog['attrs']['Tela']->id])->toBe($ids('ALG-OXF Pima'))
+            ->and($stored['axes'][$catalog['attrs']['Género']->id])->toBe($ids('Caballero'))
+            ->and($stored['restrictions'][$catalog['attrs']['Talla']->id])->toEqualCanonicalizing($ids('S', 'M'))
+            ->and($stored['included_customization_ids'])->toBe([$held->id])
+            // The deactivated service stays offered, marked, because the combination holds it (DEC-PRD-56).
+            ->and(collect($props['services'])->pluck('label')->all())->toBe(['Bordado pequeño (inactivo)', 'Estampado'])
+            ->and(collect($props['services'])->pluck('value')->all())->toBe([$held->id, $other->id]);
+    });
+});
+
+it('PRD-005 duplicates a combination: ?from pre-fills axes, restrictions, description and services with an empty code', function () {
+    $catalog = combCatalog();
+    $service = Product::factory()->service()->create(['name' => 'Bordado pequeño']);
+    $source = app(CreateCombination::class)->handle(
+        $catalog['product'],
+        combPayload($catalog, ['code' => '110', 'description' => 'Camisa de oficina', 'included_customization_ids' => [$service->id]], restrictions: ['Talla' => ['S']]),
+        combCreator(),
+    );
+
+    $this->actingAs(combCreator())->get("/products/{$catalog['product']->id}/combinations/create?from={$source->id}")->assertInertia(function (Assert $page) use ($catalog, $service) {
+        $initial = $page->toArray()['props']['initial'];
+
+        expect($initial['code'])->toBe('')
+            ->and($initial['description'])->toBe('Camisa de oficina')
+            ->and($initial['axes'][$catalog['attrs']['Modelo']->id])->toBe([$catalog['vals']['Columbia especial']->id])
+            ->and($initial['restrictions'][$catalog['attrs']['Talla']->id])->toBe([$catalog['vals']['S']->id])
+            ->and($initial['included_customization_ids'])->toBe([$service->id]);
+    });
+});
+
+it('PRD-005 ignores ?from when it is not a combination of this product or not a valid id', function (string $from) {
+    $catalog = combCatalog();
+    $otherProduct = Product::factory()->create();
+    $foreign = Combination::factory()->for($otherProduct)->create();
+    CatalogCode::factory()->create(['combination_id' => $foreign->id, 'code' => 'X-1']);
+    $from = str_replace('{foreign}', (string) $foreign->id, $from);
+
+    $this->actingAs(combCreator())->get("/products/{$catalog['product']->id}/combinations/create?from={$from}")->assertInertia(
+        fn (Assert $page) => $page->where('initial', ['code' => '', 'description' => '', 'axes' => [], 'restrictions' => [], 'included_customization_ids' => []]),
+    );
+})->with([
+    'combination of another product' => ['{foreign}'],
+    'unknown id' => ['999999'],
+    'not a number' => ['abc'],
+]);
+
+it('PRD-005 returns 404 on the edit page of a combination of another product', function () {
+    $catalog = combCatalog();
+    $combination = makeCombination($catalog, '110');
+    $otherProduct = Product::factory()->create();
+
+    $this->actingAs(combEditor())->get("/products/{$otherProduct->id}/combinations/{$combination->id}/edit")->assertNotFound();
+});
+
+it('PRD-005 returns 404 for an unknown product on the create page', function () {
+    $this->actingAs(combCreator())->get('/products/999999/combinations/create')->assertNotFound();
+});
 
 it('PRD-005 returns 404 for an unknown product or a combination of another product', function () {
     $catalog = combCatalog();

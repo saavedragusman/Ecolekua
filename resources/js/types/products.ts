@@ -263,6 +263,36 @@ export type ProductStructureAttribute = {
     values: ProductFormOption<number>[];
 };
 
+// --- Combination editor (PRD-005) ------------------------------------------------------------
+
+export type CombinationSubject = {
+    id: number;
+    name: string;
+    status: CatalogStatus;
+    status_label: string;
+};
+
+// An axis or a restrictable order attribute with the values the product admits for it.
+export type CombinationAttribute = {
+    id: number;
+    name: string;
+    values: ProductFormOption<number>[];
+};
+
+// `attributeId => valueIds`. An empty map arrives as an empty array (PHP encoding).
+export type CombinationValueMap = Record<number, number[]>;
+
+// Fields of the form as the backend sends them and expects them back.
+export type CombinationFields = {
+    code: string;
+    description: string;
+    axes: CombinationValueMap;
+    restrictions: CombinationValueMap;
+    included_customization_ids: number[];
+};
+
+export type CombinationEditable = CombinationFields & { id: number };
+
 export type ProductStructureSubject = {
     id: number;
     name: string;
