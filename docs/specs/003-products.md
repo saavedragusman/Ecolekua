@@ -961,6 +961,19 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | DEC-PRD-68 | Valor retirado usado por una combinación y por un combo | A) Se informa primero el error de la combinación · B) Ambos errores | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-69 | Cantidad de un componente | A) Entero de 1 a 999 · B) Sin máximo | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-70 | Restricción de color de un componente que el producto deja de ofrecer (se retira una tela del producto o un color de una tela) | A) Sin regla nueva: no se bloquea el retiro; el combo queda con menos opciones y, si se queda sin ninguna, deja de ofrecerse (PRD-010) · B) Rechazar el retiro | **Confirmada** (2026-10-08): **A**. Retirar telas o colores es una decisión del negocio que no se bloquea | — |
+| DEC-PRD-71 | Selección no disponible al resolver | A) Combinación inactiva, sin combinación que coincida, o producto inexistente → error en `product` con «La selección no está disponible.» · B) Error por campo | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-72 | Valor de eje desactivado (E-24) al resolver | A) Error en el campo del eje (`axes.{id}`) · B) Mensaje general de no disponible | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-73 | Mensajes de la resolución | A) Los textos de error no fijados por la spec los redacta el equipo (p. ej. «La selección coincide con más de una combinación.») y se revisan en la interfaz · B) Fijarlos en la spec | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-74 | Nombre descriptivo de la selección | A) Nombre del producto más los valores de eje elegidos, sin atributos de pedido · B) Incluir talla y color | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-75 | Personalización incluida cuyo servicio se desactivó después | A) Se devuelve igual como incluida (coherente con DEC-PRD-56) · B) Se omite | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-76 | Alcance de la restricción de la combinación sobre el color | A) Se aplica al color de un producto sin tela (DEC-PRD-36); no al color de un producto con tela ni al color personalizado · B) A todos | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-77 | Atributos no declarados por el producto en la selección | A) Se rechazan con error en ese campo; solo pueden venir de un error del frontend e ignorarlos haría creer al cliente que su elección se registró · B) Se ignoran | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-78 | Ubicaciones de detalle o personalizaciones repetidas en la selección | A) Se rechazan: una ubicación tiene un solo color y la cantidad de personalizaciones la define `004` · B) Se aceptan repetidas | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-79 | Formato del color personalizado | A) Tono `#RRGGBB`, devuelto en mayúsculas; nota recortada, hasta 100 caracteres, vacía = nula; `custom_color` se ignora si el color elegido no es «Personalizado» · B) Otro formato | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-80 | Tela inválida al resolver | A) Se informa solo el error de la tela y no se validan los colores · B) Ambos errores | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-81 | Aplicación automática de un único valor admitido | A) Función disponible y probada; se usa con los componentes de combo (unidad 14b) · B) Aplicarla también a productos sueltos | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-82 | Combinaciones sin código | A) No se cargan en la resolución · B) Se cargan | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-83 | `product_id` como texto | A) Se acepta un texto de dígitos · B) Solo entero | **Confirmada** (2026-10-08): **A** | — |
 
 ### Decisiones técnicas
 
