@@ -541,7 +541,7 @@ Ejemplo: el pañal antigoteo talla 5XG tiene un stock mínimo de 6 y un cliente 
 
 En los pañales ecológicos infantiles, la regla se aplica cuando la cantidad pedida supera el stock disponible.
 
-En los productos con stock mínimo, Ecolekua debe confirmar si la regla protege el mínimo (disponible − pedido < mínimo) o si solo se aplica cuando la cantidad pedida supera el stock disponible (DEC-PRD-11).
+Si el stock queda bajo el mínimo, se notifica a ventas, administración o gerencia para reponer. Si el pedido supera el disponible, se deriva a WhatsApp y la asesora gestiona la entrega y la fabricación (DEC-PRD-11).
 
 ---
 

@@ -203,6 +203,34 @@ it('E-41 gives the general template when the product has no template for the cho
         ->and(tplOptions($catalog, '110')['template']['id'])->toBe($general->id);
 });
 
+it('E-41 gives the general template to an admitted gender without its own template while Caballero and Dama keep theirs (DEC-PRD-99)', function () {
+    $catalog = tplCatalog();
+    $camisa = $catalog['camisa'];
+    $catalog['vals']['Unisex'] = AttributeValue::factory()->for($catalog['attrs']['Género'], 'catalogAttribute')->create(['name' => 'Unisex']);
+    $camisa->productAttributes()->where('catalog_attribute_id', $catalog['attrs']['Género']->id)->sole()
+        ->allowedValues()->attach($catalog['vals']['Unisex']->id);
+    $unisexAxes = [...resAxesOf('110-1'), 'Género' => 'Unisex'];
+    resCombination($catalog, $camisa, '110-U', array_map(fn (string $name): array => [$name], $unisexAxes));
+    $svg = FictitiousSvg::template(TPL_ALL_LAYERS);
+
+    tplUpload($this, tplEditor(), $camisa, $svg)->assertRedirect();
+    tplUpload($this, tplEditor(), $camisa, $svg, ['variant_value_id' => $catalog['vals']['Caballero']->id], 'caballero.svg')->assertRedirect();
+    tplUpload($this, tplEditor(), $camisa, $svg, ['variant_value_id' => $catalog['vals']['Dama']->id], 'dama.svg')->assertRedirect();
+
+    $templateOf = fn (?string $gender): int => ProductTemplate::query()
+        ->where('product_id', $camisa->id)
+        ->where('variant_value_id', $gender === null ? null : $catalog['vals'][$gender]->id)->sole()->id;
+    $unisex = app(ListSelectionOptions::class)->handle([
+        'product_id' => $camisa->id,
+        'axes' => collect($unisexAxes)->mapWithKeys(fn (string $name, string $attribute): array => [$catalog['attrs'][$attribute]->id => $catalog['vals'][$name]->id])->all(),
+    ])->toArray();
+
+    expect($unisex['code'])->toBe('110-U')
+        ->and($unisex['template']['id'])->toBe($templateOf(null))
+        ->and(tplOptions($catalog, '110-1')['template']['id'])->toBe($templateOf('Dama'))
+        ->and(tplOptions($catalog, '110')['template']['id'])->toBe($templateOf('Caballero'));
+});
+
 it('E-41 rejects a template for a gender the product does not admit, for a value that is not a gender and for a product without the gender attribute', function () {
     $catalog = tplCatalog();
     $unisex = AttributeValue::factory()->for($catalog['attrs']['Género'], 'catalogAttribute')->create(['name' => 'Unisex']);
