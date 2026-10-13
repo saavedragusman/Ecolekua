@@ -31,8 +31,9 @@ use Illuminate\Validation\ValidationException;
  *    declares the fabric, which admits none (DEC-PRD-35);
  * 3. role rule (DEC-PRD-50): `ProductRules::roleViolation()`;
  * 4. freeze while combinations exist (DEC-PRD-41, E-60);
- * 5. no admitted value (or order attribute) used by a combination can be removed (DEC-PRD-37, E-24, E-57);
- * 6. layer guard and combo in-use check: empty hooks, filled in Phases 22 and 13;
+ * 5. no admitted value (or order attribute) used by a combination or restricted by a combo component
+ *    can be removed (DEC-PRD-37, E-24, E-57);
+ * 6. layer guard: an empty hook, filled in Phase 22;
  * 7. the own minimum stock of a removed size is deleted (DEC-PRD-52, E-71), after the empty hook
  *    `ensureNoStockForRemovedSizes()` that spec 008 fills;
  * 8. audit with the full previous and new structure; the deleted minimums go in `old_values`.
@@ -69,7 +70,7 @@ class SyncProductAttributes
 
             $removedValueIds = $this->removedValueIds($declared, $current);
             $this->ensureRemovedValuesNotUsedByCombinations($product, $removedValueIds);
-            $this->ensureNoComboUsesRemovedValues($product, $removedValueIds);
+            $this->ensureNoComboUsesRemovedValues($product, $removedValueIds, $this->removedAttributeIds($declared, $current));
             $this->ensureLayerGuard($product, $declared, $current);
             $this->ensureNoStockForRemovedSizes($product, $removedValueIds);
 
@@ -316,15 +317,40 @@ class SyncProductAttributes
     }
 
     /**
-     * Hook for DEC-PRD-37 / E-24: removing an allowed value that a combo component restricts must be
-     * rejected naming the combos. The combo tables arrive in Phase 13, which fills this hook (task
-     * 13.6) with `CatalogUsage::combosUsingProduct()`.
+     * Attributes of the current structure that the new one no longer declares.
+     *
+     * @param  list<array{attribute_id: int, role: AttributeRole, value_ids: list<int>}>  $declared
+     * @param  Collection<int, ProductAttribute>  $current
+     * @return list<int>
+     */
+    private function removedAttributeIds(array $declared, Collection $current): array
+    {
+        return array_values(array_diff($current->keys()->all(), array_column($declared, 'attribute_id')));
+    }
+
+    /**
+     * DEC-PRD-37, DEC-PRD-44 / E-24, E-57: removing an allowed value, or a whole attribute, that a
+     * combo component of this product restricts is rejected naming the combos. The attribute is
+     * checked as well because the color of a product with fabric has no allowed values of its own
+     * (DEC-PRD-35): a component restricts it to colors the fabrics offer, so removing the attribute
+     * is the only way to break that restriction.
      *
      * @param  list<int>  $removedValueIds
+     * @param  list<int>  $removedAttributeIds
+     *
+     * @throws ValidationException naming the combos that restrict a removed value or attribute
      */
-    private function ensureNoComboUsesRemovedValues(Product $product, array $removedValueIds): void
+    private function ensureNoComboUsesRemovedValues(Product $product, array $removedValueIds, array $removedAttributeIds): void
     {
-        // Intentionally empty until task 13.6.
+        if ($removedValueIds === [] && $removedAttributeIds === []) {
+            return;
+        }
+
+        $combos = CatalogUsage::combosRestricting($product->id, $removedValueIds, $removedAttributeIds);
+
+        if ($combos !== []) {
+            throw ValidationException::withMessages(['attributes' => __('validation.structure_value_in_combos', ['combos' => CatalogUsage::quote($combos)])]);
+        }
     }
 
     /**
