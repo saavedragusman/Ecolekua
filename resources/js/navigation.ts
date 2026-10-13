@@ -3,6 +3,7 @@ import { index as auditIndex } from '@/routes/audit';
 import { index as attributesIndex } from '@/routes/catalog/attributes';
 import { index as categoriesIndex } from '@/routes/catalog/categories';
 import { index as locationsIndex } from '@/routes/catalog/detail-locations';
+import { index as combosIndex } from '@/routes/combos';
 import { index as customersIndex } from '@/routes/customers';
 import { index as productsIndex } from '@/routes/products';
 import { index as rolesIndex } from '@/routes/roles';
@@ -72,6 +73,15 @@ export const NAV_ENTRIES: NavEntry[] = [
         permission: 'products.view',
         group: 'Comercial',
         priority: 20,
+    },
+    {
+        key: 'combos',
+        label: 'Combos',
+        icon: 'deployed_code',
+        href: combosIndex.url(),
+        permission: 'products.view',
+        group: 'Comercial',
+        priority: 25,
     },
     {
         // Entry point of the catalog (spec 003): lands on categories; the other sections are

@@ -124,8 +124,12 @@ Route::scopeBindings()->group(function () {
     Route::delete('/products/{product}/combinations/{combination}', [CombinationController::class, 'destroy'])->name('products.combinations.destroy');
 });
 
-// Combos (spec 003, PRD-010). Authorization lives in ComboPolicy. The read pages (`combos.index`,
-// `combos.show`, `combos.create`, `combos.edit`) are declared with their pages in Phase 20.
+// Combos (spec 003, PRD-010). Authorization lives in ComboPolicy. `combos/create` is declared before
+// `combos/{combo}` so it is not taken for an id.
+Route::get('/combos', [ComboController::class, 'index'])->name('combos.index');
+Route::get('/combos/create', [ComboController::class, 'create'])->name('combos.create');
+Route::get('/combos/{combo}', [ComboController::class, 'show'])->name('combos.show');
+Route::get('/combos/{combo}/edit', [ComboController::class, 'edit'])->name('combos.edit');
 Route::post('/combos', [ComboController::class, 'store'])->name('combos.store');
 Route::put('/combos/{combo}', [ComboController::class, 'update'])->name('combos.update');
 Route::delete('/combos/{combo}', [ComboController::class, 'destroy'])->name('combos.destroy');
