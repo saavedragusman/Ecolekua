@@ -116,4 +116,15 @@ final class ProductCombinations
 
         $combination->values()->sync($pivot);
     }
+
+    /**
+     * Replaces the customizations included in the price of a combination (PRD-008, DEC-PRD-47). The
+     * ids were validated as products in mode `service` by `CombinationRules`.
+     *
+     * @param  array<array-key, mixed>|null  $serviceIds  null clears the set
+     */
+    public static function syncCustomizations(Combination $combination, ?array $serviceIds): void
+    {
+        $combination->customizations()->sync(array_values(array_unique(array_map('intval', $serviceIds ?? []))));
+    }
 }

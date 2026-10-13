@@ -166,15 +166,18 @@ final class CatalogRules
     }
 
     /**
-     * Rules of the detail locations of an edited product (PRD-007, design Decision 10). The list
-     * replaces the stored set when it is sent. A location must be active when it is added, but the
-     * product keeps the ones it already holds if they were deactivated afterwards.
+     * Rules of the detail locations and admitted customizations of an edited product (PRD-007,
+     * PRD-008, design Decision 10). Both lists replace the stored set when they are sent. A location
+     * or service must be active when it is added, but the product keeps the ones it already holds if
+     * they were deactivated afterwards; a customization is a product in mode `service` and never the
+     * product itself.
      *
      * @return array<string, list<mixed>>
      */
     public static function productRelationRules(Product $product): array
     {
         $heldLocations = $product->detailLocations()->pluck('detail_locations.id')->all();
+        $heldServices = $product->customizations()->pluck('products.id')->all();
 
         return [
             'detail_location_ids' => ['sometimes', 'nullable', 'array'],
@@ -186,11 +189,38 @@ final class CatalogRules
                         ->orWhereIn('id', $heldLocations),
                 )),
             ],
+            'customization_ids' => ['sometimes', 'nullable', 'array'],
+            'customization_ids.*' => [
+                'integer',
+                Rule::notIn([$product->id]),
+                Rule::exists('products', 'id')->where(fn (Builder $query) => $query
+                    ->where('supply_mode', SupplyMode::Service->value)
+                    ->where(fn (Builder $group) => $group
+                        ->where('status', CatalogStatus::Active->value)
+                        ->orWhereIn('id', $heldServices))),
+            ],
         ];
     }
 
     /**
-     * Messages of `productRelationRules()`.
+     * Rule of the customizations a combination includes (PRD-008, DEC-PRD-47): products in mode
+     * `service`, independent of the ones the product admits as extras.
+     *
+     * @return array<string, list<mixed>>
+     */
+    public static function includedCustomizationRules(): array
+    {
+        return [
+            'included_customization_ids' => ['sometimes', 'nullable', 'array'],
+            'included_customization_ids.*' => [
+                'integer',
+                Rule::exists('products', 'id')->where('supply_mode', SupplyMode::Service->value),
+            ],
+        ];
+    }
+
+    /**
+     * Messages of `productRelationRules()` and `includedCustomizationRules()`.
      *
      * @return array<string, string>
      */
@@ -198,6 +228,9 @@ final class CatalogRules
     {
         return [
             'detail_location_ids.*.exists' => __('validation.detail_location_unavailable'),
+            'customization_ids.*.exists' => __('validation.customization_unavailable'),
+            'customization_ids.*.not_in' => __('validation.customization_unavailable'),
+            'included_customization_ids.*.exists' => __('validation.included_customization_unavailable'),
         ];
     }
 

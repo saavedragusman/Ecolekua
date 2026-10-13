@@ -579,7 +579,7 @@ it('PRD-003 returns 404 for an unknown product on edit', function () {
         ->assertNotFound();
 });
 
-// --- Details (PRD-007, design Decision 10) ------------------------------------------------------
+// --- Details and admitted customizations (PRD-007, PRD-008, design Decision 10) ----------------
 
 /**
  * Names of the detail locations or customizations a product holds, sorted, for readable assertions.
@@ -686,7 +686,72 @@ it('PRD-007 writes no audit row when the same locations arrive in another order 
         ->and(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(0);
 });
 
-it('PRD-007 rejects malformed relation payloads', function (string $field, mixed $value) {
+it('PRD-008 replaces the admitted customizations with active service products and audits the name lists', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    [$small, $large, $vinyl] = [
+        Product::factory()->service()->create(['name' => 'Bordado pequeño']),
+        Product::factory()->service()->create(['name' => 'Bordado grande']),
+        Product::factory()->service()->create(['name' => 'Vinil']),
+    ];
+    $product->customizations()->attach([$small->id, $large->id]);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, [
+            'name' => $product->name,
+            'customization_ids' => [$large->id, $vinyl->id],
+        ]))
+        ->assertRedirect();
+
+    $audit = productAuditRows(AuditAction::ProductUpdated)->sole();
+
+    expect(productRelationNames($product, 'customizations'))->toBe(['Bordado grande', 'Vinil'])
+        ->and($audit->old_values)->toBe(['customizations' => ['Bordado grande', 'Bordado pequeño']])
+        ->and($audit->new_values)->toBe(['customizations' => ['Bordado grande', 'Vinil']]);
+});
+
+it('PRD-008 rejects a customization that is not a service, is inactive when added, is the product itself or unknown', function (string $case) {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+
+    $id = match ($case) {
+        'not a service' => Product::factory()->create()->id,
+        'inactive' => Product::factory()->service()->inactive()->create()->id,
+        'itself' => $product->id,
+        'unknown' => 999999,
+    };
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'customization_ids' => [$id]]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['customization_ids.0']);
+
+    expect($product->customizations()->count())->toBe(0)
+        ->and(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(0);
+})->with(['not a service', 'inactive', 'itself', 'unknown']);
+
+it('PRD-008 keeps a customization that was deactivated afterwards when it is resubmitted and clears with an empty list', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
+    $service = Product::factory()->service()->create(['name' => 'Bordado pequeño']);
+    $product->customizations()->attach($service->id);
+    $service->forceFill(['status' => CatalogStatus::Inactive])->save();
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'customization_ids' => [$service->id]]))
+        ->assertRedirect();
+
+    expect(productRelationNames($product, 'customizations'))->toBe(['Bordado pequeño']);
+
+    $this->actingAs(productEditor())
+        ->putJson("/products/{$product->id}", productPayload($category, ['name' => $product->name, 'customization_ids' => []]))
+        ->assertRedirect();
+
+    expect(productRelationNames($product, 'customizations'))->toBe([])
+        ->and(productAuditRows(AuditAction::ProductUpdated))->toHaveCount(1);
+});
+
+it('PRD-008 rejects malformed relation payloads', function (string $field, mixed $value) {
     $category = ProductCategory::factory()->create();
     $product = Product::factory()->for($category, 'category')->create(['name' => 'Camisa corporativa']);
 
@@ -696,6 +761,7 @@ it('PRD-007 rejects malformed relation payloads', function (string $field, mixed
         ->assertJsonValidationErrors([$field]);
 })->with([
     'locations not an array' => ['detail_location_ids', 'abc'],
+    'customizations not an array' => ['customization_ids', 5],
 ]);
 
 it('PRD-007 denies editing details to a user without products.update and changes nothing', function () {

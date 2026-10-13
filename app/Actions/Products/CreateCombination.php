@@ -75,6 +75,7 @@ class CreateCombination
 
         CatalogCode::query()->create(['code' => $data['code'], 'combination_id' => $combination->id]);
         ProductCombinations::syncValues($combination, $axes, $restrictions);
+        ProductCombinations::syncCustomizations($combination, $data['included_customization_ids'] ?? null);
 
         $this->audit->handle(
             AuditAction::CombinationCreated,

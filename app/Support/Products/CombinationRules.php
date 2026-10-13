@@ -50,6 +50,7 @@ final class CombinationRules
             'restrictions' => ['sometimes', 'nullable', 'array'],
             'restrictions.*' => ['array'],
             'restrictions.*.*' => ['integer'],
+            ...CatalogRules::includedCustomizationRules(),
         ];
     }
 
@@ -59,6 +60,7 @@ final class CombinationRules
     public static function messages(): array
     {
         return [
+            ...CatalogRules::relationMessages(),
             'code.unique' => __('validation.combination_code_unique'),
             'code.regex' => __('validation.combination_code_format'),
         ];
