@@ -139,4 +139,47 @@ Authored changed lines (excluding `tasks.md`, `apply-progress.md`, `composer.loc
 A three-way split (rules + seeder; create; update/status) would bring each part nearer 600 but 3a/3b are the smallest cut with no dead code in either part. Both parts exceed 600 and would need `size:exception`.
 
 ### Remaining
-Phase 4 not started (base: PR 3b).
+Phase 3 done. Phase 4: see below.
+
+## Phase 4 (PR 6, `feat/004-pricing-and-quotations-4-scheme-assignment`, base PR 3b): tasks 4.1 to 4.3 done; 4.4 gate and harness green, commit pending (needs the orchestrator)
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 4.1/4.2 | `tests/Feature/Pricing/SchemeAssignmentTest.php` | Integration (HTTP) | `--group=cot` 219 tests green before (Phase 3 state) | First run: 24 errors (`Call to undefined function storedTieredScheme()`: the 3b helpers are not loaded when the file runs alone, so the file got its own `assignmentScheme/assignmentPrice` helpers). Second run, the real RED: 25 tests, 1 passed, 22 failed (all with 404 on `PUT /pricing/products/scheme` and the single route), 2 errors (`getByName()` null on the two route names). First GREEN attempt: 21/25; 3 failures from the single route (controller lacked a `Product` parameter, so implicit binding never ran: 422 instead of 404) and 1 test fixture error (same catalog code twice); both fixed, then 25/25 | bulk of 3 with per-product audit, skip unchanged (no write, no audit, `updated_at` untouched), all-unchanged no-op, inactive scheme 422, DEC-COT-23 ask (2 prices, 1 product; nothing changes) and confirm (3 prices across 2 combinations and 2 tiers; other product's price kept), reassign without prices needs no confirmation, skipped product keeps its prices, combo id rejected, 6 malformed inputs, DEC-COT-52 without `products.view`, single equals bulk (old/new values), single asks and rejects inactive, 404 unknown product, rollback on unknown id, 403 audited on both routes, route order, duplicate ids once, tiers untouched | `AffectedPrices` got `forProducts` and `auditByProduct`, and `forTiers` shares one private `rows()` with it |
+| 4.3 | `PriceSchemeTest`, `--group=cot` | Refactor | 46 Phase 3 tests green | n/a | `--group=cot` 244/244 after the refactor; PHPStan found 2 type errors (mixed id types), fixed with typed mapping and `$request->integer()` | n/a | `AffectedPrices` reused from 3b: no new helper |
+
+### Gate (2026-10-13)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.46s)
+- `sail artisan test`: passed, 1888 tests (1886 passed, 2 skipped, 10276 assertions)
+- Harness (no reset): `sail artisan route:list --path=pricing/products` lists `pricing.products.scheme.bulk` (`pricing/products/scheme`) and `pricing.products.scheme.update` (`pricing/products/{product}/scheme`).
+
+### Files
+Modified: `app/Support/Pricing/AffectedPrices.php`, `lang/es/validation.php`, `routes/web.php`, `openspec/changes/004-pricing-and-quotations/tasks.md`.
+Created: `app/Actions/Pricing/AssignPriceScheme.php`, `app/Http/Requests/Pricing/AssignPriceSchemeRequest.php`, `app/Http/Controllers/Pricing/ProductSchemeController.php`, `tests/Feature/Pricing/SchemeAssignmentTest.php`.
+
+### Deviations from design
+1. Request fields (not fixed by the design): `product_ids` (list), `price_scheme_id`, optional `confirm_price_removal`. The single route merges `product_ids` from the bound product. The unconfirmed-removal answer is a 422 on `confirm_price_removal`.
+2. The audit `{scheme}` is the scheme name (`old_values.scheme` is null for a product without scheme).
+3. Inactive scheme and unknown product ids are checked in the Action under the locks (`ValidationException` on `price_scheme_id` / `product_ids`); the request only checks shape and existence. Duplicate ids are processed once.
+4. Inactive products can be assigned (the spec only requires the scheme to be active); no spec text says otherwise.
+5. `AssignPriceScheme` takes no `AuditOrigin`/context from the controller (defaults to request origin); the parameters exist for the initial load (Phase later).
+6. The test file defines its own helpers because the 3b helpers live in `PriceSchemeTest.php` and are not loaded when a file runs alone.
+
+### Work unit evidence
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest tests/Feature/Pricing/SchemeAssignmentTest.php`: passed, 25 tests, 116 assertions; `sail pest --group=cot`: 244 passed |
+| Runtime harness | `route:list --path=pricing/products`: both routes, bulk first |
+| Rollback boundary | revert `AssignPriceScheme`, request, controller, the 2 routes and the `use`, the 4 lang lines, the `AffectedPrices` additions (`forProducts`, `auditByProduct`, `rows()` split) and the test file |
+
+### Size
+Authored changed lines (excluding `tasks.md`, `apply-progress.md`): about 633 (53 additions + 2 deletions in 3 modified files; 578 in 4 new files: production about 186, tests 392). Within the ~800 estimate and under the 1,100 split threshold; `size:exception` per the accepted 004 policy.
+
+### Remaining
+Task 4.4 commit pending. Next: Phase 5a.

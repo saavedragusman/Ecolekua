@@ -62,6 +62,7 @@ return [
     // Pricing (spec 004).
     'scheme_name_unique' => 'Ya existe un esquema de precio con ese nombre.',
     'scheme_type_immutable' => 'El tipo del esquema no se puede cambiar; cree otro esquema y reasigne los productos.',
+    'scheme_inactive' => 'El esquema de precio está inactivo; elija un esquema activo.',
     'scheme_tier_foreign' => 'El tramo no pertenece a este esquema.',
     'scheme_price_count' => '{1} :count precio|[2,*] :count precios',
     'scheme_product_count' => '{1} :count producto|[2,*] :count productos',
@@ -281,5 +282,8 @@ return [
         'tiers.*.max' => 'cantidad máxima del tramo',
         'tiers.*.kind' => 'tipo de tramo',
         'confirm_price_removal' => 'confirmación de eliminación de precios',
+        'product_ids' => 'productos',
+        'product_ids.*' => 'producto',
+        'price_scheme_id' => 'esquema de precio',
     ],
 ];

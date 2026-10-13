@@ -3,6 +3,7 @@
 namespace App\Support\Pricing;
 
 use App\Models\CombinationPrice;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -27,9 +28,33 @@ final class AffectedPrices
             return [];
         }
 
-        $prices = CombinationPrice::query()
+        return self::rows(CombinationPrice::query()->whereIn('price_tier_id', $tierIds));
+    }
+
+    /**
+     * Prices of every combination, tier and size group of the products, in the order they were loaded
+     * (a product leaving its scheme loses all of them, COT-002, DEC-COT-23).
+     *
+     * @param  list<int>  $productIds
+     * @return list<array{id: int, product_id: int, code: ?string, size_group: ?string, tier: string, price: string}>
+     */
+    public static function forProducts(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        return self::rows(CombinationPrice::query()->whereHas('combination', fn ($combinations) => $combinations->whereIn('product_id', $productIds)));
+    }
+
+    /**
+     * @param  Builder<CombinationPrice>  $query
+     * @return list<array{id: int, product_id: int, code: ?string, size_group: ?string, tier: string, price: string}>
+     */
+    private static function rows(Builder $query): array
+    {
+        $prices = $query
             ->with(['combination.catalogCode', 'tier', 'sizeGroup.sizes'])
-            ->whereIn('price_tier_id', $tierIds)
             ->orderBy('id')
             ->get();
 
@@ -77,6 +102,23 @@ final class AffectedPrices
             'tier' => $row['tier'],
             'price' => $row['price'],
         ], $rows);
+    }
+
+    /**
+     * The rows grouped by product id, in the shape the audit keeps.
+     *
+     * @param  list<array{id: int, product_id: int, code: ?string, size_group: ?string, tier: string, price: string}>  $rows
+     * @return array<int, list<array{code: ?string, size_group: ?string, tier: string, price: string}>>
+     */
+    public static function auditByProduct(array $rows): array
+    {
+        $byProduct = [];
+
+        foreach ($rows as $row) {
+            $byProduct[$row['product_id']][] = $row;
+        }
+
+        return array_map(self::forAudit(...), $byProduct);
     }
 
     /**

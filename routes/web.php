@@ -15,6 +15,7 @@ use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Pricing\PriceSchemeController;
+use App\Http\Controllers\Pricing\ProductSchemeController;
 use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ComboController;
 use App\Http\Controllers\Products\ProductAssetController;
@@ -162,6 +163,10 @@ Route::post('/pricing/schemes', [PriceSchemeController::class, 'store'])->name('
 Route::put('/pricing/schemes/{scheme}', [PriceSchemeController::class, 'update'])->whereNumber('scheme')->name('pricing.schemes.update');
 Route::post('/pricing/schemes/{scheme}/activate', [PriceSchemeController::class, 'activate'])->whereNumber('scheme')->name('pricing.schemes.activate');
 Route::post('/pricing/schemes/{scheme}/deactivate', [PriceSchemeController::class, 'deactivate'])->whereNumber('scheme')->name('pricing.schemes.deactivate');
+
+// Scheme assignment (COT-002). The static bulk segment is declared before the parameterized route.
+Route::put('/pricing/products/scheme', [ProductSchemeController::class, 'bulk'])->name('pricing.products.scheme.bulk');
+Route::put('/pricing/products/{product}/scheme', [ProductSchemeController::class, 'update'])->whereNumber('product')->name('pricing.products.scheme.update');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
