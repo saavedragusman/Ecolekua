@@ -974,6 +974,12 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | DEC-PRD-81 | Aplicación automática de un único valor admitido | A) Función disponible y probada; se usa con los componentes de combo (unidad 14b) · B) Aplicarla también a productos sueltos | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-82 | Combinaciones sin código | A) No se cargan en la resolución · B) Se cargan | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-83 | `product_id` como texto | A) Se acepta un texto de dígitos · B) Solo entero | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-84 | Forma de la selección de un combo | A) `combo_id` y `components` indexados por id de componente, cada uno con los mismos campos que la selección de un producto · B) Lista posicional | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-85 | Componente que no pertenece al combo | A) Se rechaza en `components.{id}` (analogía con DEC-PRD-77) · B) Se ignora | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-86 | Cuándo se ofrece un combo | A) Activo, con código y componentes, y cada componente con producto disponible (DEC-PRD-64), una combinación activa alcanzable bajo su restricción y al menos una opción en cada atributo de pedido (DEC-PRD-70); si no, «La selección no está disponible.» en `combo` (DEC-PRD-71) · B) Solo el estado del combo | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-87 | Color personalizado en los combos | A) No se admite en ningún componente de combo: los combos tienen precio cerrado y el color personalizado deriva a la asesora; además DEC-PRD-34 lo limita a productos bajo pedido y los combos son de stock · B) Se admite en componentes sin restricción de color | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-88 | Valor admitido por el producto pero no por el componente | A) Error propio `selection_component_restricted`, distinto del valor no admitido por el producto; textos según DEC-PRD-73 · B) Mismo error | **Confirmada** (2026-10-08): **A** | — |
+| DEC-PRD-89 | Datos de prueba de E-63 | A) La prueba usa el absorbente, que declara Color; el protector de cama de E-21 no declara atributos. La parte de opciones de E-63 se prueba en la fase 15 (PRD-019) · B) — | **Confirmada** (2026-10-08): **A** | — |
 
 ### Decisiones técnicas
 

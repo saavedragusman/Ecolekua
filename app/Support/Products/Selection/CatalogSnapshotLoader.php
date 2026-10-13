@@ -28,57 +28,142 @@ final class CatalogSnapshotLoader
      */
     public function forProduct(int $productId): ?ProductSnapshot
     {
-        $product = DB::table('products')
+        return $this->forProducts([$productId])[$productId] ?? null;
+    }
+
+    /**
+     * Snapshots of several products by product id, in the same constant number of queries as one
+     * (the queries take every id at once and the rows are grouped in memory). Ids that do not exist
+     * are left out. Used by combos, whose components hold different products (PRD-010).
+     *
+     * @param  list<int>  $productIds
+     * @return array<int, ProductSnapshot>
+     */
+    public function forProducts(array $productIds): array
+    {
+        $productIds = array_values(array_unique($productIds));
+
+        if ($productIds === []) {
+            return [];
+        }
+
+        $products = DB::table('products')
             ->join('product_categories', 'product_categories.id', '=', 'products.product_category_id')
-            ->where('products.id', $productId)
-            ->first([
-                'products.name', 'products.status', 'products.supply_mode', 'products.allows_custom_color',
+            ->whereIn('products.id', $productIds)
+            ->get([
+                'products.id', 'products.name', 'products.status', 'products.supply_mode', 'products.allows_custom_color',
                 'product_categories.status as category_status',
             ]);
 
-        if ($product === null) {
-            return null;
-        }
+        $attributes = $this->attributes($productIds);
+        $roles = [];
+        $allowed = [];
+        $fabrics = [];
 
-        $attributes = $this->attributes($productId);
-        $fabricAllowed = [];
+        foreach ($attributes as $productId => $declared) {
+            $allowed[$productId] = [];
+            $fabrics[$productId] = [];
 
-        foreach ($attributes as $attribute) {
-            if ($attribute->isFabric()) {
-                $fabricAllowed = $attribute->allowed;
+            foreach ($declared as $attribute) {
+                $roles[$productId][$attribute->id] = $attribute->role;
+                $allowed[$productId] = [...$allowed[$productId], ...$attribute->allowed];
+
+                if ($attribute->isFabric()) {
+                    $fabrics[$productId] = $attribute->allowed;
+                }
             }
         }
 
-        $roles = [];
+        [$combinations, $combinationValueIds] = $this->combinations($productIds, $roles);
+        $fabricColors = $this->fabricColors(array_merge([], ...array_values($fabrics)));
+        $colorIds = array_merge([], ...array_values($fabricColors));
+        $values = $this->values(array_values(array_unique([...array_merge([], ...array_values($allowed)), ...array_merge([], ...array_values($combinationValueIds)), ...$colorIds])));
+        $locations = $this->detailLocations($productIds);
+        $services = $this->admittedServices($productIds);
+        $snapshots = [];
 
-        foreach ($attributes as $attribute) {
-            $roles[$attribute->id] = $attribute->role;
+        foreach ($products as $product) {
+            $productId = (int) $product->id;
+            $declared = $attributes[$productId] ?? [];
+            $supplyMode = SupplyMode::from((string) $product->supply_mode);
+            $ownFabricColors = array_intersect_key($fabricColors, array_flip($fabrics[$productId] ?? []));
+            $ownValueIds = [...($allowed[$productId] ?? []), ...($combinationValueIds[$productId] ?? []), ...array_merge([], ...array_values($ownFabricColors))];
+
+            $snapshots[$productId] = new ProductSnapshot(
+                id: $productId,
+                name: (string) $product->name,
+                active: $product->status === self::ACTIVE,
+                categoryActive: $product->category_status === self::ACTIVE,
+                supplyMode: $supplyMode,
+                admitsCustomColor: $supplyMode === SupplyMode::OnDemand
+                    && (bool) $product->allows_custom_color
+                    && array_filter($declared, fn (AttributeSnapshot $attribute): bool => $attribute->isColor()) !== [],
+                attributes: $declared,
+                values: array_intersect_key($values, array_flip($ownValueIds)),
+                fabricColors: $ownFabricColors,
+                combinations: $combinations[$productId] ?? [],
+                detailLocations: $locations[$productId] ?? [],
+                customizations: $services[$productId] ?? [],
+                // The templates table arrives with the SVG templates (Phase 22); nothing reads them yet.
+                templates: [],
+            );
         }
 
-        [$combinations, $combinationValueIds] = $this->combinations($productId, $roles);
-        $fabricColors = $this->fabricColors($fabricAllowed);
-        $allowed = array_merge(...array_map(fn (AttributeSnapshot $attribute): array => $attribute->allowed, $attributes));
-        $colorIds = array_merge(...array_values($fabricColors));
-        $supplyMode = SupplyMode::from((string) $product->supply_mode);
+        return $snapshots;
+    }
 
-        return new ProductSnapshot(
-            id: $productId,
-            name: (string) $product->name,
-            active: $product->status === self::ACTIVE,
-            categoryActive: $product->category_status === self::ACTIVE,
-            supplyMode: $supplyMode,
-            admitsCustomColor: $supplyMode === SupplyMode::OnDemand
-                && (bool) $product->allows_custom_color
-                && array_filter($attributes, fn (AttributeSnapshot $attribute): bool => $attribute->isColor()) !== [],
-            attributes: $attributes,
-            values: $this->values(array_values(array_unique([...$allowed, ...$combinationValueIds, ...$colorIds]))),
-            fabricColors: $fabricColors,
-            combinations: $combinations,
-            detailLocations: $this->detailLocations($productId),
-            customizations: $this->admittedServices($productId),
-            // The templates table arrives with the SVG templates (Phase 22); nothing reads them yet.
-            templates: [],
-        );
+    /**
+     * Snapshot of a combo with the snapshot and restriction of each component, or null when it does
+     * not exist or has no code in the registry. One query for the combo, its components and their
+     * restrictions, plus the ones of `forProducts()`, so the cost does not depend on the number of
+     * components (PRD-010).
+     */
+    public function forCombo(int $comboId): ?ComboSnapshot
+    {
+        $rows = DB::table('combos')
+            ->join('catalog_codes', 'catalog_codes.combo_id', '=', 'combos.id')
+            ->leftJoin('combo_components', 'combo_components.combo_id', '=', 'combos.id')
+            ->leftJoin('combo_component_values', 'combo_component_values.combo_component_id', '=', 'combo_components.id')
+            ->where('combos.id', $comboId)
+            ->orderBy('combo_components.sort_order')
+            ->orderBy('combo_components.id')
+            ->get([
+                'combos.name', 'combos.status', 'catalog_codes.code', 'combo_components.id as component_id',
+                'combo_components.product_id', 'combo_components.quantity',
+                'combo_component_values.catalog_attribute_id', 'combo_component_values.attribute_value_id',
+            ]);
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $components = [];
+        $restrictions = [];
+
+        foreach ($rows as $row) {
+            if ($row->component_id === null) {
+                continue;
+            }
+
+            $components[(int) $row->component_id] ??= $row;
+
+            if ($row->attribute_value_id !== null) {
+                $restrictions[(int) $row->component_id][(int) $row->catalog_attribute_id][] = (int) $row->attribute_value_id;
+            }
+        }
+
+        $snapshots = $this->forProducts(array_map(fn (object $row): int => (int) $row->product_id, array_values($components)));
+        $built = [];
+
+        foreach ($components as $id => $row) {
+            if (isset($snapshots[(int) $row->product_id])) {
+                $built[] = new ComponentSnapshot($id, (int) $row->quantity, $restrictions[$id] ?? [], $snapshots[(int) $row->product_id]);
+            }
+        }
+
+        $first = $rows->first();
+
+        return new ComboSnapshot($comboId, (string) $first->name, (string) $first->code, $first->status === self::ACTIVE, $built);
     }
 
     /**
@@ -100,20 +185,21 @@ final class CatalogSnapshotLoader
     }
 
     /**
-     * Attributes the product declares in display order, each with the value ids it admits.
+     * Attributes each product declares in display order, each with the value ids it admits.
      *
-     * @return list<AttributeSnapshot>
+     * @param  list<int>  $productIds
+     * @return array<int, list<AttributeSnapshot>> by product id
      */
-    private function attributes(int $productId): array
+    private function attributes(array $productIds): array
     {
         $rows = DB::table('product_attributes')
             ->join('catalog_attributes', 'catalog_attributes.id', '=', 'product_attributes.catalog_attribute_id')
             ->leftJoin('product_attribute_values', 'product_attribute_values.product_attribute_id', '=', 'product_attributes.id')
-            ->where('product_attributes.product_id', $productId)
+            ->whereIn('product_attributes.product_id', $productIds)
             ->orderBy('product_attributes.sort_order')
             ->orderBy('product_attributes.id')
             ->get([
-                'product_attributes.id as row_id', 'catalog_attributes.id', 'catalog_attributes.name', 'catalog_attributes.status',
+                'product_attributes.id as row_id', 'product_attributes.product_id', 'catalog_attributes.id', 'catalog_attributes.name', 'catalog_attributes.status',
                 'catalog_attributes.presentation', 'catalog_attributes.special_use', 'product_attributes.role',
                 'product_attributes.sort_order', 'product_attribute_values.attribute_value_id',
             ]);
@@ -129,16 +215,22 @@ final class CatalogSnapshotLoader
             }
         }
 
-        return array_values(array_map(fn (object $row): AttributeSnapshot => new AttributeSnapshot(
-            id: (int) $row->id,
-            name: (string) $row->name,
-            active: $row->status === self::ACTIVE,
-            role: AttributeRole::from((string) $row->role),
-            sortOrder: (int) $row->sort_order,
-            presentation: AttributePresentation::from((string) $row->presentation),
-            specialUse: $row->special_use === null ? null : AttributeSpecialUse::from((string) $row->special_use),
-            allowed: $allowed[$row->row_id] ?? [],
-        ), $attributes));
+        $byProduct = [];
+
+        foreach ($attributes as $rowId => $row) {
+            $byProduct[(int) $row->product_id][] = new AttributeSnapshot(
+                id: (int) $row->id,
+                name: (string) $row->name,
+                active: $row->status === self::ACTIVE,
+                role: AttributeRole::from((string) $row->role),
+                sortOrder: (int) $row->sort_order,
+                presentation: AttributePresentation::from((string) $row->presentation),
+                specialUse: $row->special_use === null ? null : AttributeSpecialUse::from((string) $row->special_use),
+                allowed: $allowed[$rowId] ?? [],
+            );
+        }
+
+        return $byProduct;
     }
 
     /**
@@ -146,27 +238,31 @@ final class CatalogSnapshotLoader
      * of an attribute that the product declares as an axis is an axis value; one of an order
      * attribute is a restriction (DEC-PRD-36).
      *
-     * @param  array<int, AttributeRole>  $roles  declared attribute id => role
-     * @return array{0: list<CombinationSnapshot>, 1: list<int>} the combinations and every value id they use
+     * @param  list<int>  $productIds
+     * @param  array<int, array<int, AttributeRole>>  $roles  product id => declared attribute id => role
+     * @return array{0: array<int, list<CombinationSnapshot>>, 1: array<int, list<int>>} the combinations and every value id they use, by product id
      */
-    private function combinations(int $productId, array $roles): array
+    private function combinations(array $productIds, array $roles): array
     {
         $rows = DB::table('combinations')
             ->join('catalog_codes', 'catalog_codes.combination_id', '=', 'combinations.id')
             ->leftJoin('combination_values', 'combination_values.combination_id', '=', 'combinations.id')
-            ->where('combinations.product_id', $productId)
+            ->whereIn('combinations.product_id', $productIds)
             ->where('combinations.status', self::ACTIVE)
             ->orderBy('combinations.id')
-            ->get(['combinations.id', 'catalog_codes.code', 'combination_values.catalog_attribute_id', 'combination_values.attribute_value_id']);
+            ->get(['combinations.id', 'combinations.product_id', 'catalog_codes.code', 'combination_values.catalog_attribute_id', 'combination_values.attribute_value_id']);
 
         $codes = [];
+        $owners = [];
         $axes = [];
         $restrictions = [];
         $valueIds = [];
 
         foreach ($rows as $row) {
             $id = (int) $row->id;
+            $productId = (int) $row->product_id;
             $codes[$id] = (string) $row->code;
+            $owners[$id] = $productId;
             $axes[$id] ??= [];
             $restrictions[$id] ??= [];
 
@@ -176,9 +272,9 @@ final class CatalogSnapshotLoader
 
             $attributeId = (int) $row->catalog_attribute_id;
             $valueId = (int) $row->attribute_value_id;
-            $valueIds[] = $valueId;
+            $valueIds[$productId][] = $valueId;
 
-            match ($roles[$attributeId] ?? null) {
+            match ($roles[$productId][$attributeId] ?? null) {
                 AttributeRole::Axis => $axes[$id][$attributeId][] = $valueId,
                 AttributeRole::Order => $restrictions[$id][$attributeId][] = $valueId,
                 null => null,
@@ -189,7 +285,7 @@ final class CatalogSnapshotLoader
         $combinations = [];
 
         foreach ($codes as $id => $code) {
-            $combinations[] = new CombinationSnapshot($id, $code, $axes[$id], $restrictions[$id], $included[$id] ?? []);
+            $combinations[$owners[$id]][] = new CombinationSnapshot($id, $code, $axes[$id], $restrictions[$id], $included[$id] ?? []);
         }
 
         return [$combinations, $valueIds];
@@ -253,37 +349,51 @@ final class CatalogSnapshotLoader
     }
 
     /**
-     * @return list<LocationSnapshot>
+     * @param  list<int>  $productIds
+     * @return array<int, list<LocationSnapshot>> by product id
      */
-    private function detailLocations(int $productId): array
+    private function detailLocations(array $productIds): array
     {
         $rows = DB::table('product_detail_locations')
             ->join('detail_locations', 'detail_locations.id', '=', 'product_detail_locations.detail_location_id')
-            ->where('product_detail_locations.product_id', $productId)
+            ->whereIn('product_detail_locations.product_id', $productIds)
             ->where('detail_locations.status', self::ACTIVE)
             ->orderBy('detail_locations.name')
             ->orderBy('detail_locations.id')
-            ->get(['detail_locations.id', 'detail_locations.name', 'detail_locations.svg_layer']);
+            ->get(['product_detail_locations.product_id', 'detail_locations.id', 'detail_locations.name', 'detail_locations.svg_layer']);
 
-        return array_values($rows->map(fn (object $row): LocationSnapshot => new LocationSnapshot((int) $row->id, (string) $row->name, $row->svg_layer))->all());
+        $locations = [];
+
+        foreach ($rows as $row) {
+            $locations[(int) $row->product_id][] = new LocationSnapshot((int) $row->id, (string) $row->name, $row->svg_layer);
+        }
+
+        return $locations;
     }
 
     /**
-     * Active services the product admits as extra customizations (PRD-008).
+     * Active services each product admits as extra customizations (PRD-008).
      *
-     * @return list<ServiceSnapshot>
+     * @param  list<int>  $productIds
+     * @return array<int, list<ServiceSnapshot>> by product id
      */
-    private function admittedServices(int $productId): array
+    private function admittedServices(array $productIds): array
     {
         $rows = DB::table('product_customizations')
             ->join('products', 'products.id', '=', 'product_customizations.service_product_id')
-            ->where('product_customizations.product_id', $productId)
+            ->whereIn('product_customizations.product_id', $productIds)
             ->where('products.status', self::ACTIVE)
             ->orderBy('products.name')
             ->orderBy('products.id')
-            ->get(['products.id', 'products.name']);
+            ->get(['product_customizations.product_id', 'products.id', 'products.name']);
 
-        return array_values($rows->map(fn (object $row): ServiceSnapshot => new ServiceSnapshot((int) $row->id, (string) $row->name, true))->all());
+        $services = [];
+
+        foreach ($rows as $row) {
+            $services[(int) $row->product_id][] = new ServiceSnapshot((int) $row->id, (string) $row->name, true);
+        }
+
+        return $services;
     }
 
     /**

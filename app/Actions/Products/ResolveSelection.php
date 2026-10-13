@@ -3,19 +3,25 @@
 namespace App\Actions\Products;
 
 use App\Support\Products\Selection\CatalogSnapshotLoader;
+use App\Support\Products\Selection\ComboSelectionRules;
+use App\Support\Products\Selection\ResolvedCombo;
 use App\Support\Products\Selection\ResolvedSelection;
 use App\Support\Products\Selection\SelectionRules;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Validates a selection of a product and resolves it to the combination that is sold (PRD-011, DT-02).
- * It is the one operation 004, 005 and 006 use, so no frontend reimplements the rules (AGENTS.md
- * section 7.1). It reads the catalog only: no price and no stock (design Decision 14).
+ * Validates a selection of a product or a combo and resolves it to the combination that is sold
+ * (PRD-010, PRD-011, DT-02). It is the one operation 004, 005 and 006 use, so no frontend
+ * reimplements the rules (AGENTS.md section 7.1). It reads the catalog only: no price and no stock
+ * (design Decision 14).
  *
- * Input: `product_id`, `axes` and `order` (`attributeId => valueId`, or `custom` for the color of
- * the garment), `custom_color` (`tone`, `note`), `details` (`location_id`, `color_value_id`) and
- * `customizations` (service product ids). An invalid selection raises a `ValidationException` keyed
- * by field, so a controller can return it unchanged. Combos arrive with unit 14b.
+ * Product input: `product_id`, `axes` and `order` (`attributeId => valueId`, or `custom` for the
+ * color of the garment), `custom_color` (`tone`, `note`), `details` (`location_id`,
+ * `color_value_id`) and `customizations` (service product ids). Combo input: `combo_id` and
+ * `components` (`componentId => ` the product input of that component, without `product_id`); when
+ * `combo_id` is present the selection is the combo's. An invalid selection raises a
+ * `ValidationException` keyed by field (`components.{componentId}.` prefixes the fields of a
+ * component), so a controller can return it unchanged.
  */
 final class ResolveSelection
 {
@@ -26,23 +32,72 @@ final class ResolveSelection
      *
      * @throws ValidationException
      */
-    public function handle(array $input): ResolvedSelection
+    public function handle(array $input): ResolvedSelection|ResolvedCombo
     {
-        $productId = $input['product_id'] ?? null;
-        $productId = is_string($productId) && ctype_digit($productId) ? (int) $productId : $productId;
-        $snapshot = is_int($productId) ? $this->loader->forProduct($productId) : null;
+        return array_key_exists('combo_id', $input) ? $this->resolveCombo($input) : $this->resolveProduct($input);
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     *
+     * @throws ValidationException
+     */
+    private function resolveProduct(array $input): ResolvedSelection
+    {
+        $productId = self::id($input['product_id'] ?? null);
+        $snapshot = $productId === null ? null : $this->loader->forProduct($productId);
 
         if ($snapshot === null) {
             throw ValidationException::withMessages(['product' => __('validation.selection_unavailable')]);
         }
 
-        $details = $input['details'] ?? null;
-        $result = SelectionRules::validate($snapshot, $input, is_array($details) && $details !== [] ? $this->loader->palette() : []);
+        $result = SelectionRules::validate($snapshot, $input, self::hasDetails($input) ? $this->loader->palette() : []);
 
-        if (is_array($result)) {
-            throw ValidationException::withMessages(array_map(fn (string $code): string => __("validation.$code"), $result));
+        return is_array($result) ? throw self::invalid($result) : $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     *
+     * @throws ValidationException
+     */
+    private function resolveCombo(array $input): ResolvedCombo
+    {
+        $comboId = self::id($input['combo_id']);
+        $combo = $comboId === null ? null : $this->loader->forCombo($comboId);
+
+        if ($combo === null) {
+            throw ValidationException::withMessages(['combo' => __('validation.selection_unavailable')]);
         }
 
-        return $result;
+        $components = is_array($input['components'] ?? null) ? $input['components'] : [];
+        $details = array_filter($components, fn (mixed $component): bool => is_array($component) && self::hasDetails($component));
+        $result = ComboSelectionRules::validate($combo, $input, $details !== [] ? $this->loader->palette() : []);
+
+        return is_array($result) ? throw self::invalid($result) : $result;
+    }
+
+    /**
+     * An id sent as an integer or as digits (DEC-PRD-83).
+     */
+    private static function id(mixed $input): ?int
+    {
+        return is_string($input) && ctype_digit($input) ? (int) $input : (is_int($input) ? $input : null);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $selection
+     */
+    private static function hasDetails(array $selection): bool
+    {
+        return is_array($selection['details'] ?? null) && $selection['details'] !== [];
+    }
+
+    /**
+     * @param  array<string, string>  $codes  reason code by field key
+     */
+    private static function invalid(array $codes): ValidationException
+    {
+        return ValidationException::withMessages(array_map(fn (string $code): string => __("validation.$code"), $codes));
     }
 }

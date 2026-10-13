@@ -3,16 +3,19 @@
 use App\Actions\Products\ResolveSelection;
 use App\Enums\AttributeRole;
 use App\Enums\CatalogStatus;
+use App\Enums\SupplyMode;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogCode;
 use App\Models\Combination;
+use App\Models\Combo;
 use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
 use App\Support\Products\Selection\CatalogSnapshotLoader;
 use App\Support\Products\Selection\ProductSnapshot;
+use App\Support\Products\Selection\ResolvedCombo;
 use App\Support\Products\Selection\ResolvedSelection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -216,7 +219,7 @@ function resInput(array $catalog, string $product, string $code, array $order = 
 /**
  * @param  array<string, mixed>  $input
  */
-function resResolve(array $input): ResolvedSelection
+function resResolve(array $input): ResolvedSelection|ResolvedCombo
 {
     return app(ResolveSelection::class)->handle($input);
 }
@@ -622,6 +625,7 @@ it('PRD-011 has a message in Spanish for every reason code the rules return', fu
         'selection_custom_tone_invalid', 'selection_custom_note_too_long', 'selection_location_not_admitted',
         'selection_location_color_invalid', 'selection_customization_not_admitted',
         'selection_attribute_not_declared', 'selection_location_repeated', 'selection_customization_repeated',
+        'selection_component_restricted', 'selection_component_not_in_combo',
     ];
 
     foreach ($codes as $code) {
@@ -721,4 +725,256 @@ it('DT-02 query bound: resolving costs a bounded number of queries and never rea
         ->and(count($statements))->toBeLessThanOrEqual(10)
         ->and(count($statements))->toBeGreaterThan(0)
         ->and(implode("\n", $statements))->not->toMatch('/price|stock/i');
+});
+
+/**
+ * The diaper catalog of the E-21 kit with an active combination per sellable item: the diaper per
+ * size (3XG `10`, 4XG `11`, 5XG `12`), the absorbent `20`, the bed protector `30` and the eco diaper
+ * per fabric (Microfibra `40`, Algodón `41`). Combos are created on top with `makeCombo()`.
+ *
+ * @return array<string, mixed>
+ */
+function resKitCatalog(): array
+{
+    $catalog = comboCatalog();
+    $catalog['services'] = [];
+
+    foreach (['3XG' => '10', '4XG' => '11', '5XG' => '12'] as $size => $code) {
+        resCombination($catalog, $catalog['products']['Pañal antiderrame'], $code, ['Talla' => [$size]]);
+    }
+
+    resCombination($catalog, $catalog['products']['Absorbente'], '20', []);
+    resCombination($catalog, $catalog['products']['Protector de cama'], '30', []);
+    resCombination($catalog, $catalog['products']['Pañal ecológico'], '40', ['Tela' => ['Microfibra']]);
+    resCombination($catalog, $catalog['products']['Pañal ecológico'], '41', ['Tela' => ['Algodón']]);
+
+    return $catalog;
+}
+
+/**
+ * Id of the component of `$combo` that holds `$product` (the `$position`-th one when it repeats).
+ *
+ * @param  array<string, mixed>  $catalog
+ */
+function resComponentId(array $catalog, Combo $combo, string $product, int $position = 0): int
+{
+    return $combo->components()->where('product_id', $catalog['products'][$product]->id)->get()->values()[$position]->id;
+}
+
+/**
+ * Combo selection input. `$choices` maps a product name to its `axes` and `order` choices (attribute
+ * name => value name), applied to every component that holds the product.
+ *
+ * @param  array<string, mixed>  $catalog
+ * @param  array<string, array{axes?: array<string, string>, order?: array<string, string>}>  $choices
+ * @return array<string, mixed>
+ */
+function resComboInput(array $catalog, Combo $combo, array $choices): array
+{
+    $ids = fn (array $map): array => collect($map)->mapWithKeys(fn (string $name, string $attribute): array => [
+        $catalog['attrs'][$attribute]->id => $catalog['vals'][$name]->id,
+    ])->all();
+    $components = [];
+
+    foreach ($combo->components as $component) {
+        $name = collect($catalog['products'])->search(fn (Product $product): bool => $product->id === $component->product_id);
+        $components[$component->id] = ['axes' => $ids($choices[$name]['axes'] ?? []), 'order' => $ids($choices[$name]['order'] ?? [])];
+    }
+
+    return ['combo_id' => $combo->id, 'components' => $components];
+}
+
+it('E-23 resolves the kit: each component to its combination and the chosen size for the diaper', function () {
+    $catalog = resKitCatalog();
+    $combo = makeCombo($catalog);
+    $input = resComboInput($catalog, $combo, [
+        'Pañal antiderrame' => ['axes' => ['Talla' => '4XG']],
+        'Absorbente' => ['order' => ['Talla' => '3XG', 'Color' => 'Blanco']],
+    ]);
+
+    $result = resResolve($input);
+    $data = $result->toArray();
+
+    expect($result)->toBeInstanceOf(ResolvedCombo::class)
+        ->and($data['kind'])->toBe('combo')
+        ->and($data['combo'])->toBe(['id' => $combo->id, 'name' => 'Kit Oro antiderrame', 'code' => 'K-ORO'])
+        ->and(array_column($data['components'], 'component_id'))->toBe([resComponentId($catalog, $combo, 'Pañal antiderrame'), resComponentId($catalog, $combo, 'Absorbente'), resComponentId($catalog, $combo, 'Protector de cama')])
+        ->and(array_column($data['components'], 'quantity'))->toBe([2, 3, 1])
+        ->and(array_column(array_column($data['components'], 'selection'), 'code'))->toBe(['11', '20', '30'])
+        ->and($data['components'][0]['selection']['axes'][0]['value'])->toBe('4XG')
+        ->and($data['requires_advisor'])->toBeFalse();
+});
+
+it('E-23 reports each failing component under its own prefix and leaves the valid ones out', function () {
+    $catalog = resKitCatalog();
+    $combo = makeCombo($catalog);
+    $diaper = resComponentId($catalog, $combo, 'Pañal antiderrame');
+    $absorbent = resComponentId($catalog, $combo, 'Absorbente');
+    $protector = resComponentId($catalog, $combo, 'Protector de cama');
+    $size = $catalog['attrs']['Talla']->id;
+    $color = $catalog['attrs']['Color']->id;
+    $input = resComboInput($catalog, $combo, ['Pañal antiderrame' => ['axes' => ['Talla' => '2XG']]]);
+
+    // 2XG exists in the catalog but the diaper does not admit it: the error is on that component.
+    expect(resErrors($input))->toBe([
+        "components.$diaper.axes.$size" => [resMessage('selection_value_not_allowed')],
+        "components.$absorbent.order.$size" => [resMessage('selection_value_required')],
+        "components.$absorbent.order.$color" => [resMessage('selection_value_required')],
+    ]);
+
+    $input['components'][$protector]['details'] = [['location_id' => 999_999, 'color_value_id' => 999_999]];
+
+    expect(resErrors($input))->toHaveKeys(["components.$protector.details.0.location_id", "components.$protector.details.0.color_value_id"])
+        ->and(resErrors($input)["components.$protector.details.0.location_id"])->toBe([resMessage('selection_location_not_admitted')]);
+});
+
+it('E-63 (resolve) rejects Azul for a component restricted to Blanco and accepts Blanco', function () {
+    $catalog = resKitCatalog();
+    $combo = makeCombo($catalog, ['components' => [comboComponent($catalog, 'Absorbente', 1, ['Color' => ['Blanco']])]]);
+    $absorbent = resComponentId($catalog, $combo, 'Absorbente');
+    $input = fn (string $color): array => resComboInput($catalog, $combo, ['Absorbente' => ['order' => ['Talla' => '3XG', 'Color' => $color]]]);
+
+    expect(resErrors($input('Azul')))->toBe(["components.$absorbent.order.{$catalog['attrs']['Color']->id}" => [resMessage('selection_component_restricted')]])
+        ->and(resResolve($input('Blanco'))->toArray()['components'][0]['selection']['order'][1]['value'])->toBe('Blanco');
+});
+
+it('DEC-PRD-87 does not admit the custom color in a component, with or without a color restriction', function () {
+    $catalog = resKitCatalog();
+    // On its own the absorbent admits the custom color: on demand, option on, and it declares Color.
+    $catalog['products']['Absorbente']->update(['supply_mode' => SupplyMode::OnDemand, 'allows_custom_color' => true]);
+    $open = makeCombo($catalog, ['name' => 'Libre', 'code' => 'K-FREE', 'components' => [comboComponent($catalog, 'Absorbente')]]);
+    $restricted = makeCombo($catalog, ['name' => 'Blanco', 'code' => 'K-WHITE', 'components' => [comboComponent($catalog, 'Absorbente', 1, ['Color' => ['Blanco']])]]);
+    $color = $catalog['attrs']['Color']->id;
+    $withCustom = function (Combo $combo) use ($catalog, $color): array {
+        $input = resComboInput($catalog, $combo, ['Absorbente' => ['order' => ['Talla' => '3XG', 'Color' => 'Blanco']]]);
+        $id = resComponentId($catalog, $combo, 'Absorbente');
+        $input['components'][$id]['order'][$color] = 'custom';
+        $input['components'][$id]['custom_color'] = ['tone' => '#112233', 'note' => 'azul'];
+
+        return $input;
+    };
+
+    expect(resResolve(resComboInput($catalog, $open, ['Absorbente' => ['order' => ['Talla' => '3XG', 'Color' => 'Blanco']]]))->toArray()['kind'])->toBe('combo')
+        ->and(resErrors($withCustom($open)))->toBe(['components.'.resComponentId($catalog, $open, 'Absorbente').".order.$color" => [resMessage('selection_component_restricted')]])
+        ->and(resErrors($withCustom($restricted)))->toBe(['components.'.resComponentId($catalog, $restricted, 'Absorbente').".order.$color" => [resMessage('selection_component_restricted')]]);
+});
+
+it('E-63 (resolve) narrows the color of a product with fabric to the restriction of the component', function () {
+    $catalog = resKitCatalog();
+    $combo = makeCombo($catalog, ['components' => [comboComponent($catalog, 'Pañal ecológico', 1, ['Color' => ['Crema']])]]);
+    $eco = resComponentId($catalog, $combo, 'Pañal ecológico');
+    $input = fn (string $color): array => resComboInput($catalog, $combo, ['Pañal ecológico' => ['axes' => ['Tela' => 'Algodón'], 'order' => ['Color' => $color]]]);
+
+    // Algodón offers Blanco and Crema, but the component admits only Crema.
+    expect(resErrors($input('Blanco')))->toBe(["components.$eco.order.{$catalog['attrs']['Color']->id}" => [resMessage('selection_component_restricted')]])
+        ->and(resResolve($input('Crema'))->toArray()['components'][0]['selection']['code'])->toBe('41');
+});
+
+it('PRD-010 applies the only admitted value of an axis or order attribute, so the client sends nothing for it (DEC-PRD-81)', function () {
+    $catalog = resKitCatalog();
+    $combo = makeCombo($catalog, ['components' => [
+        comboComponent($catalog, 'Pañal antiderrame', 2, ['Talla' => ['5XG']]),
+        comboComponent($catalog, 'Absorbente', 1, ['Talla' => ['4XG'], 'Color' => ['Azul']]),
+    ]]);
+    $data = resResolve(resComboInput($catalog, $combo, []))->toArray();
+    $selections = array_column($data['components'], 'selection');
+
+    expect(array_column($selections, 'code'))->toBe(['12', '20'])
+        ->and($selections[0]['axes'][0]['value'])->toBe('5XG')
+        ->and(array_column($selections[1]['order'], 'value'))->toBe(['4XG', 'Azul']);
+
+    // A value the client did send is validated, never replaced by the only admitted one.
+    $input = resComboInput($catalog, $combo, ['Pañal antiderrame' => ['axes' => ['Talla' => '4XG']]]);
+
+    expect(resErrors($input))->toBe(['components.'.resComponentId($catalog, $combo, 'Pañal antiderrame').".axes.{$catalog['attrs']['Talla']->id}" => [resMessage('selection_component_restricted')]]);
+});
+
+it('PRD-010 does not offer a combo that is inactive or has a component that cannot be resolved (DEC-PRD-64)', function () {
+    $catalog = resKitCatalog();
+    $combo = makeCombo($catalog, ['components' => [comboComponent($catalog, 'Pañal antiderrame'), comboComponent($catalog, 'Protector de cama')]]);
+    $input = resComboInput($catalog, $combo, ['Pañal antiderrame' => ['axes' => ['Talla' => '4XG']]]);
+    $unavailable = ['combo' => [RES_UNAVAILABLE]];
+    $protector = $catalog['products']['Protector de cama'];
+
+    expect(resResolve($input)->toArray()['kind'])->toBe('combo');
+
+    $combo->update(['status' => CatalogStatus::Inactive]);
+    expect(resErrors($input))->toBe($unavailable);
+
+    $combo->update(['status' => CatalogStatus::Active]);
+    $protector->update(['status' => CatalogStatus::Inactive]);
+    expect(resErrors($input))->toBe($unavailable);
+
+    $protector->update(['status' => CatalogStatus::Active]);
+    $protector->combinations()->update(['status' => CatalogStatus::Inactive]);
+    expect(resErrors($input))->toBe($unavailable);
+
+    $protector->combinations()->update(['status' => CatalogStatus::Active]);
+    expect(resResolve($input)->toArray()['kind'])->toBe('combo');
+});
+
+it('PRD-010 stops offering a combo whose component is left with no option, and keeps offering the others (DEC-PRD-70)', function () {
+    $catalog = resKitCatalog();
+    $restricted = makeCombo($catalog, ['name' => 'Solo 3XG', 'code' => 'K-3', 'components' => [comboComponent($catalog, 'Pañal antiderrame', 1, ['Talla' => ['3XG']])]]);
+    $open = makeCombo($catalog, ['name' => 'Todas las tallas', 'code' => 'K-ALL', 'components' => [comboComponent($catalog, 'Pañal antiderrame')]]);
+    $eco = makeCombo($catalog, ['name' => 'Algodón crema', 'code' => 'K-ALG', 'components' => [comboComponent($catalog, 'Pañal ecológico', 1, ['Tela' => ['Algodón'], 'Color' => ['Crema']])]]);
+    $ecoInput = resComboInput($catalog, $eco, ['Pañal ecológico' => ['order' => ['Color' => 'Crema']]]);
+
+    expect(resResolve(resComboInput($catalog, $restricted, []))->toArray()['components'][0]['selection']['code'])->toBe('10')
+        ->and(resResolve($ecoInput)->toArray()['components'][0]['selection']['code'])->toBe('41');
+
+    // The only size the component admits is deactivated, and the only color it admits is withdrawn from its fabric.
+    $catalog['vals']['3XG']->update(['status' => CatalogStatus::Inactive]);
+    $catalog['vals']['Algodón']->offeredColors()->detach($catalog['vals']['Crema']->id);
+
+    expect(resErrors(resComboInput($catalog, $restricted, [])))->toBe(['combo' => [RES_UNAVAILABLE]])
+        ->and(resErrors($ecoInput))->toBe(['combo' => [RES_UNAVAILABLE]])
+        ->and(resResolve(resComboInput($catalog, $open, ['Pañal antiderrame' => ['axes' => ['Talla' => '4XG']]]))->toArray()['components'][0]['selection']['code'])->toBe('11');
+});
+
+it('PRD-011 answers "not available" for a combo that does not exist and rejects a component that is not in the combo', function () {
+    $catalog = resKitCatalog();
+    $combo = makeCombo($catalog, ['components' => [comboComponent($catalog, 'Protector de cama')]]);
+    $input = resComboInput($catalog, $combo, []);
+
+    expect(resErrors(['combo_id' => 999_999]))->toBe(['combo' => [RES_UNAVAILABLE]])
+        ->and(resErrors(['combo_id' => 'x']))->toBe(['combo' => [RES_UNAVAILABLE]])
+        ->and(resResolve([...$input, 'combo_id' => (string) $combo->id])->toArray()['combo']['id'])->toBe($combo->id)
+        // DEC-PRD-77 by analogy: a component the combo does not have is an error, never ignored.
+        ->and(resErrors([...$input, 'components' => $input['components'] + [987_654 => []]]))->toBe(['components.987654' => [resMessage('selection_component_not_in_combo')]]);
+});
+
+it('DT-02 query bound: a combo costs the same number of queries for 2 and for 6 components, and forProducts for 1 and 4 products', function () {
+    $catalog = resKitCatalog();
+    $few = makeCombo($catalog, ['name' => 'Corto', 'code' => 'K-2', 'components' => [comboComponent($catalog, 'Pañal antiderrame', 1, ['Talla' => ['3XG', '4XG']]), comboComponent($catalog, 'Pañal ecológico')]]);
+    $many = makeCombo($catalog, ['name' => 'Largo', 'code' => 'K-6', 'components' => [
+        comboComponent($catalog, 'Pañal antiderrame'), comboComponent($catalog, 'Absorbente'), comboComponent($catalog, 'Protector de cama'),
+        comboComponent($catalog, 'Pañal ecológico'), comboComponent($catalog, 'Pañal antiderrame', 2), comboComponent($catalog, 'Absorbente', 4),
+    ]]);
+    $choices = ['Pañal antiderrame' => ['axes' => ['Talla' => '3XG']], 'Absorbente' => ['order' => ['Talla' => '3XG', 'Color' => 'Blanco']], 'Pañal ecológico' => ['axes' => ['Tela' => 'Microfibra'], 'order' => ['Color' => 'Blanco']]];
+    $loader = app(CatalogSnapshotLoader::class);
+    $ids = array_map(fn (Product $product): int => $product->id, array_values($catalog['products']));
+
+    $loaded = $loader->forCombo($many->id);
+    $fewLoad = resQueryCount(fn () => $loader->forCombo($few->id));
+    $manyLoad = resQueryCount(fn () => $loader->forCombo($many->id));
+    $fewResolve = resQueryCount(fn () => resResolve(resComboInput($catalog, $few, $choices)));
+    $manyResolve = resQueryCount(fn () => resResolve(resComboInput($catalog, $many, $choices)));
+    // The eco diaper has fabric and combinations, so it runs every query the others may run.
+    $oneProduct = resQueryCount(fn () => $loader->forProducts([$catalog['products']['Pañal ecológico']->id]));
+    $allProducts = resQueryCount(fn () => $loader->forProducts($ids));
+    $snapshots = $loader->forProducts([$ids[0], 999_999, $ids[1]]);
+
+    expect($loaded->code)->toBe('K-6')
+        ->and($loaded->active)->toBeTrue()
+        ->and($loaded->components)->toHaveCount(6)
+        ->and($manyLoad)->toBe($fewLoad)
+        ->and($manyLoad)->toBeLessThanOrEqual(10)
+        ->and($manyResolve)->toBe($fewResolve)
+        ->and($manyResolve)->toBeLessThanOrEqual(10)
+        ->and($allProducts)->toBe($oneProduct)
+        ->and($allProducts)->toBeLessThanOrEqual(10)
+        ->and(array_keys($snapshots))->toBe([$ids[0], $ids[1]])
+        ->and($loader->forProducts([]))->toBe([])
+        ->and($loader->forCombo(999_999))->toBeNull();
 });

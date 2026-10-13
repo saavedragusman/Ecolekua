@@ -236,9 +236,9 @@ Covers PRD-011, PRD-004 (color rules), PRD-008 (resolution), DEC-PRD-31..36, DEC
 
 Covers PRD-010 (resolution), PRD-011 rule 5, E-23, E-63 (resolve).
 
-- [ ] 14.8 RED — Extend `ResolveSelectionTest.php`: `E-23` the combo of E-21 resolved with 4XG for the diaper → each component resolves to its combination (`11` for the diaper), 2XG → error on that component (keys prefixed `components.{componentId}.`); `E-63 (resolve)` a component restricted to Blanco rejects Azul with an error on the component's color; an axis or order attribute with a single admitted active value is applied automatically; an inactive combo or a combo with an unreachable component is not offered. Expected: fail. [PRD-010, PRD-011, E-23, E-63]
-- [ ] 14.9 GREEN — Add combo resolution to `app/Actions/Products/ResolveSelection.php` (component restriction in `SelectionRules`, `forProducts()` loader). Run the tests: GREEN. [Decision 14]
-- [ ] 14.10 Unit close — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): resolve combo selections by component [PRD-010, E-23, E-63]`.
+- [x] 14.8 RED — Extend `ResolveSelectionTest.php`: `E-23` the combo of E-21 resolved with 4XG for the diaper → each component resolves to its combination (`11` for the diaper), 2XG → error on that component (keys prefixed `components.{componentId}.`); `E-63 (resolve)` a component restricted to Blanco rejects Azul with an error on the component's color; an axis or order attribute with a single admitted active value is applied automatically; an inactive combo or a combo with an unreachable component is not offered. Expected: fail. [PRD-010, PRD-011, E-23, E-63]
+- [x] 14.9 GREEN — Add combo resolution to `app/Actions/Products/ResolveSelection.php` (component restriction in `SelectionRules`, `forProducts()` loader). Run the tests: GREEN. [Decision 14]
+- [x] 14.10 Unit close — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): resolve combo selections by component [PRD-010, E-23, E-63]`.
 
 ## Phase 15: `ListSelectionOptions` (design slice 15)
 
