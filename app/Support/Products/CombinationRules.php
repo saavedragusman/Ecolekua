@@ -40,13 +40,7 @@ final class CombinationRules
         $heldServices = $combination?->customizations()->pluck('products.id')->values()->all() ?? [];
 
         return [
-            'code' => [
-                'required',
-                'string',
-                'max:'.self::CODE_MAX_LENGTH,
-                'regex:'.self::CODE_PATTERN,
-                Rule::unique('catalog_codes', 'code')->ignore($registryId),
-            ],
+            'code' => self::codeRules($registryId),
             'description' => ['nullable', 'string', 'max:'.self::DESCRIPTION_MAX_LENGTH],
             'axes' => ['sometimes', 'array'],
             'axes.*' => ['array'],
@@ -55,6 +49,24 @@ final class CombinationRules
             'restrictions.*' => ['array'],
             'restrictions.*.*' => ['integer'],
             ...CatalogRules::includedCustomizationRules($heldServices),
+        ];
+    }
+
+    /**
+     * Rules of a code of the shared registry (DT-01, DEC-PRD-14): combinations and combos draw their
+     * codes from the same space, so `ComboRules` uses these too. `$registryId` is the registry row of
+     * the record being edited, which may keep its own code.
+     *
+     * @return list<mixed>
+     */
+    public static function codeRules(?int $registryId): array
+    {
+        return [
+            'required',
+            'string',
+            'max:'.self::CODE_MAX_LENGTH,
+            'regex:'.self::CODE_PATTERN,
+            Rule::unique('catalog_codes', 'code')->ignore($registryId),
         ];
     }
 
@@ -151,10 +163,13 @@ final class CombinationRules
     }
 
     /**
+     * Integer ids, no repeated value and no empty list: the shape every `attributeId => valueIds`
+     * map (axes, restrictions, component values) is stored in.
+     *
      * @param  array<array-key, mixed>  $map
      * @return array<int, list<int>>
      */
-    private static function normalize(array $map): array
+    public static function normalize(array $map): array
     {
         $normalized = [];
 

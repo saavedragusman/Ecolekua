@@ -101,6 +101,14 @@ return [
     'service_in_use_both' => 'No se puede sacar el producto del modo «Servicio»: lo admiten los productos :products y lo incluyen las combinaciones :combinations.',
 
     // Combos (spec 003, PRD-010) and the edit guards that protect their components (DEC-PRD-52).
+    'combo_name_unique' => 'Ya existe un combo con ese nombre.',
+    'combo_components_required' => 'Agregue al menos un componente.',
+    'combo_component_product_unknown' => 'El producto no existe.',
+    'combo_component_not_diapers' => 'Solo se admiten productos de la línea de pañales.',
+    'combo_component_inactive' => 'El producto está inactivo: solo se pueden agregar productos activos como componentes.',
+    'combo_component_service' => 'Un producto en modo «Servicio» no puede ser componente de un combo.',
+    'combo_component_attribute_unknown' => 'Este atributo no pertenece al producto.',
+    'combo_component_value_not_allowed' => 'Algún valor no está admitido por el producto para este atributo.',
     'product_in_combos_line' => 'No se puede cambiar la línea de negocio: el producto es componente de los combos :combos.',
     'product_in_combos_service' => 'No se puede pasar el producto al modo «Servicio»: es componente de los combos :combos.',
     'structure_value_in_combos' => 'No se puede retirar el valor ni el atributo admitido: lo restringen los componentes de los combos :combos.',
@@ -181,5 +189,9 @@ return [
         'detail_location_ids' => 'ubicaciones de detalle',
         'customization_ids' => 'personalizaciones',
         'included_customization_ids' => 'personalizaciones incluidas',
+        'components' => 'componentes',
+        'components.*.product_id' => 'producto',
+        'components.*.quantity' => 'cantidad',
+        'components.*.values' => 'valores admitidos',
     ],
 ];
