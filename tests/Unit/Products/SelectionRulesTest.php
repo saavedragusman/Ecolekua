@@ -146,37 +146,49 @@ it('PRD-010 reachableCombinations applies a component restriction on every axis'
         ->and(selReachable($snapshot, [], []))->toBe(['110', '159-1']);
 });
 
-it('PRD-010 autoApplied picks the attribute left with exactly one admitted active value', function () {
+it('PRD-010 autoAppliedAxes picks the axis left with exactly one admitted active value', function () {
     $snapshot = selSnapshot();
 
     // Only the model has a single admitted value; the fabric has three active ones.
-    expect(SelectionRules::autoApplied($snapshot, null))->toBe([2 => 21])
-        // A component restriction narrows the size to one value; the fabric restricted to Microfibra
-        // has no active value left, so it is not applied.
-        ->and(SelectionRules::autoApplied($snapshot, [3 => [33], 1 => [14]]))->toBe([2 => 21, 3 => 33])
-        // Two admitted values after the restriction: nothing is applied for that attribute.
-        ->and(SelectionRules::autoApplied($snapshot, [3 => [31, 32]]))->toBe([2 => 21])
+    expect(SelectionRules::autoAppliedAxes($snapshot, null))->toBe([2 => 21])
+        // A component restriction narrows the fabric to one active value (Microfibra is inactive, so none).
+        ->and(SelectionRules::autoAppliedAxes($snapshot, [1 => [14]]))->toBe([2 => 21])
+        ->and(SelectionRules::autoAppliedAxes($snapshot, [1 => [12]]))->toBe([1 => 12, 2 => 21])
+        // Two admitted values after the restriction: nothing is applied for that axis.
+        ->and(SelectionRules::autoAppliedAxes($snapshot, [1 => [12, 13]]))->toBe([2 => 21])
+        // DEC-PRD-94: order attributes are never part of it, whatever the restriction (see singleListedValue).
+        ->and(SelectionRules::autoAppliedAxes($snapshot, [3 => [33]]))->toBe([2 => 21])
         // A restriction with no active value leaves nothing to apply either.
-        ->and(SelectionRules::autoApplied($snapshot, [2 => [99]]))->toBe([]);
+        ->and(SelectionRules::autoAppliedAxes($snapshot, [2 => [99]]))->toBe([]);
 });
 
-it('PRD-010 autoApplied leaves the color to the client when the options are not a single value', function () {
-    $own = new AttributeSnapshot(4, 'Color', true, AttributeRole::Order, 4, AttributePresentation::Color, null, [41]);
-    $withoutFabric = selSnapshot([
-        'attributes' => [
-            new AttributeSnapshot(2, 'Modelo', true, AttributeRole::Axis, 2, AttributePresentation::Text, null, [21]),
-            $own,
-        ],
-        'admitsCustomColor' => false,
-    ]);
+it('DEC-PRD-94 singleListedValue returns the only listed value, except when the custom color is offered', function () {
+    expect(SelectionRules::singleListedValue([42], false))->toBe(42)
+        ->and(SelectionRules::singleListedValue([41, 42], false))->toBeNull()
+        ->and(SelectionRules::singleListedValue([], false))->toBeNull()
+        // The color with the "Personalizado" option is a second choice for the client (DEC-PRD-34).
+        ->and(SelectionRules::singleListedValue([42], true))->toBeNull();
+});
 
-    // One own color and no custom option: nothing else to choose.
-    expect(SelectionRules::autoApplied($withoutFabric, null))->toBe([2 => 21, 4 => 41])
-        // The "Personalizado" option is a second choice, so the color stays open.
-        ->and(SelectionRules::autoApplied(selSnapshot([
-            'attributes' => $withoutFabric->attributes,
-            'admitsCustomColor' => true,
-        ]), null))->toBe([2 => 21]);
+it('DEC-PRD-94 validate applies the only listed value of an omitted order attribute, with every restriction', function () {
+    $own = new AttributeSnapshot(4, 'Color', true, AttributeRole::Order, 4, AttributePresentation::Color, null, [41]);
+    $talla = new AttributeSnapshot(3, 'Talla', true, AttributeRole::Order, 3, AttributePresentation::Text, AttributeSpecialUse::Size, [31, 32, 33, 34]);
+    $modelo = new AttributeSnapshot(2, 'Modelo', true, AttributeRole::Axis, 2, AttributePresentation::Text, null, [21]);
+    $restricted = new CombinationSnapshot(1, 'M-1', [2 => [21]], [3 => [33]], []);
+    $snapshot = selSnapshot(['attributes' => [$modelo, $talla, $own], 'admitsCustomColor' => false, 'combinations' => [$restricted]]);
+    $omitted = ['axes' => [2 => 21], 'order' => []];
+
+    $result = SelectionRules::validate($snapshot, $omitted);
+
+    // The combination restricts the size to L and the product lists one color without "Personalizado".
+    expect($result)->toBeInstanceOf(ResolvedSelection::class)
+        ->and(array_column($result->toArray()['order'], 'value_id'))->toBe([33, 41])
+        // What the client sends is validated as usual, never replaced.
+        ->and(SelectionRules::validate($snapshot, ['axes' => [2 => 21], 'order' => [3 => 32]]))->toBe(['order.3' => 'selection_value_restricted'])
+        // With the custom option the color is the client's choice, so omitting it is still an error.
+        ->and(SelectionRules::validate(selSnapshot(['attributes' => [$modelo, $talla, $own], 'admitsCustomColor' => true, 'combinations' => [$restricted]]), $omitted))->toBe(['order.4' => 'selection_value_required'])
+        // A component never admits it, so its only color is applied (DEC-PRD-87).
+        ->and(SelectionRules::validate(selSnapshot(['attributes' => [$modelo, $talla, $own], 'admitsCustomColor' => true, 'combinations' => [$restricted]]), $omitted, [], [])->toArray()['order'][1]['value_id'])->toBe(41);
 });
 
 it('E-14 validate resolves a valid selection to the code and the normalized selection', function () {
@@ -420,7 +432,7 @@ it('DEC-PRD-87 validate does not admit the custom color in any component, restri
         ->and(SelectionRules::validate(selSnapshot(['admitsCustomColor' => false]), $custom, [], [4 => [42]]))->toBe(['order.4' => 'selection_custom_color_not_admitted']);
 });
 
-it('DEC-PRD-87 autoApplied and componentOffered ignore the custom color of a component', function () {
+it('DEC-PRD-87 componentOffered ignores the custom color of a component', function () {
     $modelo = new AttributeSnapshot(2, 'Modelo', true, AttributeRole::Axis, 2, AttributePresentation::Text, null, [21]);
     $own = new AttributeSnapshot(4, 'Color', true, AttributeRole::Order, 4, AttributePresentation::Color, null, [41]);
     $snapshot = selSnapshot(['attributes' => [$modelo, $own], 'admitsCustomColor' => true, 'combinations' => [new CombinationSnapshot(1, 'M-1', [2 => [21]], [], [])]]);
@@ -430,9 +442,8 @@ it('DEC-PRD-87 autoApplied and componentOffered ignore the custom color of a com
         'combinations' => [new CombinationSnapshot(1, 'M-1', [2 => [21]], [], [])],
     ]);
 
-    // The product alone keeps the color open for the "Personalizado" option; a component has its only color applied.
-    expect(SelectionRules::autoApplied($snapshot, null))->toBe([2 => 21])
-        ->and(SelectionRules::autoApplied($snapshot, []))->toBe([2 => 21, 4 => 41])
+    // The color is an order attribute: its automatic application is `singleListedValue` (DEC-PRD-94).
+    expect(SelectionRules::autoAppliedAxes($snapshot, []))->toBe([2 => 21])
         // A component whose product lists no color has nothing to choose, even if the product admits the custom one.
         ->and(SelectionRules::componentOffered($snapshot, []))->toBeTrue()
         ->and(SelectionRules::componentOffered($withoutColors, []))->toBeFalse();
