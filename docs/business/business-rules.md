@@ -1,6 +1,6 @@
 # Reglas de negocio de Ecolekua
 
-> Actualizado: 2026-10-09 — personalización opcional sin cargo en productos puntuales (§26.2). 2026-10-05 — conteo de piezas para el tramo por línea de negocio (§2.1); tramos de la línea de pañales (§2.3); combos y packs (§2.4); colores por tela y color personalizado (§26). 2026-10-04: traducción al español; precios por línea de producto (§2), anticipo (§3), consumos conocidos (§5), catálogo de productos (§26), stock de producto terminado (§27) y uso de prendas en stock (§28). Las secciones 1–25 conservan su numeración porque las specs las citan.
+> Actualizado: 2026-10-12 — decisiones de la spec 004: tramos de uniformes 13–49 y negociación desde 50 (§2.2), combos y servicios en el conteo del tramo (§2.1), sin VIP inicial en pañales (§2.3), precio por ítem de los kits (§2.4), precio fijo de "Varios" (§2.5), moneda y tasa (§2.6), anticipo por modo y anticipo acordado (§3), personalizaciones sin cargo en uniformes (§26.2). 2026-10-09 — personalización opcional sin cargo en productos puntuales (§26.2). 2026-10-05 — conteo de piezas para el tramo por línea de negocio (§2.1); tramos de la línea de pañales (§2.3); combos y packs (§2.4); colores por tela y color personalizado (§26). 2026-10-04: traducción al español; precios por línea de producto (§2), anticipo (§3), consumos conocidos (§5), catálogo de productos (§26), stock de producto terminado (§27) y uso de prendas en stock (§28). Las secciones 1–25 conservan su numeración porque las specs las citan.
 
 ## 1. Canales de venta
 
@@ -23,9 +23,10 @@ El origen debe estar disponible para los reportes y el cálculo de comisiones.
 - Un precio pertenece a una combinación de producto identificada por su **código** de la lista de precios existente (ver §26).
 - Cada producto usa un esquema de tramos o un precio fijo. La configuración inicial se describe en §2.2 a §2.5.
 - Los límites de los tramos, los umbrales de negociación y los precios son configuración del negocio. No deben quedar fijos en el código (§25).
-- El tramo se determina por el **total de piezas de la misma línea de negocio** en la cotización o el pedido: todas las piezas de uniformes cuentan juntas y todas las de pañales cuentan juntas, aunque sean productos distintos. En un pedido mixto, cada línea se cuenta por separado y los productos de precio fijo no cuentan. Ejemplo: 5 camisas + 5 chemises + 3 pantalones = 13 piezas de uniformes → tramo 13–50 para todas. Pedido mixto: 15 camisas + 10 pañales de adulto + 2 pañales infantiles → uniformes 15 piezas (tramo 13–50), pañales de adulto 10 unidades (detal), pañales infantiles a precio fijo.
+- El tramo se determina por el **total de piezas de la misma línea de negocio** en la cotización o el pedido: todas las piezas de uniformes cuentan juntas y todas las de pañales cuentan juntas, aunque sean productos distintos. En un pedido mixto, cada línea se cuenta por separado y los productos de precio fijo no cuentan. Ejemplo: 5 camisas + 5 chemises + 3 pantalones = 13 piezas de uniformes → tramo 13–49 para todas. Pedido mixto: 15 camisas + 10 pañales de adulto + 2 pañales infantiles → uniformes 15 piezas (tramo 13–49), pañales de adulto 10 unidades (detal), pañales infantiles a precio fijo.
 - El total de la línea se aplica a cada producto dentro del esquema de tramos que tenga ese producto, aunque los productos de la línea usen esquemas distintos. Ejemplo: 4 pañales + 3 absorbentes 3XG/4XG = 7 unidades de la línea de pañales → los pañales se cotizan al precio de 7 unidades en su esquema (detal, 1–19) y los absorbentes al precio de 7 unidades en el suyo (Especial, desde 7).
-- Pendiente de confirmar por Ecolekua: si las unidades de los combos cuentan para el tramo de su línea.
+- Las unidades de los combos (§2.4) no cuentan para el tramo de su línea.
+- Los servicios vendidos solos (p. ej., bordados sobre prendas que trae el cliente) no suman a su línea de negocio: su tramo se elige con la cantidad total de ese mismo servicio. Ejemplo: 20 bordados pequeños → tramo 13–49 del bordado, aunque la cotización tenga además 10 camisas.
 
 ---
 
@@ -37,8 +38,8 @@ Configuración inicial:
 |---|---|---|
 | 1 | 1–6 piezas | Precio al detal ("Precio 4" en la lista de precios actual) |
 | 2 | 7–12 piezas | "Precio 3" |
-| 3 | 13–50 piezas | "Precio 2" |
-| VIP | Más de 50 piezas | Negociación directa |
+| 3 | 13–49 piezas | "Precio 2" |
+| VIP | desde 50 piezas | Negociación directa |
 
 El precio de cada tramo lo calcula automáticamente el sistema.
 
@@ -72,7 +73,7 @@ Configuración inicial.
 
 Los demás productos de la línea usan el esquema que Ecolekua les asigne en la configuración.
 
-Ecolekua debe indicar si activa un umbral de negociación VIP por WhatsApp en esta línea, con el mismo comportamiento que en §2.2.
+La configuración inicial no tiene umbral de negociación VIP en esta línea. Puede añadirse por configuración, con el mismo comportamiento que en §2.2.
 
 ---
 
@@ -86,27 +87,42 @@ Los productos de la línea de pañales también pueden venderse en combos con un
 Reglas:
 
 - Cada ítem de un combo tiene su propio precio final, que puede incluir un descuento respecto a su precio individual. Las columnas "Precio 1", "Precio 2" y "Precio 3" de la lista de precios corresponden a precios de ítems dentro de combos.
+- Cada combo tiene un único precio por ítem, que no depende de la cantidad de combos pedidos. Qué columna de la lista corresponde a cada kit es un dato de la carga inicial que Ecolekua valida.
 - El total del combo es la suma del precio de cada ítem multiplicado por su cantidad.
 - Las "Opciones 1, 2 y 3" de la lista de precios son una referencia para calcular precios de combos y no se registran en el sistema.
-- Qué columna de precio se aplica a cada kit está pendiente de definir por Ecolekua.
+- Cuando se piden unidades sueltas y existe un pack más barato que las cubre, el cotizador lo avisa, sin cambiar lo pedido.
 
 ---
 
 ## 2.5 Productos de precio fijo
 
-Los productos de la sección "Varios" de la lista de precios (pañales infantiles, servicios y otros artículos) tienen un único precio fijo con IVA incluido, sin tramos por cantidad.
+Los productos de la sección "Varios" de la lista de precios (pañales infantiles, servicios y otros artículos) tienen un único precio fijo, sin tramos por cantidad. Su precio es la columna "Precio 4" de esa sección, que ya es el precio final.
+
+---
+
+## 2.6 Moneda y tasa de cambio
+
+- Los precios, las cotizaciones y sus totales están en **dólares (USD)**.
+- El sistema guarda cada día la tasa oficial (Bs por USD) publicada por el BCV, obtenida automáticamente. Si no se puede obtener, se usa la última tasa disponible, mostrando su fecha, y el equipo autorizado puede registrarla manualmente.
+- Las cotizaciones muestran su equivalente en bolívares como referencia, con la tasa y su fecha. La falta de tasa no impide cotizar.
 
 ---
 
 # 3. Anticipo
 
-Los pedidos cuyo precio calcula automáticamente el sistema (cualquier tramo de §2 distinto de la negociación VIP) requieren inicialmente:
+El porcentaje de anticipo es configurable (§25). Valor inicial:
 
 ```text
 50 % de anticipo
 ```
 
-El porcentaje de anticipo es configurable (§25). Ecolekua debe confirmar, antes de la especificación de pedidos, si el anticipo también se aplica a los productos de stock (pañales y otros productos terminados) y a los productos de precio fijo.
+El anticipo requerido depende del tipo de producto:
+
+| Productos | Anticipo |
+|---|---|
+| Confeccionados a pedido y servicios, con precio calculado por el sistema | Porcentaje de anticipo configurado |
+| Productos de stock (pañales, pantalones industriales, gorras y otros productos terminados) y combos, con precio calculado por el sistema | Pago completo |
+| Productos con precio negociado (VIP o color personalizado) | Monto que acuerda la asesora con el cliente |
 
 El anticipo debe representarse como una transacción financiera asociada al pedido.
 
@@ -473,7 +489,8 @@ Los siguientes valores deben ser configurables cuando corresponda:
 - tramos de precio y sus límites para cada línea de producto;
 - umbrales de negociación VIP;
 - precios, incluidos los precios de los ítems de los combos;
-- stock mínimo de los productos terminados.
+- stock mínimo de los productos terminados;
+- vigencia de las cotizaciones.
 
 ---
 
@@ -502,14 +519,14 @@ Si el cliente no encuentra un color de su gusto entre los ofrecidos, puede elegi
 - el pedido no se procesa desde la web: se habilita el botón de WhatsApp y una asesora acuerda con el cliente la tela, el precio y el tiempo de entrega;
 - la tela se compra en la cantidad necesaria para ese pedido y queda asociada a él, sin entrar al stock general. El sobrante entra al inventario solo si el equipo lo decide.
 
-## 26.2 Personalización sin cargo
+## 26.2 Personalizaciones sin cargo
 
-En algunos productos puntuales (p. ej., gorras, tazas y mouse pads) la personalización no se cobra aparte: el cliente paga solo el precio del producto.
+Las personalizaciones (bordado, vinil, sublimación sencilla y similares) que se añaden a una prenda o artículo de la línea de uniformes **no se cobran aparte**: el cliente paga solo el precio del producto.
 
-- No es una regla general por modo de abastecimiento, por categoría ni para todo el catálogo; se indica producto por producto.
-- La personalización es opcional: el producto se vende también liso, y personalizarlo no cambia el precio.
-- Por eso se registra como personalización **admitida** del producto (spec 003, PRD-008), no como incluida en la combinación (DEC-PRD-47), y su precio en ese producto es 0. La spec de precios (004) debe permitir ese precio por producto.
-- Qué productos la ofrecen sin cargo, y con qué personalizaciones, es un dato de la carga inicial que Ecolekua valida.
+- Aplica a todos los productos de uniformes que admiten personalizaciones, incluidos gorras, tazas y mouse pads. Los productos de la línea de pañales no admiten personalizaciones.
+- La personalización es opcional: el producto se vende también liso, y personalizarlo no cambia el precio. Se registra como especificación para producción, con su cantidad por prenda.
+- Las personalizaciones incluidas en el precio de una combinación (spec 003, PRD-008) tampoco se cobran aparte.
+- Los servicios de personalización solo tienen precio cuando se venden solos, por ejemplo sobre prendas que trae el cliente (§2.1).
 
 ---
 
