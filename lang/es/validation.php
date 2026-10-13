@@ -65,6 +65,21 @@ return [
     'product_min_stock_not_allowed' => 'El stock mínimo solo se admite en el modo «Stock con mínimo».',
     'product_custom_color_not_allowed' => 'El color personalizado solo se admite en el modo «Bajo pedido».',
 
+    // Product structure (spec 003, PRD-004) and attributes in use (DEC-PRD-51).
+    'structure_attribute_repeated' => 'El atributo ya está declarado en este producto.',
+    'structure_attribute_inactive' => 'No se puede declarar un atributo inactivo.',
+    'structure_value_foreign' => 'Algún valor admitido no pertenece al atributo.',
+    'structure_value_inactive' => 'No se puede admitir un valor inactivo.',
+    'structure_values_required' => 'El atributo debe admitir al menos un valor activo.',
+    'structure_color_values_not_allowed' => 'El color de un producto con tela no guarda valores admitidos: sus colores salen de la tela elegida.',
+    'structure_role_fabric' => 'La tela debe declararse como eje.',
+    'structure_role_color' => 'El color debe declararse como atributo de pedido.',
+    'structure_frozen' => 'El producto tiene combinaciones: para cambiar sus ejes, cree un producto nuevo y desactive el anterior.',
+    'structure_axis_removal_frozen' => 'El producto tiene combinaciones: no se puede retirar un atributo de eje. Cree un producto nuevo y desactive el anterior.',
+    'structure_value_in_use' => 'No se puede retirar el valor admitido: lo usan las combinaciones :combinations.',
+    'attribute_in_use_deactivate' => 'No se puede desactivar el atributo: lo declaran los productos activos :products.',
+    'attribute_in_use_change' => 'No se puede cambiar la presentación ni el uso especial del atributo: lo declaran los productos :products.',
+
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
         'mixed' => 'El campo :attribute debe contener al menos una mayúscula y una minúscula.',
@@ -122,5 +137,9 @@ return [
         'min_stock_default' => 'stock mínimo',
         'allows_custom_color' => 'color personalizado',
         'portal_visible' => 'visibilidad en el portal',
+        'attributes' => 'atributos',
+        'attributes.*.attribute_id' => 'atributo',
+        'attributes.*.role' => 'rol',
+        'attributes.*.allowed_value_ids' => 'valores admitidos',
     ],
 ];

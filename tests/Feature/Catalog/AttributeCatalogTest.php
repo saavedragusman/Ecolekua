@@ -12,6 +12,8 @@ use App\Enums\PermissionName;
 use App\Models\AttributeValue;
 use App\Models\AuditLog;
 use App\Models\CatalogAttribute;
+use App\Models\Product;
+use App\Models\ProductAttribute;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -612,7 +614,7 @@ it('PRD-016 denies each attribute and value write to a user without products.cat
 
 // --- Hooks filled by later slices ------------------------------------------------------------
 
-it('DEC-PRD-51 call sites of the in-use hooks do not alter attribute lifecycle and edits while no product table exists', function () {
+it('DEC-PRD-51 call sites of the in-use hooks do not alter attribute lifecycle and edits while no product declares the attribute', function () {
     $attribute = CatalogAttribute::factory()->fabric()->create();
     $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => null]);
     $actor = attributeManager();
@@ -639,6 +641,116 @@ it('DEC-PRD-53 call sites of the layer hook let a value gain, change and lose it
 
         expect($value->fresh()->svg_layer)->toBe($layer);
     }
+});
+
+// --- Attributes in use (E-69, DEC-PRD-51) ----------------------------------------------------
+
+/**
+ * The attribute Tela declared by the given product (here, the active "Camisa corporativa" by default).
+ */
+function declaredFabric(?Product $product = null): array
+{
+    $fabric = CatalogAttribute::factory()->fabric()->create();
+    $product ??= Product::factory()->create(['name' => 'Camisa corporativa']);
+    ProductAttribute::factory()->axis()->create(['product_id' => $product->id, 'catalog_attribute_id' => $fabric->id]);
+
+    return [$fabric, $product];
+}
+
+it('E-69 rejects deactivating an attribute declared by an active product, naming it, and leaves attribute and audit unchanged', function () {
+    [$fabric] = declaredFabric();
+    Product::factory()->create(['name' => 'Gorra']);
+
+    $response = $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['status']);
+
+    expect($response->json('errors.status.0'))->toContain('Camisa corporativa')->not->toContain('Gorra')
+        ->and($fabric->fresh()->status)->toBe(CatalogStatus::Active)
+        ->and(attributeAuditRows(AuditAction::CatalogDeactivated))->toHaveCount(0);
+});
+
+it('E-69 rejects clearing, changing and assigning the special use or changing the presentation of a declared attribute', function (array $payload, string $field) {
+    [$fabric] = declaredFabric();
+    $before = ['presentation' => $fabric->presentation, 'special_use' => $fabric->special_use];
+
+    $response = $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'text', 'special_use' => 'fabric', ...$payload])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors([$field]);
+
+    expect($response->json("errors.{$field}.0"))->toContain('Camisa corporativa')
+        ->and($fabric->fresh()->presentation)->toBe($before['presentation'])
+        ->and($fabric->fresh()->special_use)->toBe($before['special_use'])
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+})->with([
+    'clear special use' => [['special_use' => null], 'special_use'],
+    'change special use' => [['special_use' => 'gender'], 'special_use'],
+    'change presentation' => [['presentation' => 'image'], 'presentation'],
+]);
+
+it('E-69 rejects giving a special use to a declared attribute that has none', function () {
+    $size = CatalogAttribute::factory()->create(['name' => 'Talla']);
+    $product = Product::factory()->create(['name' => 'Camisa corporativa']);
+    ProductAttribute::factory()->create(['product_id' => $product->id, 'catalog_attribute_id' => $size->id]);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$size->id}", ['name' => 'Talla', 'presentation' => 'text', 'special_use' => 'size'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['special_use']);
+
+    expect($size->fresh()->special_use)->toBeNull();
+});
+
+it('E-69 still lets a declared attribute be renamed while presentation and special use stay', function () {
+    [$fabric] = declaredFabric();
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela principal', 'presentation' => 'text', 'special_use' => 'fabric'])
+        ->assertRedirect();
+
+    expect($fabric->fresh()->name)->toBe('Tela principal');
+});
+
+it('E-69 lets a declared attribute be deactivated once its product is inactive, but still blocks presentation and use changes', function () {
+    [$fabric, $product] = declaredFabric();
+    $product->forceFill(['status' => CatalogStatus::Inactive])->save();
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'image', 'special_use' => 'fabric'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['presentation']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'text', 'special_use' => null])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['special_use']);
+
+    $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")->assertRedirect();
+
+    expect($fabric->fresh()->status)->toBe(CatalogStatus::Inactive);
+});
+
+it('E-69 keeps an inactive attribute declared by an inactive product inactive, as a no-op', function () {
+    [$fabric, $product] = declaredFabric();
+    $product->forceFill(['status' => CatalogStatus::Inactive])->save();
+    $fabric->forceFill(['status' => CatalogStatus::Inactive])->save();
+
+    $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")->assertRedirect();
+
+    expect($fabric->fresh()->status)->toBe(CatalogStatus::Inactive)
+        ->and(attributeAuditRows(AuditAction::CatalogDeactivated))->toHaveCount(0);
+});
+
+it('E-69 names every active product that declares the attribute, in alphabetical order', function () {
+    [$fabric] = declaredFabric();
+    $second = Product::factory()->create(['name' => 'Bata']);
+    ProductAttribute::factory()->axis()->create(['product_id' => $second->id, 'catalog_attribute_id' => $fabric->id]);
+
+    $response = $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")
+        ->assertUnprocessable();
+
+    expect($response->json('errors.status.0'))->toContain('«Bata», «Camisa corporativa»');
 });
 
 // --- Colors offered in a fabric (E-46) -------------------------------------------------------
