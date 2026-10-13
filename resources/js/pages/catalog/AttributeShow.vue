@@ -180,6 +180,7 @@ function reactivateValue(value: CatalogAttributeValue): void {
             :key="editing?.id ?? 'new'"
             :attribute-id="attribute.id"
             :presentation="attribute.presentation"
+            :special-use="attribute.special_use"
             :value="editingCurrent"
             @done="closePanels"
             @cancel="closePanels"

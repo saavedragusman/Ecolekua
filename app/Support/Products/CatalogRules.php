@@ -102,9 +102,21 @@ final class CatalogRules
             'description' => [...$optional, 'nullable', 'string', 'max:255'],
             'tone' => $tone,
             // DEC-PRD-97: the tone of a color value paints the `cuerpo` layer, so it never carries one.
-            'svg_layer' => $attribute->presentation === AttributePresentation::Color
-                ? [...$optional, 'prohibited']
-                : self::layerRules($optional),
+            // DEC-PRD-100: neither does a value of Tela, Talla or Género: the size is not drawn, the gender
+            // selects the whole template and the fabric shows in its option thumbnail.
+            'svg_layer' => match (true) {
+                $attribute->presentation === AttributePresentation::Color => [...$optional, 'prohibited'],
+                $attribute->special_use !== null => [
+                    ...$optional,
+                    'nullable',
+                    function (string $field, mixed $layer, Closure $fail): void {
+                        if ($layer !== null && $layer !== '') {
+                            $fail(__('validation.value_layer_special_use_prohibited'));
+                        }
+                    },
+                ],
+                default => self::layerRules($optional),
+            },
         ];
     }
 

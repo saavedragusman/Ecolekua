@@ -3,8 +3,9 @@
 namespace App\Support\Products\Selection;
 
 /**
- * An SVG template of the product (PRD-020, Decision 18). Resolution does not read it; the options
- * of Phase 15 use it for the preview. The loader returns none until the templates table exists.
+ * An SVG template of the product (PRD-020, Decision 18): the general one (`variantValueId` null) or
+ * the one of a gender-use value (DEC-PRD-49). Resolution does not read it; the options use it for
+ * the preview. `version` is the stored file name, used to bust the browser cache on replacement.
  */
 final readonly class TemplateSnapshot
 {
@@ -13,7 +14,9 @@ final readonly class TemplateSnapshot
      */
     public function __construct(
         public int $id,
+        public int $productId,
         public ?int $variantValueId,
         public array $layers,
+        public string $version,
     ) {}
 }

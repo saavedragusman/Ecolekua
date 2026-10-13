@@ -760,7 +760,8 @@ it('DT-02 query bound: a combo costs the same number of queries for 2 and for 6 
         ->and($manyLoad)->toBe($fewLoad)
         ->and($manyLoad)->toBeLessThanOrEqual(10)
         ->and($manyResolve)->toBe($fewResolve)
-        ->and($manyResolve)->toBeLessThanOrEqual(10)
+        // 10 to load the combo and its products (the templates query of PRD-020 is the tenth) + 1 for the palette.
+        ->and($manyResolve)->toBeLessThanOrEqual(11)
         ->and($allProducts)->toBe($oneProduct)
         ->and($allProducts)->toBeLessThanOrEqual(10)
         ->and(array_keys($snapshots))->toBe([$ids[0], $ids[1]])

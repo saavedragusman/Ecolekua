@@ -7,6 +7,7 @@ use App\Enums\AuditAction;
 use App\Models\AttributeValue;
 use App\Models\User;
 use App\Support\Products\CatalogRules;
+use App\Support\Products\TemplateLayerGuard;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -42,8 +43,10 @@ class UpdateAttributeValue
                     $input['tone'] = CatalogRules::normalizeTone($input['tone']);
                 }
 
-                if (isset($input['svg_layer'])) {
-                    $this->ensureNoProductMissesLayer($value, $input['svg_layer']);
+                // Only a layer that is assigned or actually changes is checked: re-sending the stored
+                // layer (e.g. on a rename) must not fail because a template lacks it (DEC-PRD-53).
+                if (isset($input['svg_layer']) && $input['svg_layer'] !== $value->svg_layer) {
+                    TemplateLayerGuard::ensureLayerFitsProducts('value', $value->id, $input['svg_layer']);
                 }
 
                 $value->fill($input)->save();
@@ -74,16 +77,5 @@ class UpdateAttributeValue
     private function snapshot(AttributeValue $value): array
     {
         return array_intersect_key($value->only(self::FIELDS), array_flip(self::FIELDS));
-    }
-
-    /**
-     * Hook for DEC-PRD-53 / E-72: assigning or changing `svg_layer` to a non-null layer must be
-     * rejected while a product that admits the value has a template without that layer, naming the
-     * products. Templates arrive in Phase 21; task 22.7 fills this call site. Clearing the layer is
-     * always allowed.
-     */
-    private function ensureNoProductMissesLayer(AttributeValue $value, string $layer): void
-    {
-        // Intentionally empty until task 22.7.
     }
 }

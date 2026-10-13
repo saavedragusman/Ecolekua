@@ -135,6 +135,12 @@ Route::scopeBindings()->group(function () {
     Route::post('/products/{product}/combinations/{combination}/activate', [CombinationController::class, 'activate'])->name('products.combinations.activate');
     Route::post('/products/{product}/combinations/{combination}/deactivate', [CombinationController::class, 'deactivate'])->name('products.combinations.deactivate');
     Route::delete('/products/{product}/combinations/{combination}', [CombinationController::class, 'destroy'])->name('products.combinations.destroy');
+
+    // SVG templates (PRD-020, Decision 18): upload and removal are `update`; serving is `view`. A
+    // template of another product is a 404.
+    Route::post('/products/{product}/templates', [ProductAssetController::class, 'storeTemplate'])->name('products.templates.store');
+    Route::delete('/products/{product}/templates/{template}', [ProductAssetController::class, 'destroyTemplate'])->name('products.templates.destroy');
+    Route::get('/products/{product}/templates/{template}', [ProductAssetController::class, 'showTemplate'])->name('products.templates.show');
 });
 
 // Combos (spec 003, PRD-010). Authorization lives in ComboPolicy. `combos/create` is declared before

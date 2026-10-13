@@ -10,6 +10,7 @@ use App\Models\CatalogAttribute;
 use App\Models\User;
 use App\Support\Audit\AuditOrigin;
 use App\Support\Products\CatalogRules;
+use App\Support\Products\TemplateLayerGuard;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -70,12 +71,15 @@ class CreateAttributeValue
     }
 
     /**
-     * Hook for DEC-PRD-53 / E-72: assigning a non-null `svg_layer` must be rejected while a product
-     * that admits the value has a template without that layer. Templates arrive in Phase 21; task
-     * 22.7 fills this call site with `CatalogUsage::productsMissingLayer()`.
+     * DEC-PRD-53 / E-72: assigning a non-null `svg_layer` is rejected while a product that admits the
+     * value has a template without that layer. A new value is admitted by no product yet, so the
+     * check finds nothing today; it stays so the rule holds if a value is ever created already
+     * admitted. A null layer never runs it.
      */
     private function ensureNoProductMissesLayer(AttributeValue $value): void
     {
-        // Intentionally empty until task 22.7.
+        if ($value->svg_layer !== null) {
+            TemplateLayerGuard::ensureLayerFitsProducts('value', $value->id, $value->svg_layer);
+        }
     }
 }

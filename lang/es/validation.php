@@ -54,6 +54,7 @@ return [
     'attribute_fabric_not_color' => 'El atributo de tela no puede tener presentación de color.',
     'value_name_unique' => 'Ya existe un valor con ese nombre en este atributo.',
     'value_layer_color_prohibited' => 'Los valores de color no llevan capa SVG: su tono pinta la capa del cuerpo.',
+    'value_layer_special_use_prohibited' => 'Los valores de tela, talla y género no llevan capa SVG: la talla no se dibuja, el género elige la plantilla y la tela se ve en su miniatura.',
     'value_layer_reserved' => 'Esa capa está reservada para la vista previa de la plantilla.',
     'location_name_unique' => 'Ya existe una ubicación de detalle con ese nombre.',
     'offered_colors_not_fabric' => 'Solo los valores del atributo de tela tienen colores ofrecidos.',
@@ -66,6 +67,17 @@ return [
     'image_size' => 'La imagen no puede superar 2 MB.',
     'image_format' => 'El archivo no es una imagen válida. Use JPG, PNG o WebP.',
     'image_dimensions' => 'La imagen es demasiado grande: su lado más largo no puede superar :side px. Reduzca su tamaño antes de subirla.',
+
+    // SVG templates of products (spec 003, PRD-020, E-37..E-41).
+    'template_required' => 'Elija un archivo SVG.',
+    'template_upload_failed' => 'No se pudo subir la plantilla. Verifique que pese 2 MB o menos.',
+    'template_size' => 'La plantilla no puede superar 2 MB.',
+    'template_format' => 'El archivo no es un SVG válido.',
+    'template_doctype' => 'El SVG no puede declarar DOCTYPE ni entidades.',
+    'template_missing_layers' => 'A la plantilla le faltan estas capas: :layers.',
+    'template_variant_invalid' => 'El género elegido no es uno de los que admite el producto.',
+    'template_layer_conflict' => 'No se puede asignar la capa «:layer»: a alguna plantilla de estos productos le falta esa capa: :products.',
+    'template_layer_added' => 'A alguna plantilla del producto le faltan estas capas: :layers. Suba una plantilla que las incluya antes de añadir el cambio.',
 
     // Products (spec 003).
     'product_name_unique' => 'Ya existe un producto con ese nombre.',

@@ -179,9 +179,22 @@ export type ProductDetail = {
         default: number | null;
         overrides: ProductStockOverride[];
     };
-    // Main image URLs (null without image); the templates arrive with their slice.
+    // Main image URLs (null without image) and the SVG templates (PRD-020).
     image: ImageUrls | null;
-    images: { has_main: boolean; templates: string[] };
+    images: { has_main: boolean; templates: ProductTemplateRow[] };
+    // Genders the product admits: the variants a template can be uploaded for (E-41).
+    template_variants: { value: number; label: string }[];
+};
+
+// An SVG template of the product. `variant` is the gender it is for (null for the general one);
+// `layers` are the ones the backend detected on the sanitized file; `url` serves the file and is
+// shown only through `<img src>`.
+export type ProductTemplateRow = {
+    id: number;
+    variant: string | null;
+    original_name: string;
+    layers: string[];
+    url: string;
 };
 
 // Flags mirror the policies; they only decide what to show.

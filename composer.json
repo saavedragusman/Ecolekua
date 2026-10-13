@@ -7,11 +7,14 @@
         "laravel",
         "framework"
     ],
-    "license": "MIT",
+    "license": "proprietary",
     "require": {
         "php": "^8.4",
+        "ext-dom": "*",
         "ext-exif": "*",
         "ext-gd": "*",
+        "ext-libxml": "*",
+        "enshrined/svg-sanitize": "1.0.0",
         "inertiajs/inertia-laravel": "^3.0",
         "laravel/framework": "^13.17",
         "laravel/tinker": "^3.0",

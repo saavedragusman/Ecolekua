@@ -18,6 +18,7 @@ use App\Support\Products\CatalogUsage;
 use App\Support\Products\ProductAudit;
 use App\Support\Products\ProductRules;
 use App\Support\Products\StockMinimum;
+use App\Support\Products\TemplateLayerGuard;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -34,7 +35,7 @@ use Illuminate\Validation\ValidationException;
  * 4. freeze while combinations exist (DEC-PRD-41, E-60);
  * 5. no admitted value (or order attribute) used by a combination or restricted by a combo component
  *    can be removed (DEC-PRD-37, E-24, E-57);
- * 6. layer guard: an empty hook, filled in Phase 22;
+ * 6. layer guard: a newly admitted value whose layer a template lacks is rejected (E-40);
  * 7. the own minimum stock of a removed size is deleted (DEC-PRD-52, E-71), after the empty hook
  *    `ensureNoStockForRemovedSizes()` that spec 008 fills;
  * 8. audit with the full previous and new structure; the deleted minimums go in `old_values`.
@@ -355,16 +356,31 @@ class SyncProductAttributes
     }
 
     /**
-     * Hook for PRD-020 / E-40: a newly admitted value whose `svg_layer` is missing from any template
-     * of the product must be rejected naming the layer. Templates arrive in Phase 22, which fills
-     * this hook (task 22.7) with `TemplateLayerRequirements::missing()`.
+     * PRD-020 / E-40: a newly admitted value whose `svg_layer` is missing from any template of the
+     * product is rejected naming the layer. Values the product already admitted are not checked, so
+     * a stale template never blocks an unrelated edit; the template upload checks those.
      *
      * @param  list<array{attribute_id: int, role: AttributeRole, value_ids: list<int>}>  $declared
      * @param  Collection<int, ProductAttribute>  $current
+     *
+     * @throws ValidationException on `attributes`
      */
     private function ensureLayerGuard(Product $product, array $declared, Collection $current): void
     {
-        // Intentionally empty until task 22.7.
+        $added = [];
+
+        foreach ($declared as $entry) {
+            $admitted = $current->get($entry['attribute_id'])?->allowedValues->modelKeys() ?? [];
+            $added = [...$added, ...array_diff($entry['value_ids'], $admitted)];
+        }
+
+        if ($added === []) {
+            return;
+        }
+
+        $layers = AttributeValue::query()->whereIn('id', $added)->whereNotNull('svg_layer')->pluck('svg_layer')->all();
+
+        TemplateLayerGuard::ensureTemplatesHaveLayers($product->id, array_values(array_map(strval(...), $layers)), 'attributes');
     }
 
     /**

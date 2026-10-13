@@ -13,7 +13,7 @@ use stdClass;
 /**
  * Loads what the selection engine needs about a product in a constant number of queries, whatever
  * the number of its combinations (design Decision 14, DT-02): at most 8 for a product, one more for
- * the palette and one for the templates once their table exists, all well under the bound of 10. It
+ * the templates and one for the palette, all well under the bound of 10. It
  * reads the catalog only: no price, cost or stock table is touched. Rows are read with the query
  * builder and grouped in memory, so no model is hydrated per row.
  */
@@ -80,6 +80,7 @@ final class CatalogSnapshotLoader
         $values = $this->values(array_values(array_unique([...array_merge([], ...array_values($allowed)), ...array_merge([], ...array_values($combinationValueIds)), ...$colorIds])));
         $locations = $this->detailLocations($productIds);
         $services = $this->admittedServices($productIds);
+        $templates = $this->templates($productIds);
         $snapshots = [];
 
         foreach ($products as $product) {
@@ -104,8 +105,7 @@ final class CatalogSnapshotLoader
                 combinations: $combinations[$productId] ?? [],
                 detailLocations: $locations[$productId] ?? [],
                 customizations: $services[$productId] ?? [],
-                // The templates table arrives with the SVG templates (Phase 22); nothing reads them yet.
-                templates: [],
+                templates: $templates[$productId] ?? [],
             );
         }
 
@@ -369,6 +369,38 @@ final class CatalogSnapshotLoader
         }
 
         return $locations;
+    }
+
+    /**
+     * SVG templates of the products, the general one first (PRD-020).
+     *
+     * @param  list<int>  $productIds
+     * @return array<int, list<TemplateSnapshot>> by product id
+     */
+    private function templates(array $productIds): array
+    {
+        $rows = DB::table('product_templates')
+            ->whereIn('product_id', $productIds)
+            ->orderBy('variant_key')
+            ->orderBy('id')
+            ->get(['id', 'product_id', 'variant_value_id', 'svg_path', 'layers']);
+
+        $templates = [];
+
+        foreach ($rows as $row) {
+            /** @var list<string> $layers */
+            $layers = json_decode((string) $row->layers, true) ?: [];
+
+            $templates[(int) $row->product_id][] = new TemplateSnapshot(
+                id: (int) $row->id,
+                productId: (int) $row->product_id,
+                variantValueId: $row->variant_value_id === null ? null : (int) $row->variant_value_id,
+                layers: $layers,
+                version: pathinfo((string) $row->svg_path, PATHINFO_FILENAME),
+            );
+        }
+
+        return $templates;
     }
 
     /**

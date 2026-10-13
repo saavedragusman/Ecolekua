@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
@@ -15,6 +16,7 @@ import {
 import type {
     CatalogAttributeValue,
     CatalogPresentation,
+    CatalogSpecialUse,
 } from '@/types/products';
 
 // Creates a value of an attribute or edits one (PRD-002). It holds no business rule: the tone only
@@ -22,6 +24,8 @@ import type {
 const props = defineProps<{
     attributeId: number;
     presentation: CatalogPresentation;
+    // Tela, Talla and Género values carry no SVG layer (DEC-PRD-100).
+    specialUse: CatalogSpecialUse | null;
     // The value being edited; null creates a new one.
     value: CatalogAttributeValue | null;
 }>();
@@ -38,15 +42,22 @@ const form = useForm({
     svg_layer: props.value?.svg_layer ?? '',
 });
 
+// The values of a color attribute and of Tela, Talla or Género carry no layer (DEC-PRD-97, DEC-PRD-100).
+const hasLayer = computed(
+    () => props.presentation !== 'color' && props.specialUse === null,
+);
+
 // Empty optional fields are sent as empty strings; the backend turns them into "none" (null). A
 // non-color attribute never sends a tone and a color one never sends a layer (DEC-PRD-97); the
 // backend prohibits both.
 form.transform((data) => {
     const { tone, svg_layer: layer, ...rest } = data;
 
-    return props.presentation === 'color'
-        ? { ...rest, tone }
-        : { ...rest, svg_layer: layer };
+    if (props.presentation === 'color') {
+        return { ...rest, tone };
+    }
+
+    return hasLayer.value ? { ...rest, svg_layer: layer } : rest;
 });
 
 function submit(): void {
@@ -91,7 +102,7 @@ function submit(): void {
                 :error="form.errors.tone"
             />
             <AppInput
-                v-if="presentation !== 'color'"
+                v-if="hasLayer"
                 v-model="form.svg_layer"
                 label="Capa del SVG (opcional)"
                 autocomplete="off"

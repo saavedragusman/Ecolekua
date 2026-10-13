@@ -35,4 +35,9 @@ final readonly class AttributeSnapshot
     {
         return $this->specialUse === AttributeSpecialUse::Fabric;
     }
+
+    public function isGender(): bool
+    {
+        return $this->specialUse === AttributeSpecialUse::Gender;
+    }
 }

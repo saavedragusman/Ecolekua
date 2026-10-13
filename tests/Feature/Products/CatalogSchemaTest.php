@@ -15,6 +15,7 @@ use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
+use App\Models\ProductTemplate;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -516,4 +517,63 @@ it('Decision 15 builds combo models and factories with their relations and enum 
         ->and($component->combo->is($combo))->toBeTrue()
         ->and($code->combo?->is($combo))->toBeTrue()
         ->and($code->combination_id)->toBeNull();
+});
+
+/**
+ * @param  array<string, mixed>  $overrides
+ */
+function schemaTemplateRow(int $productId, array $overrides = []): int
+{
+    return DB::table('product_templates')->insertGetId(array_merge([
+        'product_id' => $productId,
+        'variant_value_id' => null,
+        'svg_path' => 'catalog/templates/'.$productId.'/'.fake()->unique()->uuid().'.svg',
+        'original_name' => 'camisa.svg',
+        'layers' => json_encode(['cuerpo']),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ], $overrides));
+}
+
+it('Decision 3 (DB) allows one general template and one per variant value of a product', function () {
+    $product = schemaProductRow(schemaCategoryRow());
+    $gender = schemaAttributeRow(['name' => 'Género', 'special_use' => 'gender']);
+    $man = schemaValueRow($gender, ['name' => 'Caballero']);
+    $woman = schemaValueRow($gender, ['name' => 'Dama']);
+
+    schemaTemplateRow($product);
+    schemaTemplateRow($product, ['variant_value_id' => $man]);
+    schemaTemplateRow($product, ['variant_value_id' => $woman]);
+
+    expect(fn () => schemaTemplateRow($product))->toThrow(UniqueConstraintViolationException::class)
+        ->and(fn () => schemaTemplateRow($product, ['variant_value_id' => $man]))->toThrow(UniqueConstraintViolationException::class)
+        ->and(DB::table('product_templates')->where('product_id', $product)->pluck('variant_key')->map(fn ($key) => (int) $key)->sort()->values()->all())
+        ->toBe([0, $man, $woman]);
+});
+
+it('Decision 3 (DB) cascades templates with the product and restricts deleting the variant value', function () {
+    $product = schemaProductRow(schemaCategoryRow());
+    $gender = schemaAttributeRow(['name' => 'Género', 'special_use' => 'gender']);
+    $man = schemaValueRow($gender, ['name' => 'Caballero']);
+    schemaTemplateRow($product, ['variant_value_id' => $man]);
+
+    expect(fn () => DB::table('attribute_values')->where('id', $man)->delete())->toThrow(QueryException::class);
+
+    DB::table('products')->where('id', $product)->delete();
+
+    expect(DB::table('product_templates')->count())->toBe(0)
+        ->and(DB::table('attribute_values')->where('id', $man)->exists())->toBeTrue();
+});
+
+it('Decision 3 builds the template model and factory with its layers cast and relations', function () {
+    $product = Product::factory()->create();
+    $value = AttributeValue::factory()->create();
+    $template = ProductTemplate::factory()->for($product)->create(['variant_value_id' => $value->id, 'layers' => ['cuerpo', 'sombras']]);
+
+    expect($template->fresh()->layers)->toBe(['cuerpo', 'sombras'])
+        ->and($template->fresh()->variant_key)->toBe($value->id)
+        ->and($template->product->is($product))->toBeTrue()
+        ->and($template->variantValue?->is($value))->toBeTrue()
+        ->and($product->templates)->toHaveCount(1)
+        ->and(ProductTemplate::factory()->for($product)->create()->variantValue)->toBeNull();
 });

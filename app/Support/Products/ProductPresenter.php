@@ -17,6 +17,7 @@ use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
+use App\Models\ProductTemplate;
 use App\Models\StockMinimumOverride;
 use App\Support\Products\Assets\ImageUrls;
 use Illuminate\Support\Collection;
@@ -192,6 +193,7 @@ final class ProductPresenter
             'productAttributes.allowedValues',
             'detailLocations',
             'customizations',
+            'templates.variantValue',
         ]);
 
         return [
@@ -215,11 +217,55 @@ final class ProductPresenter
                 'default' => $product->min_stock_default,
                 'overrides' => StockMinimum::snapshot($product),
             ],
-            // The raw storage paths are never exposed: `image` holds the serving URLs (Phase 21) and
-            // the template files arrive with Phase 22.
+            // The raw storage paths are never exposed: `image` and the templates hold serving URLs.
             'image' => ImageUrls::for($product, 'products.image.show', 'product'),
-            'images' => ['has_main' => $product->image_display_path !== null, 'templates' => []],
+            'images' => ['has_main' => $product->image_display_path !== null, 'templates' => self::templates($product)],
+            'template_variants' => self::templateVariants($product),
         ];
+    }
+
+    /**
+     * Templates of the product for the page (PRD-020): the gender it is for (null for the general
+     * one), the uploaded file name, the layers detected and the URL it is served from.
+     *
+     * @return list<array{id: int, variant: string|null, original_name: string, layers: list<string>, url: string}>
+     */
+    private static function templates(Product $product): array
+    {
+        return array_values($product->templates->map(fn (ProductTemplate $template): array => [
+            'id' => $template->id,
+            'variant' => $template->variantValue?->name,
+            'original_name' => $template->original_name,
+            'layers' => $template->layers,
+            'url' => route('products.templates.show', [
+                'product' => $product->id,
+                'template' => $template->id,
+                'v' => pathinfo($template->svg_path, PATHINFO_FILENAME),
+            ], absolute: false),
+        ])->all());
+    }
+
+    /**
+     * Values of the gender-use attribute the product admits, i.e. the variants a template can be
+     * uploaded for (E-41). Empty when the product does not declare that attribute.
+     *
+     * @return list<array{value: int, label: string}>
+     */
+    private static function templateVariants(Product $product): array
+    {
+        $variants = [];
+
+        foreach ($product->productAttributes as $declared) {
+            if ($declared->catalogAttribute->special_use !== AttributeSpecialUse::Gender) {
+                continue;
+            }
+
+            foreach ($declared->allowedValues->sortBy('sort_order') as $value) {
+                $variants[] = ['value' => $value->id, 'label' => $value->name];
+            }
+        }
+
+        return $variants;
     }
 
     /**

@@ -9,7 +9,8 @@ namespace App\Support\Products\Selection;
  * snapshots and formats them; prices and stock never appear (Decision 14).
  *
  * Every option carries `id`, `name`, `sort_order`, `description`, `image_urls`, `tone` and `layer`.
- * `image_urls` is empty until the images exist (Phase 21).
+ * `image_urls` is empty until the images exist (Phase 21). The order stage also carries the
+ * `template` of the preview (E-41) and every template of the product in `templates`.
  */
 final readonly class SelectionOptions
 {
@@ -19,6 +20,7 @@ final readonly class SelectionOptions
      * @param  list<LocationSnapshot>  $locations
      * @param  list<ValueSnapshot>  $palette
      * @param  list<ServiceSnapshot>  $customizations
+     * @param  list<TemplateSnapshot>  $templates
      */
     private function __construct(
         public string $stage,
@@ -29,6 +31,8 @@ final readonly class SelectionOptions
         public array $locations,
         public array $palette,
         public array $customizations,
+        public ?TemplateSnapshot $template = null,
+        public array $templates = [],
     ) {}
 
     /**
@@ -44,10 +48,11 @@ final readonly class SelectionOptions
      * @param  list<LocationSnapshot>  $locations
      * @param  list<ValueSnapshot>  $palette
      * @param  list<ServiceSnapshot>  $customizations
+     * @param  list<TemplateSnapshot>  $templates  every template of the product, for a gender chosen after the combination
      */
-    public static function order(CombinationSnapshot $combination, array $order, array $locations, array $palette, array $customizations): self
+    public static function order(CombinationSnapshot $combination, array $order, array $locations, array $palette, array $customizations, ?TemplateSnapshot $template = null, array $templates = []): self
     {
-        return new self('order', null, [], $combination, $order, $locations, $palette, $customizations);
+        return new self('order', null, [], $combination, $order, $locations, $palette, $customizations, $template, $templates);
     }
 
     /**
@@ -82,6 +87,24 @@ final readonly class SelectionOptions
             ], $this->locations),
             'palette' => array_map(self::option(...), $this->palette),
             'customizations' => array_map(fn (ServiceSnapshot $service): array => ['id' => $service->id, 'name' => $service->name], $this->customizations),
+            'template' => $this->template === null ? null : self::templateOption($this->template),
+            'templates' => array_map(self::templateOption(...), $this->templates),
+        ];
+    }
+
+    /**
+     * A template for the preview: its layers and the relative URL it is served from (the `v`
+     * parameter is the stored file name, so a replaced template is not served from the cache).
+     *
+     * @return array{id: int, variant_value_id: int|null, layers: list<string>, url: string}
+     */
+    private static function templateOption(TemplateSnapshot $template): array
+    {
+        return [
+            'id' => $template->id,
+            'variant_value_id' => $template->variantValueId,
+            'layers' => $template->layers,
+            'url' => route('products.templates.show', ['product' => $template->productId, 'template' => $template->id, 'v' => $template->version], absolute: false),
         ];
     }
 

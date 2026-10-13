@@ -40,6 +40,7 @@ use Illuminate\Support\Carbon;
  * @property-read ProductCategory $category
  * @property-read Collection<int, ProductAttribute> $productAttributes
  * @property-read Collection<int, DetailLocation> $detailLocations
+ * @property-read Collection<int, ProductTemplate> $templates
  * @property-read Collection<int, Product> $customizations
  */
 #[Fillable([
@@ -96,6 +97,16 @@ class Product extends Model
     public function combinations(): HasMany
     {
         return $this->hasMany(Combination::class);
+    }
+
+    /**
+     * SVG templates of the product, the general one first (PRD-020).
+     *
+     * @return HasMany<ProductTemplate, $this>
+     */
+    public function templates(): HasMany
+    {
+        return $this->hasMany(ProductTemplate::class)->orderBy('variant_key')->orderBy('id');
     }
 
     /**

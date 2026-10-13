@@ -162,7 +162,42 @@ final class SelectionRules
             $snapshot->detailLocations,
             $palette(),
             $snapshot->customizations,
+            self::previewTemplate($snapshot, $reachable[0]),
+            $snapshot->templates,
         );
+    }
+
+    /**
+     * The template for the preview of a combination (E-41, DEC-PRD-49): the one of the combination's
+     * value of the gender-use attribute when the product has one for it, otherwise the general
+     * template, otherwise none. A gender that is an order attribute, or a combination that lists
+     * several genders, is not decided by the combination: the general template is used and the
+     * caller picks among `SelectionOptions::templates` once the customer chooses.
+     */
+    public static function previewTemplate(ProductSnapshot $snapshot, CombinationSnapshot $combination): ?TemplateSnapshot
+    {
+        $genderValues = [];
+
+        foreach (self::attributesWithRole($snapshot, AttributeRole::Axis) as $attribute) {
+            if ($attribute->isGender()) {
+                $genderValues = $combination->axes[$attribute->id] ?? [];
+            }
+        }
+
+        $variantId = count($genderValues) === 1 ? $genderValues[0] : null;
+        $general = null;
+
+        foreach ($snapshot->templates as $template) {
+            if ($variantId !== null && $template->variantValueId === $variantId) {
+                return $template;
+            }
+
+            if ($template->variantValueId === null) {
+                $general = $template;
+            }
+        }
+
+        return $general;
     }
 
     /**
