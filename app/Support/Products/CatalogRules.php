@@ -204,17 +204,24 @@ final class CatalogRules
 
     /**
      * Rule of the customizations a combination includes (PRD-008, DEC-PRD-47): products in mode
-     * `service`, independent of the ones the product admits as extras.
+     * `service`, independent of the ones the product admits as extras. A service must be active when
+     * it is added; the ones the combination already includes (`$heldServices`) are kept even if the
+     * service was deactivated afterwards (DEC-PRD-56).
      *
+     * @param  array<int, mixed>  $heldServices  ids of the products the edited combination already includes (empty on creation)
      * @return array<string, list<mixed>>
      */
-    public static function includedCustomizationRules(): array
+    public static function includedCustomizationRules(array $heldServices = []): array
     {
         return [
             'included_customization_ids' => ['sometimes', 'nullable', 'array'],
             'included_customization_ids.*' => [
                 'integer',
-                Rule::exists('products', 'id')->where('supply_mode', SupplyMode::Service->value),
+                Rule::exists('products', 'id')
+                    ->where('supply_mode', SupplyMode::Service->value)
+                    ->where(fn (Builder $query) => $query
+                        ->where('status', CatalogStatus::Active->value)
+                        ->orWhereIn('id', $heldServices)),
             ],
         ];
     }
