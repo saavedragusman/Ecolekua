@@ -2,10 +2,14 @@
 
 use App\Enums\AttributePresentation;
 use App\Enums\AttributeSpecialUse;
+use App\Enums\BusinessLine;
 use App\Enums\CatalogStatus;
+use App\Enums\SupplyMode;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
 use App\Models\DetailLocation;
+use App\Models\Product;
+use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -215,4 +219,159 @@ it('Decision 3 (DB) restricts deleting a value used as offered color or fabric',
 
     expect(fn () => DB::table('attribute_values')->where('id', $drill)->delete())->toThrow(QueryException::class)
         ->and(fn () => DB::table('attribute_values')->where('id', $green)->delete())->toThrow(QueryException::class);
+});
+
+/**
+ * Raw product insert (products part of the schema, task 8.1). Defaults to a valid `on_demand` row.
+ *
+ * @param  array<string, mixed>  $overrides
+ */
+function schemaProductRow(int $categoryId, array $overrides = []): int
+{
+    return DB::table('products')->insertGetId(array_merge([
+        'name' => 'Camisa corporativa',
+        'product_category_id' => $categoryId,
+        'business_line' => 'uniforms',
+        'supply_mode' => 'on_demand',
+        'min_stock_default' => null,
+        'allows_custom_color' => 0,
+        'portal_visible' => 1,
+        'status' => 'active',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ], $overrides));
+}
+
+it('DEC-PRD-46 (DB) accepts a default minimum only in stock_with_minimum and requires it there', function () {
+    $category = schemaCategoryRow();
+
+    // Accepted: stock_with_minimum with its default (E-20 accepts 6).
+    $valid = schemaProductRow($category, ['name' => 'Pañal adulto', 'supply_mode' => 'stock_with_minimum', 'min_stock_default' => 6]);
+
+    expect(DB::table('products')->where('id', $valid)->value('min_stock_default'))->toBe(6);
+
+    // Rejected: a minimum in any other mode, and no minimum in stock_with_minimum.
+    foreach (['on_demand', 'stock_depletable', 'service'] as $mode) {
+        expect(fn () => schemaProductRow($category, ['name' => 'Con mínimo '.$mode, 'supply_mode' => $mode, 'min_stock_default' => 6]))
+            ->toThrow(QueryException::class);
+    }
+
+    expect(fn () => schemaProductRow($category, ['name' => 'Sin mínimo', 'supply_mode' => 'stock_with_minimum', 'min_stock_default' => null]))
+        ->toThrow(QueryException::class);
+});
+
+it('DEC-PRD-34 (DB) accepts custom color only in on_demand', function () {
+    $category = schemaCategoryRow();
+
+    $valid = schemaProductRow($category, ['name' => 'Camisa', 'supply_mode' => 'on_demand', 'allows_custom_color' => 1]);
+
+    expect(DB::table('products')->where('id', $valid)->value('allows_custom_color'))->toBe(1);
+
+    foreach (['stock_depletable', 'service'] as $mode) {
+        expect(fn () => schemaProductRow($category, ['name' => 'Color '.$mode, 'supply_mode' => $mode, 'allows_custom_color' => 1]))
+            ->toThrow(QueryException::class);
+    }
+
+    expect(fn () => schemaProductRow($category, ['name' => 'Color con mínimo', 'supply_mode' => 'stock_with_minimum', 'min_stock_default' => 6, 'allows_custom_color' => 1]))
+        ->toThrow(QueryException::class);
+});
+
+it('DEC-PRD-45 (DB) compares product names without regard to letter case', function () {
+    $category = schemaCategoryRow();
+    schemaProductRow($category, ['name' => 'Camisa corporativa']);
+
+    expect(fn () => schemaProductRow($category, ['name' => 'camisa corporativa']))
+        ->toThrow(UniqueConstraintViolationException::class);
+});
+
+it('Decision 3 (DB) restricts deleting a category that has products', function () {
+    $category = schemaCategoryRow();
+    schemaProductRow($category);
+
+    expect(fn () => DB::table('product_categories')->where('id', $category)->delete())
+        ->toThrow(QueryException::class)
+        ->and(DB::table('product_categories')->where('id', $category)->exists())->toBeTrue();
+});
+
+it('Decision 3 (DB) keeps one row per attribute in a product and cascades them with the product', function () {
+    $product = schemaProductRow(schemaCategoryRow());
+    $fabric = schemaAttributeRow(['name' => 'Tela', 'special_use' => 'fabric']);
+    $size = schemaAttributeRow(['name' => 'Talla', 'special_use' => 'size']);
+    $drill = schemaValueRow($fabric, ['name' => 'Drill']);
+    $row = fn (int $attributeId, string $role): array => [
+        'product_id' => $product,
+        'catalog_attribute_id' => $attributeId,
+        'role' => $role,
+        'sort_order' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ];
+
+    $fabricRow = DB::table('product_attributes')->insertGetId($row($fabric, 'axis'));
+    DB::table('product_attributes')->insert($row($size, 'order'));
+
+    expect(fn () => DB::table('product_attributes')->insert($row($fabric, 'order')))
+        ->toThrow(UniqueConstraintViolationException::class);
+
+    DB::table('product_attribute_values')->insert(['product_attribute_id' => $fabricRow, 'attribute_value_id' => $drill]);
+
+    // The attribute value is protected by restrict; the product's own rows disappear with it.
+    expect(fn () => DB::table('attribute_values')->where('id', $drill)->delete())->toThrow(QueryException::class);
+
+    DB::table('products')->where('id', $product)->delete();
+
+    expect(DB::table('product_attributes')->where('product_id', $product)->count())->toBe(0)
+        ->and(DB::table('product_attribute_values')->where('product_attribute_id', $fabricRow)->count())->toBe(0);
+});
+
+it('Decision 3 (DB) cascades detail locations and customizations with the product and restricts the referenced rows', function () {
+    $category = schemaCategoryRow();
+    $product = schemaProductRow($category, ['name' => 'Camisa']);
+    $service = schemaProductRow($category, ['name' => 'Bordado pequeño', 'supply_mode' => 'service']);
+    $location = schemaLocationRow();
+    DB::table('product_detail_locations')->insert(['product_id' => $product, 'detail_location_id' => $location]);
+    DB::table('product_customizations')->insert(['product_id' => $product, 'service_product_id' => $service]);
+
+    expect(fn () => DB::table('detail_locations')->where('id', $location)->delete())->toThrow(QueryException::class)
+        ->and(fn () => DB::table('products')->where('id', $service)->delete())->toThrow(QueryException::class);
+
+    DB::table('products')->where('id', $product)->delete();
+
+    expect(DB::table('product_detail_locations')->count())->toBe(0)
+        ->and(DB::table('product_customizations')->count())->toBe(0)
+        ->and(DB::table('products')->where('id', $service)->exists())->toBeTrue();
+});
+
+it('Decision 3 builds product models and factories with their states and enum casts', function () {
+    $category = ProductCategory::factory()->create();
+    $onDemand = Product::factory()->for($category, 'category')->onDemand()->create();
+    $minimum = Product::factory()->for($category, 'category')->stockWithMinimum()->create();
+    $depletable = Product::factory()->for($category, 'category')->stockDepletable()->diapers()->create();
+    $service = Product::factory()->for($category, 'category')->service()->inactive()->create();
+
+    expect($onDemand->fresh()->supply_mode)->toBe(SupplyMode::OnDemand)
+        ->and($onDemand->fresh()->allows_custom_color)->toBeTrue()
+        ->and($onDemand->business_line)->toBe(BusinessLine::Uniforms)
+        ->and($minimum->fresh()->min_stock_default)->toBe(6)
+        ->and($minimum->fresh()->allows_custom_color)->toBeFalse()
+        ->and($depletable->fresh()->business_line)->toBe(BusinessLine::Diapers)
+        ->and($service->fresh()->status)->toBe(CatalogStatus::Inactive)
+        ->and($service->category->is($category))->toBeTrue()
+        ->and(Product::query()->withStatus(CatalogStatus::Active)->count())->toBe(3)
+        ->and(Product::query()->search('')->count())->toBe(4)
+        ->and(Product::query()->search($onDemand->name)->pluck('id')->all())->toBe([$onDemand->id]);
+});
+
+it('DEC-PRD-34 computes the effective custom color from mode, flag and the declared color attribute', function () {
+    $category = ProductCategory::factory()->create();
+    $color = CatalogAttribute::factory()->color()->create();
+    $product = Product::factory()->for($category, 'category')->onDemand()->create();
+
+    // No color attribute declared: the stored flag alone is not enough.
+    expect($product->admitsCustomColor())->toBeFalse();
+
+    ProductAttribute::factory()->for($product)->for($color, 'catalogAttribute')->create(['role' => 'order']);
+
+    expect($product->fresh()->admitsCustomColor())->toBeTrue()
+        ->and(Product::factory()->for($category, 'category')->onDemand()->create(['allows_custom_color' => false])->admitsCustomColor())->toBeFalse();
 });
