@@ -14,6 +14,7 @@ use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Pricing\PriceSchemeController;
 use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ComboController;
 use App\Http\Controllers\Products\ProductAssetController;
@@ -154,6 +155,10 @@ Route::put('/combos/{combo}', [ComboController::class, 'update'])->name('combos.
 Route::delete('/combos/{combo}', [ComboController::class, 'destroy'])->name('combos.destroy');
 Route::post('/combos/{combo}/activate', [ComboController::class, 'activate'])->name('combos.activate');
 Route::post('/combos/{combo}/deactivate', [ComboController::class, 'deactivate'])->name('combos.deactivate');
+
+// Price schemes (spec 004, COT-001). Authorization lives in PricingPolicy (`pricing.manage`); the scheme
+// pages arrive with the pricing UI, so only the writes exist for now.
+Route::post('/pricing/schemes', [PriceSchemeController::class, 'store'])->name('pricing.schemes.store');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
