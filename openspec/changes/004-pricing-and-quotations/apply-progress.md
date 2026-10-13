@@ -182,4 +182,47 @@ Created: `app/Actions/Pricing/AssignPriceScheme.php`, `app/Http/Requests/Pricing
 Authored changed lines (excluding `tasks.md`, `apply-progress.md`): about 633 (53 additions + 2 deletions in 3 modified files; 578 in 4 new files: production about 186, tests 392). Within the ~800 estimate and under the 1,100 split threshold; `size:exception` per the accepted 004 policy.
 
 ### Remaining
-Task 4.4 commit pending. Next: Phase 5a.
+Task 4.4 commit: done (`27f884d`). Next: Phase 5a, below.
+
+## Phase 5a (PR 7, `feat/004-pricing-and-quotations-5a-combination-prices`, base PR 6): tasks 5a.1, 5a.2, 5a.5, 5a.6 done; 5a.3 and 5a.4 (`MissingPrices`, E-26) ship in PR 8
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 5a.1/5a.2 | `tests/Feature/Pricing/CombinationPriceTest.php` | Integration (HTTP) | `--group=cot` 244 tests green before (Phase 4 state) | 32 tests: 1 passed (the 404 of an unknown product, vacuous before the route), 29 failed (404 instead of 302/422/403: no route), 2 errors (`PermissionName::ProductsManage` undefined: a test typo, fixed to `ProductsUpdate`; `getByName()` null on the route name) | First GREEN run 30/32; the 2 failures were `toBe` on JSON audit payloads (MySQL JSON reorders keys: `toEqual`, as noted in Phase 3). Then 32/32 | E-05 register 3 tiers then change one, comma/dot/integer input; only changed cells written (same value written as `40`, no audit, `updated_at` untouched; third identical save writes no audit at all); E-06 zero, `0,00`, negative, 3 decimals, text, exponent, plus smallest (0.01) and 2-decimal positives accepted, several invalid cells reported together with none saved, negotiation tier; DEC-COT-32 delete with audit and null over an empty cell; inactive combination; foreign combination, unknown ids, foreign tier, product without scheme, duplicate cell; size group required / foreign / unexpected and a grouped price per group; fixed scheme implicit tier; 6 malformed payloads; 404; E-07 403 audited with `pricing.view` only and with products permissions only; route declared | `AffectedPrices::sizeGroupName()` extracted so audit rows and the table share the group name; PHPStan: 4 errors (`__()` returns `array\|string`), fixed with `Lang::string()` |
+| 5a.5 | architecture suites | Refactor | green | n/a | `NoManualForbiddenTest`, `ProtectedByDefaultTest` pass in the full suite; no `abort(403)` | n/a | none |
+
+### Gate (2026-10-13)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.52s)
+- `sail artisan test`: passed, 1920 tests (1918 passed, 2 skipped, 10419 assertions)
+- Harness (no reset): `sail artisan route:list --name=pricing.products.prices` shows `PUT pricing/products/{product}/prices`.
+
+### Files
+Modified: `app/Support/Pricing/AffectedPrices.php` (`sizeGroupName()`), `lang/es/validation.php`, `routes/web.php`, `openspec/changes/004-pricing-and-quotations/tasks.md`.
+Created: `app/Actions/Pricing/SyncCombinationPrices.php`, `app/Http/Requests/Pricing/SyncCombinationPricesRequest.php`, `app/Http/Controllers/Pricing/ProductPriceController.php`, `tests/Feature/Pricing/CombinationPriceTest.php`.
+
+### Deviations from design / choices the design did not fix
+1. Request shape: `cells` (min 1) each `{combination_id, size_group_id|null, price_tier_id, price}`; `price` must be present and is a string (JSON numbers are rejected so no float travels); `null` deletes (DEC-COT-32). An empty string becomes `null` through the app middleware, so it also deletes.
+2. Error fields: foreign combination on `cells.{i}.combination_id`; unknown or foreign tier on `cells.{i}.price_tier_id`; negotiation tier on `cells.{i}.price` (as the task says); group rules on `cells.{i}.size_group_id`; a repeated cell on `cells.{i}.price_tier_id`; a product without a scheme (or whose scheme changed under the lock) on `cells`. The design only fixed `cells.{i}.price` for E-06.
+3. Cells are validated entirely before any write (one invalid cell saves nothing; all errors reported together).
+4. Lock order: the scheme row (when the product has one), then the product row, re-checking that the scheme did not change.
+5. Audit payload: `old_values` and `new_values` both carry the full `{code, size_group, tier, price}` (created: `old_values` empty; deleted: `new_values` empty). `size_group` is the sizes joined by ", " until `SizeGroupLabel` (PR 8); replace then.
+6. Tasks 5a.3 and 5a.4 (`MissingPrices`, E-26, COT-025 list flag) are not in this PR by the 2026-10-13 regrouping, so the commit cites COT-003, E-05, E-06, E-07 and DEC-COT-32 only.
+
+### Work unit evidence
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest tests/Feature/Pricing/CombinationPriceTest.php`: passed, 32 tests, 141 assertions |
+| Runtime harness | `route:list --name=pricing.products.prices`: the PUT route is listed |
+| Rollback boundary | revert `SyncCombinationPrices`, its request, `ProductPriceController`, the route and its `use`, the lang entries, `AffectedPrices::sizeGroupName` and the test file |
+
+### Size
+Authored changed lines (excluding `tasks.md`, `apply-progress.md`): about 789 (30 additions + 1 deletion in 3 modified files; 758 in 4 new files: production about 315, tests 443). Under the 1,100 split threshold; `size:exception` per the accepted 004 policy.
+
+### Remaining
+Next: PR 8 (Phase 5b1 plus tasks 5a.3 and 5a.4).

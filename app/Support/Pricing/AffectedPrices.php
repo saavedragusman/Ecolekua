@@ -3,6 +3,7 @@
 namespace App\Support\Pricing;
 
 use App\Models\CombinationPrice;
+use App\Models\SizeGroup;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 
@@ -65,13 +66,22 @@ final class AffectedPrices
                 'id' => $price->id,
                 'product_id' => $price->combination->product_id,
                 'code' => $price->combination->code,
-                'size_group' => $price->sizeGroup?->sizes->pluck('name')->implode(', '),
+                'size_group' => self::sizeGroupName($price->sizeGroup),
                 'tier' => $price->tier->label,
                 'price' => Money::toStorage($price->unit_price, 2),
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * How the audit names a size group until `SizeGroupLabel` arrives with the size groups slice: the
+     * sizes of the group joined by ", " (`null` for an ungrouped price). The group needs its `sizes` loaded.
+     */
+    public static function sizeGroupName(?SizeGroup $group): ?string
+    {
+        return $group?->sizes->pluck('name')->implode(', ');
     }
 
     /**
