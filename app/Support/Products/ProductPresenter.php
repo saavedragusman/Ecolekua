@@ -15,6 +15,7 @@ use App\Models\DetailLocation;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
+use App\Models\StockMinimumOverride;
 use Illuminate\Support\Collection;
 
 /**
@@ -214,6 +215,226 @@ final class ProductPresenter
             // storage paths are never exposed.
             'images' => ['has_main' => $product->image_display_path !== null, 'templates' => []],
         ];
+    }
+
+    /**
+     * Options of the product form (PRD-003, PRD-012): the categories a product can be placed in
+     * (the active ones, plus the product's own even if it was deactivated afterwards, as the
+     * request rule does), and the labelled lines and modes.
+     *
+     * @return array{categories: list<array{value: int, label: string}>, lines: list<array{value: string, label: string}>, modes: list<array{value: string, label: string}>}
+     */
+    public static function formOptions(?Product $product = null): array
+    {
+        $categories = ProductCategory::query()
+            ->where(fn ($query) => $query
+                ->where('status', CatalogStatus::Active->value)
+                ->when($product !== null, fn ($inner) => $inner->orWhere('id', $product?->product_category_id)))
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        return [
+            'categories' => array_values($categories
+                ->map(fn (ProductCategory $category): array => ['value' => $category->id, 'label' => $category->name])
+                ->all()),
+            'lines' => self::filterOptions()['lines'],
+            'modes' => self::filterOptions()['modes'],
+        ];
+    }
+
+    /**
+     * Stored general data of a product for the edit form, with the ids of the detail locations and
+     * customizations it admits.
+     *
+     * @return array<string, mixed>
+     */
+    public static function form(Product $product): array
+    {
+        return [
+            'id' => $product->id,
+            'name' => $product->name,
+            'description' => $product->description,
+            'product_category_id' => $product->product_category_id,
+            'business_line' => $product->business_line->value,
+            'supply_mode' => $product->supply_mode->value,
+            'min_stock_default' => $product->min_stock_default,
+            'allows_custom_color' => $product->allows_custom_color,
+            'portal_visible' => $product->portal_visible,
+            'status' => $product->status->value,
+            'detail_location_ids' => array_values($product->detailLocations()->pluck('detail_locations.id')->map(fn (mixed $id): int => (int) $id)->all()),
+            'customization_ids' => array_values($product->customizations()->pluck('products.id')->map(fn (mixed $id): int => (int) $id)->all()),
+        ];
+    }
+
+    /**
+     * Detail locations and services the edit form can check: the active ones plus those the product
+     * already holds even if they were deactivated afterwards (DEC-PRD-55). A service is never the
+     * product itself.
+     *
+     * @return array{detail_locations: list<array{value: int, label: string}>, customizations: list<array{value: int, label: string}>}
+     */
+    public static function relationOptions(Product $product): array
+    {
+        $heldLocations = $product->detailLocations()->pluck('detail_locations.id')->all();
+        $heldServices = $product->customizations()->pluck('products.id')->all();
+
+        $locations = DetailLocation::query()
+            ->where(fn ($query) => $query->where('status', CatalogStatus::Active->value)->orWhereIn('id', $heldLocations))
+            ->get();
+        $services = Product::query()
+            ->where('supply_mode', SupplyMode::Service->value)
+            ->whereKeyNot($product->id)
+            ->where(fn ($query) => $query->where('status', CatalogStatus::Active->value)->orWhereIn('id', $heldServices))
+            ->get();
+
+        return [
+            'detail_locations' => self::checkboxOptions($locations),
+            'customizations' => self::checkboxOptions($services),
+        ];
+    }
+
+    /**
+     * Own minimum stock editor of a `stock_with_minimum` product (PRD-009, DEC-PRD-46): the articles
+     * (combinations) that can carry an own minimum, the sizes each one admits when the product
+     * declares the size-use attribute as an order attribute (the combination restriction when it has
+     * one, every allowed size otherwise), and the stored overrides. Null in any other mode.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function stockEditor(Product $product): ?array
+    {
+        if ($product->supply_mode !== SupplyMode::StockWithMinimum) {
+            return null;
+        }
+
+        $sizeRow = $product->productAttributes()
+            ->where('role', AttributeRole::Order->value)
+            ->whereHas('catalogAttribute', fn ($query) => $query->where('special_use', AttributeSpecialUse::Size->value))
+            ->with(['catalogAttribute', 'allowedValues'])
+            ->first();
+        $allowedSizes = $sizeRow?->allowedValues->sortBy(['sort_order', 'id']);
+
+        $combinations = $product->combinations()
+            ->with(['catalogCode', 'values'])
+            ->get()
+            ->sortBy(fn (Combination $combination): string => (string) $combination->code, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return [
+            'size_attribute' => $sizeRow?->catalogAttribute->name,
+            'combinations' => array_values($combinations->map(function (Combination $combination) use ($sizeRow, $allowedSizes): array {
+                $sizes = null;
+
+                if ($sizeRow !== null && $allowedSizes !== null) {
+                    $restriction = $combination->values->where('catalog_attribute_id', $sizeRow->catalog_attribute_id)->modelKeys();
+                    $sizes = array_values($allowedSizes
+                        ->filter(fn (AttributeValue $size): bool => $restriction === [] || in_array($size->id, $restriction, true))
+                        ->map(fn (AttributeValue $size): array => ['value' => $size->id, 'label' => $size->name])
+                        ->all());
+                }
+
+                return [
+                    'id' => $combination->id,
+                    'code' => $combination->code,
+                    'name' => self::combinationName($combination),
+                    'sizes' => $sizes,
+                ];
+            })->all()),
+            'overrides' => array_values(StockMinimumOverride::query()
+                ->whereIn('combination_id', $combinations->modelKeys())
+                ->orderBy('combination_id')
+                ->orderBy('size_key')
+                ->get()
+                ->map(fn (StockMinimumOverride $override): array => [
+                    'combination_id' => $override->combination_id,
+                    'size_value_id' => $override->size_value_id,
+                    'minimum' => $override->minimum,
+                ])
+                ->all()),
+        ];
+    }
+
+    /**
+     * Structure editor (PRD-004): the declared attributes in display order with their admitted value
+     * ids, ready to be sent back as they are.
+     *
+     * @return list<array{attribute_id: int, role: string, allowed_value_ids: list<int>}>
+     */
+    public static function structureEntries(Product $product): array
+    {
+        return array_values($product->productAttributes()
+            ->with('allowedValues')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ProductAttribute $row): array => [
+                'attribute_id' => $row->catalog_attribute_id,
+                'role' => $row->role->value,
+                'allowed_value_ids' => array_values($row->allowedValues->sortBy(['sort_order', 'id'])->modelKeys()),
+            ])
+            ->all());
+    }
+
+    /**
+     * Attributes a product can declare: the active ones with their active values, plus the inactive
+     * attributes and values the product already holds so a save does not silently drop them
+     * (DEC-PRD-51). `is_fabric`, `is_color` and `fixed_role` carry DEC-PRD-35 and DEC-PRD-50 to the
+     * page; the backend still validates every request.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function structureCatalog(Product $product): array
+    {
+        $held = $product->productAttributes()->with('allowedValues')->get();
+        $heldAttributeIds = $held->pluck('catalog_attribute_id')->all();
+        $heldValueIds = $held->flatMap(fn (ProductAttribute $row): array => $row->allowedValues->modelKeys())->all();
+
+        $attributes = CatalogAttribute::query()
+            ->where(fn ($query) => $query->where('status', CatalogStatus::Active->value)->orWhereIn('id', $heldAttributeIds))
+            ->with(['values' => fn ($query) => $query
+                ->where(fn ($inner) => $inner->where('status', CatalogStatus::Active->value)->orWhereIn('id', $heldValueIds))
+                ->orderBy('sort_order')
+                ->orderBy('id')])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        return array_values($attributes->map(function (CatalogAttribute $attribute): array {
+            $isFabric = $attribute->special_use === AttributeSpecialUse::Fabric;
+            $isColor = $attribute->presentation === AttributePresentation::Color;
+
+            return [
+                'id' => $attribute->id,
+                'name' => $attribute->name,
+                'status' => $attribute->status->value,
+                'is_fabric' => $isFabric,
+                'is_color' => $isColor,
+                'fixed_role' => match (true) {
+                    $isFabric => AttributeRole::Axis->value,
+                    $isColor => AttributeRole::Order->value,
+                    default => null,
+                },
+                'values' => array_values($attribute->values->map(fn (AttributeValue $value): array => [
+                    'value' => $value->id,
+                    'label' => $value->status === CatalogStatus::Active ? $value->name : "{$value->name} (inactivo)",
+                ])->all()),
+            ];
+        })->all());
+    }
+
+    /**
+     * @param  Collection<int, DetailLocation>|Collection<int, Product>  $items
+     * @return list<array{value: int, label: string}>
+     */
+    private static function checkboxOptions(Collection $items): array
+    {
+        return array_values($items
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->map(fn (DetailLocation|Product $item): array => [
+                'value' => $item->id,
+                'label' => $item->status === CatalogStatus::Active ? $item->name : "{$item->name} (inactivo)",
+            ])
+            ->all());
     }
 
     /**

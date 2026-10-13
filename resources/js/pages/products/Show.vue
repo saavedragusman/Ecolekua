@@ -10,7 +10,14 @@ import type { DataTableColumn } from '@/components/DataTable.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { FOCUS_RING } from '@/lib/ui';
-import { activate, deactivate, destroy, index } from '@/routes/products';
+import {
+    activate,
+    deactivate,
+    destroy,
+    edit,
+    index,
+    structure,
+} from '@/routes/products';
 import type { ProductCan, ProductDetail } from '@/types/products';
 
 defineOptions({ layout: AppLayout });
@@ -293,6 +300,16 @@ const EMPTY = 'No registrado';
         </AppCard>
 
         <div class="flex flex-col gap-space-sm md:flex-row">
+            <AppButton v-if="can.update" :href="edit(product.id).url">
+                Editar
+            </AppButton>
+            <AppButton
+                v-if="can.update"
+                variant="outlined"
+                :href="structure(product.id).url"
+            >
+                Estructura
+            </AppButton>
             <AppButton
                 v-if="can.deactivate && product.status === 'active'"
                 variant="outlined"

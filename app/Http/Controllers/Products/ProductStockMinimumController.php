@@ -11,8 +11,8 @@ use Inertia\Inertia;
 
 /**
  * Own minimum stock per article (PRD-009): `PUT /products/{product}/stock-minimums` replaces the
- * whole set. Authorization is `ProductPolicy::update`, checked by the form request. The editing page
- * arrives in Phase 18; the endpoint returns to the page that sent it.
+ * whole set. Authorization is `ProductPolicy::update`, checked by the form request. The editor lives
+ * in the product edit page; the endpoint returns to the page that sent it.
  */
 class ProductStockMinimumController extends Controller
 {

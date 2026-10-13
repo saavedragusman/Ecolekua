@@ -2,18 +2,26 @@
 
 use App\Actions\Products\CreateProduct;
 use App\Actions\Products\UpdateProduct;
+use App\Enums\AttributeRole;
 use App\Enums\AuditAction;
 use App\Enums\BusinessLine;
 use App\Enums\CatalogStatus;
 use App\Enums\PermissionName;
 use App\Enums\SupplyMode;
+use App\Models\AttributeValue;
 use App\Models\AuditLog;
+use App\Models\CatalogAttribute;
+use App\Models\CatalogCode;
+use App\Models\Combination;
 use App\Models\DetailLocation;
 use App\Models\Product;
+use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
+use App\Models\StockMinimumOverride;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function productCreator(): User
 {
@@ -774,4 +782,156 @@ it('PRD-007 denies editing details to a user without products.update and changes
         ->assertForbidden();
 
     expect($product->detailLocations()->count())->toBe(0);
+});
+
+// --- Form pages (Phase 18, PRD-003, PRD-009, E-03) -------------------------------------------
+
+it('E-03 forbids the create page to a user without products.create', function () {
+    $actor = userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsUpdate);
+
+    $this->actingAs($actor)->get('/products/create')->assertForbidden();
+});
+
+it('E-03 forbids the edit page to a user without products.update', function () {
+    $product = Product::factory()->create();
+    $actor = userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsCreate);
+
+    $this->actingAs($actor)->get("/products/{$product->id}/edit")->assertForbidden();
+});
+
+it('E-03 redirects a guest from the form pages to the login', function () {
+    $product = Product::factory()->create();
+
+    $this->get('/products/create')->assertRedirect('/login');
+    $this->get("/products/{$product->id}/edit")->assertRedirect('/login');
+});
+
+it('PRD-003 renders the create page with active categories, lines, modes and the proposed minimum of 6', function () {
+    ProductCategory::factory()->create(['name' => 'Camisas', 'sort_order' => 2]);
+    ProductCategory::factory()->create(['name' => 'Gorras', 'sort_order' => 1]);
+    ProductCategory::factory()->inactive()->create(['name' => 'Descontinuadas']);
+
+    $this->actingAs(productCreator())->get('/products/create')->assertInertia(function (Assert $page) {
+        $page->component('products/Create')
+            ->where('defaults.min_stock_default', 6)
+            ->where('options.categories.0.label', 'Gorras')
+            ->where('options.categories.1.label', 'Camisas')
+            ->has('options.categories', 2)
+            ->where('options.lines', [
+                ['value' => 'uniforms', 'label' => BusinessLine::Uniforms->label()],
+                ['value' => 'diapers', 'label' => BusinessLine::Diapers->label()],
+            ])
+            ->has('options.modes', 4)
+            ->where('options.modes.0.value', 'on_demand');
+    });
+});
+
+it('PRD-012 renders the edit page with the stored data and keeps an inactive product editable', function () {
+    $category = ProductCategory::factory()->create(['name' => 'Camisas']);
+    $product = Product::factory()->for($category, 'category')->inactive()->create([
+        'name' => 'Camisa corporativa',
+        'description' => 'Para oficina',
+        'portal_visible' => false,
+    ]);
+
+    $this->actingAs(productEditor())->get("/products/{$product->id}/edit")->assertInertia(function (Assert $page) use ($product, $category) {
+        $page->component('products/Edit')
+            ->where('product.id', $product->id)
+            ->where('product.name', 'Camisa corporativa')
+            ->where('product.description', 'Para oficina')
+            ->where('product.product_category_id', $category->id)
+            ->where('product.business_line', 'uniforms')
+            ->where('product.supply_mode', 'on_demand')
+            ->where('product.min_stock_default', null)
+            ->where('product.allows_custom_color', true)
+            ->where('product.portal_visible', false)
+            ->where('product.status', 'inactive')
+            ->where('stock', null);
+    });
+});
+
+it('PRD-012 offers the own category of the product even when it was deactivated, and no other inactive one', function () {
+    $own = ProductCategory::factory()->inactive()->create(['name' => 'Antiguas']);
+    ProductCategory::factory()->inactive()->create(['name' => 'Otras antiguas']);
+    ProductCategory::factory()->create(['name' => 'Vigentes']);
+    $product = Product::factory()->for($own, 'category')->create();
+
+    $this->actingAs(productEditor())->get("/products/{$product->id}/edit")->assertInertia(function (Assert $page) {
+        expect(collect($page->toArray()['props']['options']['categories'])->pluck('label')->sort()->values()->all())
+            ->toBe(['Antiguas', 'Vigentes']);
+    });
+});
+
+it('PRD-007 lists the active locations and services to add and keeps the held inactive ones, never the product itself', function () {
+    $product = Product::factory()->create(['name' => 'Camisa corporativa']);
+    $active = DetailLocation::factory()->create(['name' => 'Pechera']);
+    $heldInactive = DetailLocation::factory()->inactive()->create(['name' => 'Orilla de mangas']);
+    DetailLocation::factory()->inactive()->create(['name' => 'Cuello']);
+    $product->detailLocations()->attach([$heldInactive->id]);
+
+    $service = Product::factory()->service()->create(['name' => 'Bordado pequeño']);
+    $heldService = Product::factory()->service()->inactive()->create(['name' => 'Vinil']);
+    Product::factory()->service()->inactive()->create(['name' => 'Planchado']);
+    Product::factory()->create(['name' => 'Camisa de oficina']);
+    $product->customizations()->attach([$heldService->id]);
+
+    $this->actingAs(productEditor())->get("/products/{$product->id}/edit")->assertInertia(function (Assert $page) use ($product, $active, $heldInactive, $service, $heldService) {
+        $page->where('product.detail_location_ids', [$heldInactive->id])
+            ->where('product.customization_ids', [$heldService->id])
+            ->where('options.detail_locations', [
+                ['value' => $heldInactive->id, 'label' => 'Orilla de mangas (inactivo)'],
+                ['value' => $active->id, 'label' => 'Pechera'],
+            ])
+            ->where('options.customizations', [
+                ['value' => $service->id, 'label' => 'Bordado pequeño'],
+                ['value' => $heldService->id, 'label' => 'Vinil (inactivo)'],
+            ]);
+
+        expect(collect($page->toArray()['props']['options']['customizations'])->pluck('value')->all())->not->toContain($product->id);
+    });
+});
+
+it('PRD-009 lists the own minimums of a stock_with_minimum product with sizes limited to each restriction', function () {
+    $category = ProductCategory::factory()->create();
+    $product = Product::factory()->for($category, 'category')->stockWithMinimum(6)->create(['name' => 'Pantalón industrial']);
+    $size = CatalogAttribute::factory()->size()->create();
+    [$s, $m, $l] = collect(['S', 'M', 'L'])->map(fn (string $name, int $position) => AttributeValue::factory()->for($size, 'catalogAttribute')->create(['name' => $name, 'sort_order' => $position + 1]))->all();
+    $declared = ProductAttribute::factory()->create(['product_id' => $product->id, 'catalog_attribute_id' => $size->id, 'role' => AttributeRole::Order, 'sort_order' => 1]);
+    $declared->allowedValues()->attach([$s->id, $m->id, $l->id]);
+
+    $free = Combination::factory()->for($product)->create();
+    CatalogCode::factory()->create(['combination_id' => $free->id, 'code' => 'P-01']);
+    $restricted = Combination::factory()->for($product)->create();
+    CatalogCode::factory()->create(['combination_id' => $restricted->id, 'code' => 'P-02']);
+    $restricted->values()->attach($s->id, ['catalog_attribute_id' => $size->id]);
+    StockMinimumOverride::query()->create(['combination_id' => $free->id, 'size_value_id' => $m->id, 'minimum' => 2]);
+
+    $this->actingAs(productEditor())->get("/products/{$product->id}/edit")->assertInertia(function (Assert $page) use ($free, $restricted, $s, $m, $l) {
+        $page->where('product.min_stock_default', 6)
+            ->where('stock.size_attribute', 'Talla')
+            ->where('stock.combinations.0.id', $free->id)
+            ->where('stock.combinations.0.code', 'P-01')
+            ->where('stock.combinations.0.sizes', [
+                ['value' => $s->id, 'label' => 'S'],
+                ['value' => $m->id, 'label' => 'M'],
+                ['value' => $l->id, 'label' => 'L'],
+            ])
+            ->where('stock.combinations.1.id', $restricted->id)
+            ->where('stock.combinations.1.sizes', [['value' => $s->id, 'label' => 'S']])
+            ->where('stock.overrides', [['combination_id' => $free->id, 'size_value_id' => $m->id, 'minimum' => 2]]);
+    });
+});
+
+it('PRD-009 offers combinations without sizes when the product does not declare the size attribute', function () {
+    $product = Product::factory()->stockWithMinimum(6)->create();
+    $combination = Combination::factory()->for($product)->create();
+    CatalogCode::factory()->create(['combination_id' => $combination->id, 'code' => 'G-01']);
+    StockMinimumOverride::query()->create(['combination_id' => $combination->id, 'size_value_id' => null, 'minimum' => 3]);
+
+    $this->actingAs(productEditor())->get("/products/{$product->id}/edit")->assertInertia(function (Assert $page) use ($combination) {
+        $page->where('stock.size_attribute', null)
+            ->where('stock.combinations.0.id', $combination->id)
+            ->where('stock.combinations.0.sizes', null)
+            ->where('stock.overrides', [['combination_id' => $combination->id, 'size_value_id' => null, 'minimum' => 3]]);
+    });
 });

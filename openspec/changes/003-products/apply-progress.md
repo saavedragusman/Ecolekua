@@ -707,3 +707,40 @@ RED run: `sail artisan test --filter=ProductListTest`: 27 tests, 0 passed. GREEN
 - Interpretations (no [DEC-PENDIENTE]): (1) the code search is a contains-match (consistent with the name search and the customers list); (2) the "Nuevo producto", "Editar" and "Nueva combinación" buttons are not rendered yet because their pages arrive in Phases 18 and 19 (the `can` flags are already in the props); (3) the delete rejection reason is the backend error flash already shared by the layout, and "Desactivar" is on the same page (customers precedent).
 - Navigation: "Productos" (`inventory_2`, `products.view`, group Comercial, priority 20). "Combos" arrives with Phase 20.
 - Hooks: none. Manual responsive check (17.4) pending for the human.
+
+## Phase 18 — Product forms and structure editor UI (COMPLETE except the manual flows, tasks 18.1-18.4; 18.5 waits for the human)
+
+Chain: PR "[18/26]", branch `feat/003-products-18-product-forms` (from `feat/003-products-17-product-list`). Committed with the user's per-phase authorization; no push.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | Triangulate | Refactor |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 18.1/18.2 | `ProductWriteTest.php` (+9), `ProductStructureTest.php` (+6) | Feature (HTTP + Inertia + DB) | `tests/Feature/Products` 416 tests (415 passed, 1 skipped) before | 15 tests, 0 passed (404 "route not found" and "Not a valid Inertia response") | 12/15 after the backend (the 3 left asserted `component('products/Create|Edit|Structure')`, which needs the Vue pages); 15/15 after 18.3 | E-03 (create 403 without `products.create`, edit and structure 403 without `products.update`, guests to login); create options (active categories in order, lines, modes, proposed minimum 6); edit data of an inactive product; own inactive category kept and no other inactive one; held inactive locations / services kept, active ones listed, the product never offered as its own customization; stock editor with sizes limited to each combination restriction, without sizes when the product has no size attribute, null in other modes; structure page (current structure in order, active catalog with fabric / color marks and fixed roles, held inactive attribute and value kept, `has_combinations`) | `pint`, phpstan clean |
+| 18.x (list) | `ProductListTest.php` (+1) | Feature | 27 passing before | `can.create` missing: 1 failed | 1 passed | `can.create` true for `products.create`, false for a viewer | n/a |
+| 18.3 | `resources/js/pages/products/{Create,Edit,Structure}.vue`, `components/products/{ProductForm,StockMinimumsEditor,StructureEditor}.vue`, `types/products.ts`, `Index.vue`, `Show.vue` | Frontend | n/a | n/a (the `component()` assertions of 18.1) | `pnpm types:check`, `pnpm check`, `pnpm build` pass | n/a | `pnpm check:fix` formatted 3 new components |
+
+RED run: `sail artisan test --filter=<the 15 new test names>`: 15 tests, 0 passed. GREEN run: `sail artisan test tests/Feature/Products`: 432 tests, 431 passed, 1 skipped (the E-29 todo).
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail artisan test tests/Feature/Products`: 431 passed, 1 skipped (2579 assertions) |
+| Runtime harness | Real HTTP `GET /products/create`, `/products/{id}/edit`, `/products/{id}/structure` against MySQL with `assertInertia`; the write endpoints the forms call were already covered by `ProductWriteTest`, `ProductStructureTest` and `StockMinimumTest`. Wayfinder regenerated; `sail pnpm build` compiled the three pages. Manual create / edit / structure flows at 375 / 1280 px: **PENDING for the human** (18.5) |
+| Rollback boundary | `ProductController::create/edit` and `index` `can`, `ProductStructureController::edit`, `ProductPresenter::formOptions/form/relationOptions/stockEditor/structureEntries/structureCatalog`, three `GET` routes, the three pages, three components, `types/products.ts` additions, the "Nuevo producto" / "Editar" / "Estructura" buttons, the 16 new tests and the Phase 18 marks in `tasks.md` |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (81 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1360 tests, 1358 passed, 2 skipped (same two as Phase 17).
+
+### Notes
+
+- Authored lines: about 1534 (additions + deletions, tracked and new files, excluding Wayfinder output and the openspec records): production PHP about 285, frontend about 980 (`StructureEditor` 305, `ProductForm` 230, `StockMinimumsEditor` 177, pages 144, types 90, buttons 31), tests 258. Above the 400 advisory; cohesive (three pages with their props, routes and tests), not split: recommend `size:exception`.
+- Page contracts. `GET /products/create`: `options {categories (active, sort order), lines, modes}`, `defaults {min_stock_default: 6}`. `GET /products/{id}/edit`: `product {id, name, description, product_category_id, business_line, supply_mode, min_stock_default, allows_custom_color, portal_visible, status, detail_location_ids, customization_ids}`, `options` (same plus `detail_locations` and `customizations` as `{value, label}` with "(inactivo)" for held inactive ones; own category kept), `stock` (`null` unless `stock_with_minimum`; else `{size_attribute, combinations [{id, code, name, sizes|null}], overrides [{combination_id, size_value_id, minimum}]}`). `GET /products/{id}/structure`: `product {id, name, status, status_label, has_combinations}`, `structure [{attribute_id, role, allowed_value_ids}]` in display order, `catalog [{id, name, status, is_fabric, is_color, fixed_role, values [{value, label}]}]`.
+- Write endpoints reused unchanged: `POST /products`, `PUT /products/{id}` (general data + detail locations + customizations), `PUT /products/{id}/attributes`, `PUT /products/{id}/stock-minimums`.
+- Presentation-only mirrors of backend data (no validation in JavaScript): the minimum field shows only in `stock_with_minimum` and the custom-color checkbox only in `on_demand` (a field the mode does not admit is not sent; custom color defaults on when the mode becomes `on_demand`, DEC-PRD-34); the role of the fabric and of the color is shown fixed from the backend `fixed_role` (DEC-PRD-50); a color of a product that declares the fabric shows no value picker and sends no values (DEC-PRD-35); axes are reordered by `IconButton` `reorder` arrows that swap neighbouring axes in the list sent back. All rejections (frozen structure, values in use, inactive items, duplicates) come from the backend as field or list errors.
+- The own-minimum editor is a separate form (`StockMinimumsEditor`) on the edit page because it has its own endpoint (`PUT /products/{id}/stock-minimums`, whole-set replace); details and customizations are part of the edit form (PRD-007, PRD-008). The create form carries only the general data (`StoreProductRequest` admits nothing else).
+- Interpretations (no [DEC-PENDIENTE]): (1) structure entries are sent in the order shown (axes can be moved among axes only); (2) held inactive attributes and values appear in the structure editor so a save does not silently drop them (DEC-PRD-51 / DEC-PRD-55 pattern); (3) "Nueva combinación" stays for Phase 19.
+- Process note: one append to `resources/js/types/products.ts` (and an empty no-op append to a test file) was made with a shell heredoc by mistake, against the Edit/Write-only rule; the content is ordinary and was formatted by `pnpm check:fix`.
+- Manual checks pending for the human (18.5): create, edit (including mode switch and stock overrides) and structure (add, remove, reorder axes) flows at 375 and 1280 px.

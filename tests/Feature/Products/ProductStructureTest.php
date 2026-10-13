@@ -16,6 +16,7 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function structureEditor(): User
 {
@@ -702,4 +703,94 @@ it('PRD-016 denies the structure change to a user without products.update and au
 
 it('PRD-004 answers 404 for an unknown product', function () {
     $this->actingAs(structureEditor())->putJson('/products/999999/attributes', ['attributes' => []])->assertNotFound();
+});
+
+// --- Structure page (Phase 18, PRD-004, E-03) -------------------------------------------------
+
+it('E-03 forbids the structure page to a user without products.update', function () {
+    $product = Product::factory()->create();
+    $actor = userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsCreate);
+
+    $this->actingAs($actor)->get("/products/{$product->id}/structure")->assertForbidden();
+});
+
+it('E-03 redirects a guest from the structure page to the login', function () {
+    $product = Product::factory()->create();
+
+    $this->get("/products/{$product->id}/structure")->assertRedirect('/login');
+});
+
+it('PRD-004 renders the structure page with the current structure in display order', function () {
+    $catalog = structureCatalog();
+    $product = Product::factory()->inactive()->create(['name' => 'Camisa corporativa']);
+    declareStructure($product, fullStructure($catalog));
+
+    $this->actingAs(structureEditor())->get("/products/{$product->id}/structure")->assertInertia(function (Assert $page) use ($product, $catalog) {
+        $page->component('products/Structure')
+            ->where('product', ['id' => $product->id, 'name' => 'Camisa corporativa', 'status' => 'inactive', 'status_label' => 'Inactivo', 'has_combinations' => false]);
+
+        $current = $page->toArray()['props']['structure'];
+
+        expect(collect($current)->pluck('attribute_id')->all())->toBe(array_map(fn (string $name): int => $catalog['attrs'][$name]->id, ['Tela', 'Modelo', 'Manga', 'Género', 'Talla', 'Color']))
+            ->and(collect($current)->pluck('role')->all())->toBe(['axis', 'axis', 'axis', 'axis', 'order', 'order'])
+            ->and($current[0]['allowed_value_ids'])->toEqualCanonicalizing([$catalog['vals']['Drill']->id, $catalog['vals']['Microfibra']->id])
+            ->and($current[5]['allowed_value_ids'])->toBe([]);
+    });
+});
+
+it('PRD-004 offers the active attributes with their active values and marks fabric and color', function () {
+    $catalog = structureCatalog();
+    CatalogAttribute::factory()->inactive()->create(['name' => 'Obsoleto']);
+    $catalog['vals']['XS']->update(['status' => 'inactive']);
+    foreach (['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'] as $position => $name) {
+        $catalog['vals'][$name]->update(['sort_order' => $position + 1]);
+    }
+    $product = Product::factory()->create();
+
+    $this->actingAs(structureEditor())->get("/products/{$product->id}/structure")->assertInertia(function (Assert $page) use ($catalog) {
+        $offered = collect($page->toArray()['props']['catalog']);
+        $talla = $offered->firstWhere('id', $catalog['attrs']['Talla']->id);
+        $color = $offered->firstWhere('id', $catalog['attrs']['Color']->id);
+        $tela = $offered->firstWhere('id', $catalog['attrs']['Tela']->id);
+        $modelo = $offered->firstWhere('id', $catalog['attrs']['Modelo']->id);
+
+        expect($offered->pluck('name')->all())->not->toContain('Obsoleto')
+            ->and($offered)->toHaveCount(7)
+            ->and(collect($talla['values'])->pluck('label')->all())->toBe(['S', 'M', 'L', 'XL', '2XL', '3XL'])
+            ->and($color['is_color'])->toBeTrue()
+            ->and($color['fixed_role'])->toBe('order')
+            ->and($tela['is_fabric'])->toBeTrue()
+            ->and($tela['fixed_role'])->toBe('axis')
+            ->and($modelo['is_color'])->toBeFalse()
+            ->and($modelo['is_fabric'])->toBeFalse()
+            ->and($modelo['fixed_role'])->toBeNull();
+    });
+});
+
+it('PRD-004 keeps the inactive attributes and values the product already declares so a save does not drop them', function () {
+    $catalog = structureCatalog();
+    $product = Product::factory()->create();
+    declareStructure($product, [structureEntry($catalog, 'Manga', 'axis', ['Corta', 'Larga'])]);
+    $catalog['vals']['Corta']->update(['sort_order' => 1]);
+    $catalog['vals']['Larga']->update(['sort_order' => 2]);
+    $catalog['attrs']['Manga']->update(['status' => 'inactive']);
+    $catalog['vals']['Larga']->update(['status' => 'inactive']);
+
+    $this->actingAs(structureEditor())->get("/products/{$product->id}/structure")->assertInertia(function (Assert $page) use ($catalog) {
+        $manga = collect($page->toArray()['props']['catalog'])->firstWhere('id', $catalog['attrs']['Manga']->id);
+
+        expect($manga['status'])->toBe('inactive')
+            ->and(collect($manga['values'])->pluck('label')->all())->toBe(['Corta', 'Larga (inactivo)']);
+    });
+});
+
+it('PRD-004 tells the page when the product already has combinations', function () {
+    $catalog = structureCatalog();
+    $product = Product::factory()->create();
+    declareStructure($product, [structureEntry($catalog, 'Manga', 'axis', ['Corta', 'Larga'])]);
+    structureCombination($product, $catalog, 'S-1', ['Corta']);
+
+    $this->actingAs(structureEditor())->get("/products/{$product->id}/structure")->assertInertia(
+        fn (Assert $page) => $page->where('product.has_combinations', true),
+    );
 });
