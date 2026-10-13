@@ -14,6 +14,7 @@ use App\Models\CatalogCode;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\User;
+use App\Support\Audit\AuditOrigin;
 use App\Support\Products\CatalogUsage;
 use App\Support\Products\ProductAudit;
 use App\Support\Products\ProductRules;
@@ -46,12 +47,13 @@ class SyncProductAttributes
 
     /**
      * @param  list<array{attribute_id: int|string, role: string, allowed_value_ids?: list<int|string>|null}>  $entries  validated input, in display order
+     * @param  array<string, mixed>  $auditContext  the import marker of the initial load (PRD-018)
      *
      * @throws ValidationException when a structure rule rejects the change
      */
-    public function handle(Product $product, array $entries, User $actor): Product
+    public function handle(Product $product, array $entries, User $actor, ?AuditOrigin $origin = null, array $auditContext = []): Product
     {
-        return DB::transaction(function () use ($product, $entries, $actor): Product {
+        return DB::transaction(function () use ($product, $entries, $actor, $origin, $auditContext): Product {
             $product = Product::query()->lockForUpdate()->findOrFail($product->id);
 
             $current = $product->productAttributes()->with(['catalogAttribute', 'allowedValues'])->get()->keyBy('catalog_attribute_id');
@@ -91,6 +93,8 @@ class SyncProductAttributes
                     $product,
                     oldValues: ['attributes' => $before] + ($deletedOverrides === [] ? [] : ['stock_minimum_overrides' => $deletedOverrides]),
                     newValues: ['attributes' => $after],
+                    context: $auditContext,
+                    origin: $origin,
                 );
             }
 

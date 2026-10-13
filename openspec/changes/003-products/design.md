@@ -629,6 +629,10 @@ Common: UTF-8 (BOM allowed), `,` or `;`, exact header in any order and case; lis
 
 `colores.csv` — one row per palette color: `color`, `tono` (`#RRGGBB`), `telas` (fabric value names offering it, separated by `|`; blank = palette only).
 
+Special uses (DEC-PRD-104): an attribute named exactly `tela`, `genero` or `talla` (case- and accent-insensitive, e.g. `Género`) is created with the special use Tela, Género or Talla; the name is used only at creation and the stored special-use flag is authoritative afterwards. A name that resembles a special use without matching it exactly (e.g. `tallas`, `sexo`) rejects the load with file, row, column and reason instead of creating an unflagged attribute.
+
+Row coherence (DEC-PRD-101..103): an order attribute without values is rejected, except `Color=` for a product with Tela (DEC-PRD-35); color values of a product without Tela must exist in `colores.csv`; every row of a product repeats the same axes in the same order and the same declared order attributes. The product's allowed order values are the union of its rows; a row whose order values are a strict subset becomes that combination's restriction (DEC-PRD-36, option C).
+
 Error report columns: `Archivo | Fila | Columna | Motivo`.
 
 ### Inertia props (summary)
