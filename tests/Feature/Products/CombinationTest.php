@@ -774,7 +774,7 @@ it('PRD-005 renders the create page with the axes, the restrictable order attrib
 
     $this->actingAs(combCreator())->get("/products/{$catalog['product']->id}/combinations/create")->assertInertia(function (Assert $page) use ($catalog, $active) {
         $page->component('products/combinations/Create')
-            ->where('product', ['id' => $catalog['product']->id, 'name' => 'Camisa corporativa', 'status' => 'active', 'status_label' => 'Activo'])
+            ->where('product', ['id' => $catalog['product']->id, 'name' => 'Camisa corporativa', 'business_line' => 'uniforms', 'status' => 'active', 'status_label' => 'Activo'])
             ->where('initial', ['code' => '', 'description' => '', 'axes' => [], 'restrictions' => [], 'included_customization_ids' => []]);
 
         $props = $page->toArray()['props'];

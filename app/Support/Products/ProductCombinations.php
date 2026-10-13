@@ -5,12 +5,14 @@ namespace App\Support\Products;
 use App\Enums\AttributePresentation;
 use App\Enums\AttributeRole;
 use App\Enums\AttributeSpecialUse;
+use App\Enums\BusinessLine;
 use App\Enums\CatalogStatus;
 use App\Models\CatalogCode;
 use App\Models\Combination;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Reads and writes shared by the combination Actions (design Decisions 5 and 12): the structure the
@@ -115,6 +117,20 @@ final class ProductCombinations
         }
 
         $combination->values()->sync($pivot);
+    }
+
+    /**
+     * DEC-PRD-98 / E-73: the combinations of a diaper-line product include no customizations.
+     *
+     * @param  array<array-key, mixed>|null  $serviceIds  the submitted included customizations (null when not sent)
+     *
+     * @throws ValidationException on `included_customization_ids`
+     */
+    public static function ensureIncludedCustomizationsAllowed(Product $product, ?array $serviceIds): void
+    {
+        if ($product->business_line === BusinessLine::Diapers && $serviceIds !== null && $serviceIds !== []) {
+            throw ValidationException::withMessages(['included_customization_ids' => __('validation.diaper_no_included_customizations')]);
+        }
     }
 
     /**

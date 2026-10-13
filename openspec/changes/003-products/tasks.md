@@ -285,7 +285,7 @@ Depends on Phase 18. Covers PRD-005 UI and the "Duplicar" action.
 - [x] 19.1 RED — Extend `CombinationTest.php` with GET pages: `products.combinations.create` requires `products.create`, `.edit` requires `products.update`; props contain the product axes with allowed values, order attributes with allowed values for restrictions, selectable `service` products; `?from={combination}` pre-fills axes, restrictions, description and included customizations with an empty code (`duplicate` test); a combination of another product in `from` is ignored. Expected: fail. [PRD-005, PRD-016]
 - [x] 19.2 GREEN (backend) — Add `create`, `edit` to `app/Http/Controllers/Products/CombinationController.php` and the GET routes (before the `combinations/{combination}` routes). Run the tests: GREEN.
 - [x] 19.3 GREEN (frontend) — Create `resources/js/pages/products/combinations/Create.vue`, `Edit.vue`, `resources/js/components/products/CombinationForm.vue` (one `AppCheckboxGroup` per axis limited to allowed values, code as text, restrictions, included customizations, "Duplicar" link on the product page). [Decision 20]
-- [ ] 19.4 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`; automated gate passed (1369 tests, 1367 passed, 2 skipped); manual create / duplicate flow PENDING for the human. Commit: `feat(003): combination editor with duplicate [PRD-005]`.
+- [x] 19.4 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`; automated gate passed (1369 tests, 1367 passed, 2 skipped); manual create / duplicate / row-actions flow done by the human (2026-10-10). Commit: `feat(003): combination editor with duplicate [PRD-005]`.
 - [x] 19.5 Fix — combination row actions (deactivate / reactivate / delete) on the product page [PRD-013, PRD-014]. Plan gap: the backend (routes, `CombinationController`, `CombinationPolicy`, `DeleteCombination`, tests in `CombinationTest.php` / `DeleteProductTest.php`) already existed, no task covered the UI. No backend change and no new RED: the page already exposes `can.deactivate` / `can.delete` (same permissions as the combination policy, covered by `ProductListTest.php` "can" assertions) and the repo has no JS test runner. `Show.vue` gets "Desactivar" (ConfirmDialog), "Reactivar" (no confirmation) and "Eliminar" (danger ConfirmDialog) per row, in table and mobile cards, with `preserveScroll`; rejections come back as the backend error flash. Evidence: `pnpm check`, `pnpm types:check` pass (gate in apply-progress).
 
 ## Phase 20: Combos UI (design slice 20)
@@ -295,7 +295,7 @@ Depends on Phases 13 and 17. Covers PRD-010 UI, PRD-015 (combos), spec §8.
 - [x] 20.1 RED — Extend `ComboTest.php` with GET pages: `combos.index` and `combos.show` require `products.view` (403 otherwise; `E-04`-style), `combos.create` requires `products.create`, `combos.edit` requires `products.update`; the list supports Activos / Inactivos / Todos with backend counts, search by combo name or code, pagination; `show` exposes components with product, quantity and admitted values by attribute; `create`, `edit` expose only diaper-line, non-service products with their attributes and allowed values. Expected: fail. [PRD-010, PRD-015, E-04]
 - [x] 20.2 GREEN (backend) — Add `index`, `show`, `create`, `edit` to `ComboController`, presenter methods, GET routes (create before `{combo}`). Run the tests: GREEN.
 - [x] 20.3 GREEN (frontend) — Create `resources/js/pages/combos/Index.vue`, `Show.vue`, `Create.vue`, `Edit.vue`, `resources/js/components/products/ComboForm.vue` (component rows: product, quantity, admitted values per attribute with `AppCheckboxGroup`), and the "Combos" entry (icon `deployed_code`, `products.view`, priority 25) in `resources/js/navigation.ts` (it ships here, not in Phase 17, because its index page exists only from this phase). [Decision 20]
-- [ ] 20.4 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`; automated gate passed (1380 tests, 1378 passed, 2 skipped); manual combo create / edit flow PENDING for the human. Commit: `feat(003): combo list, detail and editor [PRD-010, PRD-015]`.
+- [ ] 20.4 Slice-close gate — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`; automated gate passed (1380 tests, 1378 passed, 2 skipped); manual combo create / edit flow done by the human (2026-10-10). Commit: `feat(003): combo list, detail and editor [PRD-010, PRD-015]`.
 
 ## Phase 21: Images (design slice 21)
 
@@ -352,6 +352,15 @@ Depends on all phases.
 - [ ] 25.4 Deployment notes — confirm in the PR description: GD with JPEG/PNG/WebP, `upload_max_filesize`, `post_max_size` ≥ 4 MB, `memory_limit` ≥ 128 MB, `FoundationSeeder` deploy step, one-time `catalog:import`.
 - [ ] 25.5 Final gates — `sail pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test` all green on the whole branch; `git status` shows no `.env`, no CSV, no dump. Hand over to `sdd-verify` (read-only).
 
+## Fix DEC-PRD-98: diaper line without details or customizations
+
+Depends on Phase 21. Covers PRD-007, PRD-008, E-73, DEC-PRD-98 (confirmed 2026-10-10, option A). Branch `feat/003-products-dec98-diaper-line`.
+
+- [x] D98.1 RED — Add `E-73` tests (HTTP level) in the existing product and combination feature tests: a diaper product registered or edited with a detail location or an admitted customization → 422; a diaper combination saved with an included customization → 422; a uniforms product with details, admitted customizations or combinations with included customizations changed to the diaper line → 422 naming what to remove, nothing changes; page props let the UI hide the sections. Expected: fail. [PRD-007, PRD-008, E-73, DEC-PRD-98]
+- [x] D98.2 GREEN backend — Rules in the request/rules layer and the Actions (inside the existing transaction), Spanish messages in `lang/es/validation.php` naming the items to remove. Run the tests: GREEN. [DEC-PRD-98]
+- [x] D98.3 GREEN frontend — `ProductForm.vue`, `products/Show.vue` and `CombinationForm.vue` hide the detail, customization and included-customization sections for the diaper line and do not send them. Presentation only. [DEC-PRD-98]
+- [x] D98.4 Gate — `sail pint` then `pint --test`, `sail composer types:check`, `sail pnpm check`, `sail pnpm types:check`, `sail pnpm build`, `sail artisan test`. Commit: `feat(003): rechazar detalles y personalizaciones en productos de pañales [PRD-007, PRD-008, DEC-PRD-98, E-73]`.
+
 ## Coverage Matrix
 
 ### PRD / §4 to phases
@@ -364,8 +373,8 @@ Depends on all phases.
 | PRD-003 Register product | 8 (8.3-8.4), 18 (18.1-18.3) |
 | PRD-004 Product attributes | 9 (9.2-9.4), 14 (14.3-14.4) |
 | PRD-005 Combinations | 10 (10.1-10.4), 19 (19.1-19.3) |
-| PRD-007 Detail locations | 5 (5.1-5.2), 6 (6.1-6.3), 11 (11.1-11.2) |
-| PRD-008 Customizations | 11 (11.1-11.2), 14 (14.3) |
+| PRD-007 Detail locations | 5 (5.1-5.2), 6 (6.1-6.3), 11 (11.1-11.2), D98 (D98.1-D98.3) |
+| PRD-008 Customizations | 11 (11.1-11.2), 14 (14.3), D98 (D98.1-D98.3) |
 | PRD-009 Supply mode and minimum | 8 (8.3, 8.7), 12 (12.1-12.2) |
 | PRD-010 Combos | 13 (13.3-13.4), 14 (14.8-14.9), 20 (20.1-20.3) |
 | PRD-011 Resolve selection | 14 (14.1-14.9) |
@@ -408,8 +417,9 @@ All 19 PRD requirements (PRD-001..005, PRD-007..020) and §4 are covered. PRD-00
 | E-24 | 9 (9.3), 14 (14.3) | E-45 | 2 (2.3), 4 (4.1) | E-69 | 9 (9.3, 9.5) |
 | E-46 | 4 (4.3), 14 (14.3) | E-47 | 14 (14.3) | E-70 | 11 (11.1), 13 (13.5), 16 (16.1) |
 | E-48 | 10 (10.3) | E-71 | 12 (12.1) | E-72 | 22 (22.7) |
+| E-73 | D98 (D98.1-D98.3) | | | | |
 
-Self-check: scenarios present in the spec are E-01..E-72 minus E-12, E-13, E-18 = 69. Excluding the deferred E-29 leaves 68, all mapped to at least one task above (E-29 is recorded as a `->todo()` in task 16.1). Decision-only tests: DEC-PRD-22 (1.4), DEC-PRD-23 (1.6), DEC-PRD-48 (23.3, 24.1), DEC-PRD-49 (2.3, 4.1), DEC-PRD-50 (9.2-9.3, 23.3), DEC-PRD-51 (9.5, 14.3), DEC-PRD-52 (11.1, 12.1, 13.5), DEC-PRD-53 (22.7), DT-01 (10.3), DT-02 (14.5, 15.1), DT-03 (22.1-22.4).
+Self-check: scenarios present in the spec are E-01..E-72 minus E-12, E-13, E-18 = 69. Excluding the deferred E-29 leaves 68, all mapped to at least one task above (E-29 is recorded as a `->todo()` in task 16.1). E-73 (DEC-PRD-98) is added after the original count. Decision-only tests: DEC-PRD-22 (1.4), DEC-PRD-23 (1.6), DEC-PRD-48 (23.3, 24.1), DEC-PRD-49 (2.3, 4.1), DEC-PRD-50 (9.2-9.3, 23.3), DEC-PRD-51 (9.5, 14.3), DEC-PRD-52 (11.1, 12.1, 13.5), DEC-PRD-53 (22.7), DT-01 (10.3), DT-02 (14.5, 15.1), DT-03 (22.1-22.4).
 
 ## Definition of Done (maps to spec / AGENTS.md §12)
 

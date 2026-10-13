@@ -236,6 +236,7 @@ Un producto puede declarar las ubicaciones de detalle que admite (pechera, orill
 - Los detalles son opcionales al seleccionar el producto.
 - Los detalles no afectan al precio y son una especificación para producción (DEC-PRD-07).
 - Los botones son transparentes y no se eligen (business rules §26).
+- Un producto de la línea de pañales no declara ubicaciones de detalle: el backend lo rechaza y la interfaz no muestra la sección. Pasar un producto a la línea de pañales mientras tenga ubicaciones de detalle se rechaza e indica cuáles quitar (DEC-PRD-98).
 
 ### PRD-008 — Personalizaciones
 
@@ -246,6 +247,7 @@ Personalizaciones añadidas a la prenda e incluidas en ciertas combinaciones (DE
 - Las personalizaciones incluidas y las admitidas son independientes (DEC-PRD-47): "incluida" describe lo que cubre el precio de la combinación y "admitida" es lo que se puede agregar como extra. Por ejemplo, `139-1` (mono escolar "C/VINIL") incluye vinil sin que el producto ofrezca vinil adicional.
 - La cantidad, el precio y la relación con el pedido los definen `004` y `006`.
 - Un servicio activo y visible en el portal se vende también por sí solo (p. ej., sublimación sobre una prenda del cliente) (DEC-PRD-28).
+- Un producto de la línea de pañales no declara personalizaciones admitidas y sus combinaciones no declaran personalizaciones incluidas: el backend lo rechaza y la interfaz no muestra esas secciones. Pasar un producto a la línea de pañales mientras tenga personalizaciones admitidas, o combinaciones con personalizaciones incluidas, se rechaza e indica cuáles quitar (DEC-PRD-98).
 
 ### PRD-009 — Modo de abastecimiento y stock mínimo
 
@@ -864,6 +866,14 @@ Los escenarios marcados ⏳ se completan cuando se confirme la decisión indicad
 - **WHEN** se cambia en el catálogo la capa de "Manga 3/4" a `manga-tres-cuartos`
 - **THEN** el backend rechaza el cambio, indica el producto afectado y el valor no cambia
 
+### E-73 — Detalles y personalizaciones en un pañal (PRD-007, PRD-008, DEC-PRD-98)
+
+- **GIVEN** un producto de la línea de pañales, un producto de la línea de uniformes con una ubicación de detalle, una personalización admitida y una combinación con una personalización incluida
+- **WHEN** se registra o edita el pañal con una ubicación de detalle o una personalización admitida, o se registra o edita una combinación del pañal con una personalización incluida
+- **THEN** el backend rechaza cada intento y nada cambia
+- **AND** al pasar el producto de uniformes a la línea de pañales, el backend rechaza el cambio, indica las ubicaciones de detalle, las personalizaciones admitidas y las combinaciones con personalizaciones incluidas que hay que quitar, y la línea no cambia
+- **AND** la ficha y el formulario de un producto de la línea de pañales no muestran las secciones de detalles ni de personalizaciones, ni el editor de combinación muestra las personalizaciones incluidas
+
 ---
 
 ## 8. Interfaz (ERP)
@@ -988,6 +998,7 @@ Estados: **Confirmada** (respondida por Ecolekua o el usuario), **Propuesta** (r
 | DEC-PRD-95 | Componente ausente o ajeno al combo al consultar opciones (PRD-019) | A) El error va en `component_id` con «El componente no pertenece al combo.» · B) Se ignora el componente | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-96 | Personalizaciones en las opciones de pedido (PRD-019) | A) Son las activas admitidas por el producto, sin filtrar por las incluidas en la combinación · B) Se excluyen las ya incluidas en la combinación | **Confirmada** (2026-10-08): **A** | — |
 | DEC-PRD-97 | Capa SVG en los valores de color (PRD-020) | A) Se rechaza: el tono de referencia pinta la capa `cuerpo` y las capas SVG quedan para los valores que se muestran u ocultan (manga, modelo…) y para las ubicaciones de detalle · B) Se admite una capa en cualquier valor | **Confirmada** (2026-10-09): **A**. Caso complementario: si un atributo sin uso (ningún producto lo declara) pasa a presentación «color» y sus valores tienen capa, A) se rechaza el cambio hasta que se quiten las capas · B) se borra la capa de todos sus valores en la misma transacción, con auditoría de los valores anteriores. Confirmada (2026-10-09): **B**, mismo criterio que quitar una talla elimina sus mínimos propios con auditoría (DEC-PRD-52). Si el atributo está en uso, el cambio de presentación ya se rechaza (DEC-PRD-51) | — |
+| DEC-PRD-98 | Detalles y personalizaciones en la línea de pañales (PRD-007, PRD-008) | A) Un producto de la línea de pañales no declara ubicaciones de detalle ni personalizaciones admitidas, y sus combinaciones no declaran personalizaciones incluidas: el backend lo rechaza y la interfaz no muestra esas secciones. Pasar un producto a la línea de pañales con alguno de ellos se rechaza e indica cuáles quitar · B) Solo se ocultan en la interfaz · C) Se permiten | **Confirmada** (2026-10-10): **A**. Caso complementario: si un pañal ya guardaba ubicaciones de detalle o personalizaciones antes de esta regla, A) se dejan como están, sin migración de datos (los seeders e importadores no crean ese caso) · B) una migración de datos las borra con auditoría. Confirmada (2026-10-10): **A** | — |
 
 ### Decisiones técnicas
 

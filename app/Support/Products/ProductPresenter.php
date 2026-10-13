@@ -428,15 +428,17 @@ final class ProductPresenter
     }
 
     /**
-     * Subject of the combination editor pages.
+     * Subject of the combination editor pages. The business line lets the form hide the included
+     * customizations of a diaper (DEC-PRD-98); the backend decides.
      *
-     * @return array{id: int, name: string, status: string, status_label: string}
+     * @return array{id: int, name: string, business_line: string, status: string, status_label: string}
      */
     public static function combinationSubject(Product $product): array
     {
         return [
             'id' => $product->id,
             'name' => $product->name,
+            'business_line' => $product->business_line->value,
             'status' => $product->status->value,
             'status_label' => $product->status->label(),
         ];

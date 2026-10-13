@@ -279,6 +279,7 @@ export type ProductStructureAttribute = {
 export type CombinationSubject = {
     id: number;
     name: string;
+    business_line: string;
     status: CatalogStatus;
     status_label: string;
 };
