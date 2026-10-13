@@ -20,12 +20,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * One-time, all-or-nothing initial load of the catalog (PRD-018, design Decision 19), colors and
- * combinations part. Phase 0 checks the author, the options, that the catalog is empty and the
+ * One-time, all-or-nothing initial load of the catalog (PRD-018, design Decision 19). Phase 0 checks the author, the options, that the catalog is empty and the
  * files; phase 1 (`CatalogImportPlan`) validates every row in memory with the rules of the HTTP
  * forms; only when nothing blocks, phase 2 creates everything through the real Actions in one
  * transaction with the console origin and the import marker, so any exception leaves the database
- * untouched. The combos file is only checked for its header until the next slice.
+ * untouched. Combos are created last, through `CreateCombo`, once the products they name exist.
  *
  * It is not a generic import engine: it knows this one file layout. The report holds file names,
  * row numbers, CSV column names and fixed reasons only, never cell values.
@@ -43,6 +42,7 @@ class ImportCatalog
         private readonly CreateProduct $createProduct,
         private readonly SyncProductAttributes $syncStructure,
         private readonly CreateCombination $createCombination,
+        private readonly CreateCombo $createCombo,
     ) {}
 
     /**
@@ -71,16 +71,13 @@ class ImportCatalog
             return CatalogImportReport::blocked($problems);
         }
 
-        $plan = CatalogImportPlan::build($files['combinations'], $files['colors']);
-        $notes = $files['combos'] === []
-            ? []
-            : [count($files['combos']).' fila(s) de combos no se importan todavía: esta versión solo revisa el encabezado de ese archivo.'];
+        $plan = CatalogImportPlan::build($files['combinations'], $files['colors'], $files['combos']);
 
         if (! $plan->passes()) {
-            return new CatalogImportReport(errors: $plan->errors, notes: $notes);
+            return new CatalogImportReport(errors: $plan->errors);
         }
 
-        return $this->create($plan, $author, $notes);
+        return $this->create($plan, $author);
     }
 
     private function activeUser(?string $email): ?User
@@ -166,10 +163,8 @@ class ImportCatalog
      * Phase 2: everything in one transaction. A row rejected by an Action (a name that a database
      * index treats as repeated, for example) rolls the whole import back and is reported like a
      * phase 1 error: file, row, CSV column and reason, never the cell values.
-     *
-     * @param  list<string>  $notes
      */
-    private function create(CatalogImportPlan $plan, User $author, array $notes): CatalogImportReport
+    private function create(CatalogImportPlan $plan, User $author): CatalogImportReport
     {
         $origin = AuditOrigin::console(self::COMMAND);
         $errors = [];
@@ -179,10 +174,10 @@ class ImportCatalog
                 return $this->createAll($plan, $author, $origin, $errors);
             });
         } catch (ValidationException) {
-            return new CatalogImportReport(errors: $errors, notes: $notes);
+            return new CatalogImportReport(errors: $errors);
         }
 
-        return new CatalogImportReport(notes: $notes, imported: $imported);
+        return new CatalogImportReport(imported: $imported);
     }
 
     /**
@@ -231,9 +226,10 @@ class ImportCatalog
         $this->createOfferedColors($plan, $author, $origin, $errors, $attributes, $values);
 
         $combinations = 0;
+        $products = [];
 
         foreach ($plan->products as $draft) {
-            $product = $this->attempt(
+            $products[mb_strtolower($draft['name'])] = $product = $this->attempt(
                 $errors, CatalogImportColumns::FILE_COMBINATIONS, $draft['row'], 'producto',
                 fn (array $context): Product => $this->createProduct->handle(
                     array_filter([
@@ -272,12 +268,30 @@ class ImportCatalog
             }
         }
 
+        foreach ($plan->combos as $combo) {
+            $this->attempt(
+                $errors, CatalogImportColumns::FILE_COMBOS, $combo['row'], 'nombre',
+                fn (array $context): Combo => $this->createCombo->handle([
+                    'name' => $combo['name'],
+                    'code' => $combo['code'],
+                    // DEC-PRD-105: imported combos are published in the portal.
+                    'portal_visible' => true,
+                    'components' => array_map(fn (array $component): array => [
+                        'product_id' => $products[$component['product']]->id,
+                        'quantity' => $component['quantity'],
+                        'values' => $this->idMap($component['values'], $attributes, $values),
+                    ], $combo['components']),
+                ], $author, $origin, $context),
+            );
+        }
+
         return [
             'categorías' => count($categories),
             'atributos' => count($attributes),
             'valores' => $valueCount,
             'productos' => count($plan->products),
             'combinaciones' => $combinations,
+            'combos' => count($plan->combos),
         ];
     }
 
@@ -347,6 +361,9 @@ class ImportCatalog
         return match (true) {
             str_starts_with($field, 'axes') => 'ejes',
             str_starts_with($field, 'restrictions') => 'pedido',
+            str_ends_with($field, 'product_id') => 'producto',
+            str_ends_with($field, 'quantity') => 'cantidad',
+            str_starts_with($field, 'components') => 'valores',
             $field === 'code' => 'codigo',
             $field === 'description' => 'descripcion',
             default => $default,

@@ -11,13 +11,11 @@ final readonly class CatalogImportReport
     /**
      * @param  list<string>  $problems  reasons that stop the run before any row is read (author, options, files)
      * @param  list<array{file: string, row: int, column: string, reason: string}>  $errors  row errors; any one blocks the import
-     * @param  list<string>  $notes  informative lines that do not block the import
      * @param  array<string, int>  $imported  rows created by kind (empty when the run did not import)
      */
     public function __construct(
         public array $problems = [],
         public array $errors = [],
-        public array $notes = [],
         public array $imported = [],
     ) {}
 

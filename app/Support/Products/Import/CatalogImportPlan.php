@@ -5,10 +5,13 @@ namespace App\Support\Products\Import;
 use App\Enums\AttributePresentation;
 use App\Enums\AttributeRole;
 use App\Enums\AttributeSpecialUse;
+use App\Enums\BusinessLine;
+use App\Enums\SupplyMode;
 use App\Models\CatalogAttribute;
 use App\Support\Products\CatalogRules;
 use App\Support\Products\CombinationOverlap;
 use App\Support\Products\CombinationRules;
+use App\Support\Products\ComboRules;
 use App\Support\Products\ProductRules;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Validator;
@@ -16,12 +19,13 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Phase 1 of the initial load (PRD-018, design Decision 19) for the colors and combinations files:
- * every row is parsed and validated in memory with the same rules and pure classes as the HTTP
- * forms (`CatalogRules`, `ProductRules`, `CombinationRules`, `CombinationOverlap`), so nothing is
- * written until the whole load is known to be valid. It also puts the rows in the shape phase 2
- * creates through the real Actions: categories, attributes, values, offered colors, products with
- * their structure, and combinations with their restrictions (DEC-PRD-36).
+ * Phase 1 of the initial load (PRD-018, design Decision 19) for the colors, combinations and combos
+ * files: every row is parsed and validated in memory with the same rules and pure classes as the
+ * HTTP forms (`CatalogRules`, `ProductRules`, `CombinationRules`, `CombinationOverlap`,
+ * `ComboRules`), so nothing is written until the whole load is known to be valid. It also puts the
+ * rows in the shape phase 2 creates through the real Actions: categories, attributes, values,
+ * offered colors, products with their structure, combinations with their restrictions (DEC-PRD-36)
+ * and combos with their components.
  *
  * Attributes and values are identified by their lowercase name; every id used for the structural
  * checks is a synthetic counter, because the catalog is empty and nothing exists yet. A reason is
@@ -68,8 +72,14 @@ final class CatalogImportPlan
 
     private int $nextValueId = 1;
 
-    /** @var array<string, int> lowercase code => row */
+    /** @var list<array{code: string, name: string, row: int, components: list<array{product: string, quantity: int, values: array<string, list<string>>}>}> */
+    public array $combos = [];
+
+    /** @var array<string, array{file: string, row: int}> lowercase code => where it first appears, in either file */
     private array $codes = [];
+
+    /** @var array<string, array{line: string, mode: string, attributes: list<string>, allowed: array<string, list<string>>, fabrics: list<string>}> lowercase product name => what a combo component is checked against */
+    private array $productInfo = [];
 
     /** @var array<string, int> palette color key => row */
     private array $paletteRows = [];
@@ -83,8 +93,9 @@ final class CatalogImportPlan
     /**
      * @param  list<array{line: int, cells: array<string, string>}>  $combinationRows
      * @param  list<array{line: int, cells: array<string, string>}>  $colorRows
+     * @param  list<array{line: int, cells: array<string, string>}>  $comboRows
      */
-    public static function build(array $combinationRows, array $colorRows): self
+    public static function build(array $combinationRows, array $colorRows, array $comboRows = []): self
     {
         $plan = new self;
         $plan->readPalette($colorRows);
@@ -103,6 +114,7 @@ final class CatalogImportPlan
             }
         }
 
+        $plan->readCombos($comboRows);
         $plan->readOfferedColors();
 
         return $plan;
@@ -303,19 +315,210 @@ final class CatalogImportPlan
 
         $this->check(array_filter(['code' => $cells['codigo'], 'description' => $cells['descripcion']], fn (string $cell): bool => $cell !== ''), $rules, ['code' => 'codigo', 'description' => 'descripcion'], $file, $line, CombinationRules::messages());
 
-        $key = mb_strtolower($cells['codigo']);
+        $this->registerCode($cells['codigo'], $file, $line);
+    }
+
+    /**
+     * Combinations and combos share one registry of codes (letter case ignored): a code repeated
+     * inside a file or across both is reported on the later row.
+     */
+    private function registerCode(string $code, string $file, int $line): void
+    {
+        $key = mb_strtolower($code);
 
         if ($key === '') {
             return;
         }
 
-        if (isset($this->codes[$key])) {
-            $this->error($file, $line, 'codigo', __('validation.catalog_import_code_repeated', ['row' => $this->codes[$key]]));
+        $first = $this->codes[$key] ?? null;
+
+        if ($first === null) {
+            $this->codes[$key] = ['file' => $file, 'row' => $line];
 
             return;
         }
 
-        $this->codes[$key] = $line;
+        $this->error($file, $line, 'codigo', $first['file'] === $file
+            ? __('validation.catalog_import_code_repeated', ['row' => $first['row']])
+            : __('validation.catalog_import_code_repeated_in', ['row' => $first['row'], 'file' => $first['file']]));
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Combos file
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * One row per component (PRD-018): the rows of a code are the components of one combo, which
+     * must agree in name. Each component is checked against its product with the same criteria as
+     * `ComboRules::validateComponents()` (diaper line, no service, restrictions among the values the
+     * product admits), applied to the in-memory structure because nothing exists yet.
+     *
+     * @param  list<array{line: int, cells: array<string, string>}>  $rows
+     */
+    private function readCombos(array $rows): void
+    {
+        $file = CatalogImportColumns::FILE_COMBOS;
+        $names = [];
+        $positions = [];
+
+        foreach ($rows as ['line' => $line, 'cells' => $cells]) {
+            $code = $cells['codigo'];
+            $position = $positions[$code] ?? null;
+
+            if ($position === null) {
+                $this->checkCombo($cells, $line);
+                $this->registerCode($code, $file, $line);
+
+                $nameKey = mb_strtolower($cells['nombre']);
+
+                if ($nameKey !== '' && isset($names[$nameKey])) {
+                    $this->error($file, $line, 'nombre', __('validation.combo_name_unique'));
+                }
+
+                $names[$nameKey] ??= $line;
+                $positions[$code] = count($this->combos);
+                $this->combos[] = ['code' => $code, 'name' => $cells['nombre'], 'row' => $line, 'components' => []];
+            } elseif ($this->combos[$position]['name'] !== $cells['nombre']) {
+                $this->error($file, $line, 'nombre', __('validation.catalog_import_combo_name_differs', ['row' => $this->combos[$position]['row']]));
+            }
+
+            $component = $this->readComponent($cells, $line);
+
+            if ($component !== null) {
+                $this->combos[$positions[$code]]['components'][] = $component;
+            }
+        }
+    }
+
+    /**
+     * Shape of the name and the code of a combo, with the rules of the HTTP form.
+     *
+     * @param  array<string, string>  $cells
+     */
+    private function checkCombo(array $cells, int $line): void
+    {
+        $rules = Arr::only(ComboRules::rules(null), ['name', 'code']);
+
+        $this->check(
+            array_filter(['name' => $cells['nombre'], 'code' => $cells['codigo']], fn (string $cell): bool => $cell !== ''),
+            $rules,
+            ['name' => 'nombre', 'code' => 'codigo'],
+            CatalogImportColumns::FILE_COMBOS,
+            $line,
+            ComboRules::messages(),
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $cells
+     * @return array{product: string, quantity: int, values: array<string, list<string>>}|null null when the component has an error
+     */
+    private function readComponent(array $cells, int $line): ?array
+    {
+        $file = CatalogImportColumns::FILE_COMBOS;
+        $quantity = ComboRules::rules(null)['components.*.quantity'];
+        $valid = $this->check(
+            array_filter(['quantity' => $cells['cantidad']], fn (string $cell): bool => $cell !== ''),
+            ['quantity' => $quantity],
+            ['quantity' => 'cantidad'],
+            $file,
+            $line,
+        );
+        $productKey = mb_strtolower($cells['producto']);
+        $values = $this->parseList($cells['valores'], $line, 'valores', $file);
+
+        if (! isset($this->drafts[$productKey])) {
+            $this->error($file, $line, 'producto', __('validation.combo_component_product_unknown'));
+
+            return null;
+        }
+
+        $info = $this->productInfo[$productKey] ?? null;
+
+        if ($info === null || $values === null) {
+            return null;
+        }
+
+        $reason = match (true) {
+            $info['line'] !== BusinessLine::Diapers->value => 'combo_component_not_diapers',
+            $info['mode'] === SupplyMode::Service->value => 'combo_component_service',
+            default => null,
+        };
+
+        if ($reason !== null) {
+            $this->error($file, $line, 'producto', __("validation.{$reason}"));
+
+            return null;
+        }
+
+        $restrictions = $this->restrictions($info, $values);
+
+        if (is_string($restrictions)) {
+            $this->error($file, $line, 'valores', __("validation.{$restrictions}"));
+
+            return null;
+        }
+
+        return $valid ? ['product' => $productKey, 'quantity' => (int) $cells['cantidad'], 'values' => $restrictions] : null;
+    }
+
+    /**
+     * The restriction of a component by attribute and value keys, or the key of the message of the
+     * first rule it breaks: each attribute belongs to the product and each value is admitted by it
+     * (DEC-PRD-44). An attribute without values is not restricted.
+     *
+     * @param  array{line: string, mode: string, attributes: list<string>, allowed: array<string, list<string>>, fabrics: list<string>}  $info
+     * @param  list<array{name: string, values: list<string>}>  $entries
+     * @return array<string, list<string>>|string
+     */
+    private function restrictions(array $info, array $entries): array|string
+    {
+        $restrictions = [];
+
+        foreach ($entries as $entry) {
+            $attribute = mb_strtolower($entry['name']);
+            $values = array_map(mb_strtolower(...), $entry['values']);
+
+            if (! in_array($attribute, $info['attributes'], true)) {
+                return 'combo_component_attribute_unknown';
+            }
+
+            if ($values === []) {
+                continue;
+            }
+
+            if (array_diff($values, $this->admittedValues($info, $attribute)) !== []) {
+                return 'combo_component_value_not_allowed';
+            }
+
+            $restrictions[$attribute] = $values;
+        }
+
+        return $restrictions;
+    }
+
+    /**
+     * Same criterion as `ComboRules::admittedValues()`: the color of a product with fabric admits the
+     * colors offered by the fabrics of the product; any other attribute, the product's own values.
+     *
+     * @param  array{line: string, mode: string, attributes: list<string>, allowed: array<string, list<string>>, fabrics: list<string>}  $info
+     * @return list<string>
+     */
+    private function admittedValues(array $info, string $attribute): array
+    {
+        if ($info['fabrics'] === [] || $this->attributeModels[$attribute]->presentation !== AttributePresentation::Color) {
+            return $info['allowed'][$attribute] ?? [];
+        }
+
+        $offered = [];
+
+        foreach ($this->paletteFabrics as $color => ['fabrics' => $fabrics]) {
+            if (array_intersect(array_map(mb_strtolower(...), $fabrics), $info['fabrics']) !== []) {
+                $offered[] = $color;
+            }
+        }
+
+        return $offered;
     }
 
     /**
@@ -599,6 +802,14 @@ final class CatalogImportPlan
             ];
         }
 
+        $this->productInfo[mb_strtolower($draft['name'])] = [
+            'line' => CatalogImportColumns::LINES[$draft['line']],
+            'mode' => CatalogImportColumns::MODES[$draft['mode']],
+            'attributes' => [...$draft['axes'], ...$draft['order']],
+            'allowed' => $union,
+            'fabrics' => $this->fabricValues($draft['axes'], $union),
+        ];
+
         $this->products[] = [
             'name' => $draft['name'],
             'row' => $draft['row'],
@@ -621,7 +832,7 @@ final class CatalogImportPlan
      *
      * @return list<array{name: string, values: list<string>}>|null
      */
-    private function parseList(string $cell, int $line, string $column): ?array
+    private function parseList(string $cell, int $line, string $column, string $file = CatalogImportColumns::FILE_COMBINATIONS): ?array
     {
         $entries = [];
         $seen = [];
@@ -636,13 +847,13 @@ final class CatalogImportPlan
             $key = mb_strtolower($name);
 
             if ($rest === null || $name === '') {
-                $this->error(CatalogImportColumns::FILE_COMBINATIONS, $line, $column, __('validation.catalog_import_list_malformed'));
+                $this->error($file, $line, $column, __('validation.catalog_import_list_malformed'));
 
                 return null;
             }
 
             if (isset($seen[$key])) {
-                $this->error(CatalogImportColumns::FILE_COMBINATIONS, $line, $column, __('validation.catalog_import_list_repeated'));
+                $this->error($file, $line, $column, __('validation.catalog_import_list_repeated'));
 
                 return null;
             }
@@ -687,6 +898,24 @@ final class CatalogImportPlan
         }
 
         return false;
+    }
+
+    /**
+     * The fabric values a product admits: the allowed values of its Tela axis, if it has one.
+     *
+     * @param  list<string>  $axes
+     * @param  array<string, list<string>>  $allowed
+     * @return list<string>
+     */
+    private function fabricValues(array $axes, array $allowed): array
+    {
+        foreach ($axes as $key) {
+            if ($this->specialUse($key) === AttributeSpecialUse::Fabric) {
+                return $allowed[$key] ?? [];
+            }
+        }
+
+        return [];
     }
 
     private function specialUse(string $attributeKey): ?AttributeSpecialUse
