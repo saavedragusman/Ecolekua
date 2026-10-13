@@ -751,3 +751,46 @@ RED run: `sail artisan test --filter=<the 15 new test names>`: 15 tests, 0 passe
 - No RED/backend change: the product page already exposes `can.deactivate` and `can.delete`, which resolve to the same permissions (`products.deactivate`, `products.delete`) as `CombinationPolicy`; the existing tests already assert them. The repo has no JS test runner, so the change is frontend-only and verified by the gate and a manual check.
 - `resources/js/pages/products/Show.vue`: "Acciones" column now also appears with `can.deactivate` or `can.delete`; per row "Desactivar" (active, `ConfirmDialog`), "Reactivar" (inactive, no confirmation), "Eliminar" (`ConfirmDialog` danger, irreversible; combo or history rejection returns as the error flash). Wayfinder `activate` / `deactivate` / `destroy` of `@/routes/products/combinations`, `preserveScroll: true`. The same slot feeds the mobile cards.
 - Manual checks for the human: deactivate / reactivate / delete a combination at 375 and 1280 px; reactivating an overlapping combination and deleting one that belongs to a combo show the error flash and change nothing.
+
+## Phase 21 — Images (COMPLETE except the manual flows, tasks 21.1-21.6)
+
+Mode: Strict TDD. Runner: `./vendor/bin/sail artisan test` (Pest). Branch `feat/003-products-21-images` (from `c5dae3d`, Phase 20). Phases 19 and 20 were not recorded in this file; their state is in `tasks.md`.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 21.1 / 21.2 | `tests/Unit/Products/ImageProcessorTest.php` (14 tests, helper `tests/Support/FictitiousImage.php`) | Unit | N/A (new) | 14 tests, 0 passed (`ImageProcessor` class not found) | 14 passed, 37 assertions | JPG / PNG / WebP data set; PDF and corrupt body rejected; exactly 1920 px accepted and 1921 rejected on both sides; header-only PNG declaring 30000 px rejected as `DIMENSIONS` (not `FORMAT`) proving the bound runs before decoding; landscape, portrait and never-enlarged scaling; alpha in both variants | `ImageProcessor` encodes through one `encode()` per variant |
+| 21.3 / 21.4 | `tests/Feature/Products/ImageTest.php` (45 tests: product, value and location through data sets) | Feature (HTTP, MySQL) | `sail artisan test` 1380 tests green before | 45 tests, 0 passed (all routes 404) | 45 passed, 269 assertions | upload, audit, PDF, oversize (`max`), 1921 px, no file, replace, remove, remove without image, failure rollback, 403 per permission, 403 serving, headers, 404 variant / no image, page props | `ImageStore` shared by the four actions; `ImageUrls` shared by the presenters |
+| 21.5 | `ImageUploader.vue`, `ValueForm.vue`, `AttributeShow.vue`, `DetailLocations.vue`, `products/Show.vue`, `types/products.ts` | Frontend | n/a | n/a (the page-props tests of 21.3 define the contract) | `pnpm types:check`, `pnpm check`, `pnpm build` pass | n/a | `pnpm check:fix` formatted two files |
+
+Existing tests changed because of this slice (not weakened): `ProtectedByDefaultTest` untouched (the serving routes carry no `whereIn` constraint, so a guest is redirected to login before the variant is looked at; an unknown variant is a 404 from `ImageStore::response`); `AttributeCatalogTest` and `DetailLocationTest` "no delete routes" tests now exclude the `DELETE .../image` routes (removing an image is not deleting the value or location); the exact value and location page props gained `'image' => null`.
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused tests | `sail artisan test tests/Unit/Products/ImageProcessorTest.php`: 14 passed; `tests/Feature/Products/ImageTest.php`: 45 passed |
+| Runtime harness | Real HTTP multipart uploads (`UploadedFile::fake()->createWithContent` with GD-generated images) against MySQL and the faked private disk, decoded by the real `ImageProcessor`; serving through the real controllers with `assertHeader`. Wayfinder regenerated; `sail pnpm build` compiled the pages. Manual upload / replace / remove in a browser: **PENDING for the human** |
+| Rollback boundary | `app/Support/Products/Assets/{AssetLimits,ImageProcessor,InvalidImageException,ImageRules,ImageStore,ImageUrls}.php`, the four `app/Actions/Products/{Set,Remove}{Product,Catalog}Image.php`, the two requests, `ProductAssetController`, `CatalogAssetController`, the nine image routes, the `image` keys in `ProductPresenter::value/detail` and `DetailLocationController::index`, the `image_*` lang keys, `composer.json` / `composer.lock`, the frontend files above, the new tests and the Phase 21 marks |
+
+### Slice-close gate
+
+- `sail pint` then `pint --test`: passed. `sail composer types:check`: 0 errors. `sail pnpm check`: pass (91 files formatted, no lint warnings). `sail pnpm types:check`: pass. `sail pnpm build`: built. `sail artisan test`: 1439 tests, 1437 passed, 2 skipped (same two as before).
+
+### Notes
+
+- Design follow-ups answered: GD in the Sail container supports WebP (`gd_info()['WebP Support'] === true`), so no JPEG/PNG fallback was written; `DB::afterCommit()` callbacks run under `RefreshDatabase`. The production host's GD / upload limits remain for task 25.4 (R-5): the Sail PHP has `upload_max_filesize=100M`, `memory_limit=-1`.
+- `ext-gd` declared in `composer.json`; `composer update --lock` changed `composer.lock` (content-hash, platform `ext-gd`, and the renamed `phpdotenv` repository URL with the same version and reference). No package was added.
+- Flow: `ImageProcessor` (pure GD, no framework) checks size, header type and dimensions, then decodes and re-encodes both WebP variants; `ImageStore::replace` processes first (outside the lock), then in one transaction locks the owner row, writes the new files, stores the paths and audits, registers the deletion of the replaced files with `DB::afterCommit()`, and deletes the new files on any exception. Audit: `products.updated` (product) or `catalog.updated` (value, location) with `old_values {image: <previous display path|null>}` and `new_values {image: <new display path|null>}`; removing an owner without image changes and audits nothing.
+- Files: private `local` disk, `catalog/products|values|locations/{id}/<ulid>.webp` (a distinct ULID per variant).
+- Serving: `GET /products/{product}/image/{variant}` (`ProductPolicy::view`), `GET /catalog/values/{value}/image/{variant}` and `GET /catalog/detail-locations/{location}/image/{variant}` (`CatalogPolicy::viewAsset`); headers `X-Content-Type-Options: nosniff`, `Cache-Control: private, max-age=86400`, `Content-Type` from the stored file (`image/webp`). The page URLs are relative and carry `?v=<file ULID>` so a replaced image is not served from the 1-day browser cache.
+- Page contracts: product detail gains `image {display, thumb}|null` (the existing `images {has_main, templates}` is unchanged); each value and each location gains `image {display, thumb}|null`.
+- Not done on purpose: `SelectionOptions` still returns empty `image_urls` (the public/portal routes arrive with 005, and no Phase 21 task covers it). EXIF orientation was first left unapplied; it is now fixed, see "Fix 21.2b" below.
+- Manual checks pending for the human: upload a JPG / PNG / WebP, replace it and remove it on a product (page "Imágenes"), on a value (edit value form) and on a detail location (edit location form); a PDF and a file over 2 MB must show a Spanish error; the image must show in the value and location tables; a color value without image keeps its swatch.
+
+### Fix 21.2b — EXIF orientation applied before dropping EXIF
+
+- `ImageProcessor` now reads the EXIF Orientation of JPEG uploads (`exif_read_data` over an in-memory stream, warnings suppressed; missing, unreadable or out-of-range values count as 1) and rotates / mirrors the decoded pixels with `imagerotate` / `imageflip` before the two variants are resized. PNG and WebP are untouched. The size, header and dimension bounds still run before decoding; EXIF is still not written to the output.
+- Tests (`ImageProcessorTest`, test helper `FictitiousImage::jpegWithOrientation` builds a four-quadrant JPEG and injects an APP1 Exif segment by bytes): `DT-03 applies the EXIF orientation before dropping it` (no EXIF and orientations 1-8, asserting dimensions and quadrant colors), unknown value 9, PNG/WebP untouched, size bound after a side swap. RED: 27 tests, 19 passed, 8 failed. GREEN: 27 passed (69 assertions).
+- `ext-exif` is not declared in `composer.json`: the code guards with `function_exists('exif_read_data')` and falls back to orientation 1, so no lock change was needed.

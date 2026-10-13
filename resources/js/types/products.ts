@@ -56,6 +56,14 @@ export type CatalogColorRef = {
     status: CatalogStatus;
 };
 
+// Serving URLs of the two stored variants of an image (PRD-020). The files sit on the private disk
+// and only leave it through these authorized routes; a page shows them with `<img src>` and never
+// builds a storage path. Null when the owner has no image.
+export type ImageUrls = {
+    display: string;
+    thumb: string;
+};
+
 // Listed in `sort_order` (PRD-002). `tone` only exists on the values of the color attribute.
 // `offered_colors` is an array (possibly empty) on the values of the fabric attribute and null on
 // every other value (E-46).
@@ -65,6 +73,7 @@ export type CatalogAttributeValue = {
     description: string | null;
     tone: string | null;
     svg_layer: string | null;
+    image: ImageUrls | null;
     status: CatalogStatus;
     status_label: string;
     sort_order: number;
@@ -77,6 +86,7 @@ export type CatalogDetailLocation = {
     id: number;
     name: string;
     svg_layer: string | null;
+    image: ImageUrls | null;
     status: CatalogStatus;
     status_label: string;
 };
@@ -169,7 +179,8 @@ export type ProductDetail = {
         default: number | null;
         overrides: ProductStockOverride[];
     };
-    // Image URLs and templates arrive with the upload slices.
+    // Main image URLs (null without image); the templates arrive with their slice.
+    image: ImageUrls | null;
     images: { has_main: boolean; templates: string[] };
 };
 

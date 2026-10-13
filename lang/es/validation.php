@@ -60,6 +60,13 @@ return [
     'offered_colors_invalid' => 'Solo se pueden elegir valores del atributo de color.',
     'offered_colors_inactive' => 'No se puede ofrecer un color inactivo.',
 
+    // Images of products, values and detail locations (spec 003, PRD-020, E-35).
+    'image_required' => 'Elija una imagen.',
+    'image_upload_failed' => 'No se pudo subir la imagen. Verifique que pese 2 MB o menos.',
+    'image_size' => 'La imagen no puede superar 2 MB.',
+    'image_format' => 'El archivo no es una imagen válida. Use JPG, PNG o WebP.',
+    'image_dimensions' => 'La imagen es demasiado grande: su lado más largo no puede superar :side px. Reduzca su tamaño antes de subirla.',
+
     // Products (spec 003).
     'product_name_unique' => 'Ya existe un producto con ese nombre.',
     'product_category_unavailable' => 'Elija una categoría activa.',

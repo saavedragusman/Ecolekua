@@ -9,6 +9,7 @@ import CatalogSections from '@/components/catalog/CatalogSections.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
+import ImageUploader from '@/components/products/ImageUploader.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import { useScrollToForm } from '@/composables/useScrollToForm';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -18,6 +19,10 @@ import {
     store,
     update,
 } from '@/routes/catalog/detail-locations';
+import {
+    destroy as destroyImage,
+    store as storeImage,
+} from '@/routes/catalog/detail-locations/image';
 import type { CatalogCan, CatalogDetailLocation } from '@/types/products';
 
 defineOptions({ layout: AppLayout });
@@ -39,6 +44,10 @@ const columns = computed<DataTableColumn[]>(() => [
 // One form serves creation and editing; `editing` is the location being edited, null when creating.
 const formOpen = ref(false);
 const editing = ref<CatalogDetailLocation | null>(null);
+// The row being edited, read again from the props so an image upload (which reloads them) shows.
+const editingCurrent = computed(
+    () => props.locations.find((row) => row.id === editing.value?.id) ?? null,
+);
 const form = useForm({ name: '', svg_layer: '' });
 const formElement = useTemplateRef<HTMLFormElement>('formElement');
 const { scrollToForm } = useScrollToForm(formElement);
@@ -158,6 +167,21 @@ function reactivateLocation(location: CatalogDetailLocation): void {
                     hint="Minúsculas y guiones, por ejemplo pechera o manga-larga. No puede ser cuerpo ni sombras."
                     :error="form.errors.svg_layer"
                 />
+                <ImageUploader
+                    v-if="editingCurrent !== null"
+                    label="Imagen del dibujo (opcional)"
+                    :alt="`Imagen de ${editingCurrent.name}`"
+                    :image="editingCurrent.image"
+                    :upload-to="storeImage(editingCurrent.id)"
+                    :remove-from="destroyImage(editingCurrent.id)"
+                />
+                <p
+                    v-else
+                    class="font-body-md text-body-md text-on-surface-variant"
+                >
+                    Podrá agregar la imagen de la ubicación después de
+                    guardarla.
+                </p>
                 <div class="flex flex-col gap-space-sm md:flex-row">
                     <AppButton type="submit" :disabled="form.processing">
                         Guardar
@@ -183,6 +207,17 @@ function reactivateLocation(location: CatalogDetailLocation): void {
             row-key="id"
             empty-text="No hay ubicaciones de detalle registradas."
         >
+            <template #cell-name="{ row }">
+                <span class="inline-flex items-center gap-space-sm">
+                    <img
+                        v-if="row.image"
+                        :src="row.image.thumb"
+                        :alt="`Imagen de ${row.name}`"
+                        class="size-10 shrink-0 rounded-lg border border-outline bg-surface-container-low object-cover"
+                    />
+                    {{ row.name }}
+                </span>
+            </template>
             <template #cell-svg_layer="{ row }">
                 {{ row.svg_layer ?? 'Sin capa' }}
             </template>

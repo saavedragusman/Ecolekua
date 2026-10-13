@@ -779,7 +779,7 @@ All five answers are recorded in `docs/specs/003-products.md` §9 (2026-10-07) a
 ### Technical follow-ups (apply phase)
 
 - [ ] Pin the exact `enshrined/svg-sanitize` release, run `composer audit`, record version and advisories in `tasks.md`; confirm its default allowlist and the project `AllowedTags` remove `foreignObject`.
-- [ ] Confirm `DB::afterCommit()` callbacks run under `RefreshDatabase` as expected (Laravel's test transaction manager).
-- [ ] Confirm production GD supports WebP; otherwise the variant format falls back to JPEG/PNG in `ImageProcessor` (technical change only).
+- [x] Confirm `DB::afterCommit()` callbacks run under `RefreshDatabase` as expected (Laravel's test transaction manager). Confirmed in Phase 21 (`ImageTest`): they run.
+- [ ] Confirm production GD supports WebP; otherwise the variant format falls back to JPEG/PNG in `ImageProcessor` (technical change only). Confirmed for the Sail container in Phase 21 (`WebP Support` is true, no fallback written); the production host is still to be checked in task 25.4.
 - [ ] `composer.json` declares `"license": "MIT"` (starter kit); the project owner may want `"proprietary"` now that a GPL dependency is included (internal use, no distribution).
 - [ ] Documentation drift reported by the proposal: `docs/business/business-rules.md` §27 still marks DEC-PRD-11 as pending (not changed by this design).

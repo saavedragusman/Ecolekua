@@ -18,6 +18,7 @@ use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
 use App\Models\StockMinimumOverride;
+use App\Support\Products\Assets\ImageUrls;
 use Illuminate\Support\Collection;
 
 /**
@@ -63,6 +64,7 @@ final class ProductPresenter
             'description' => $value->description,
             'tone' => $value->tone,
             'svg_layer' => $value->svg_layer,
+            'image' => ImageUrls::for($value, 'catalog.values.image.show', 'value'),
             'status' => $value->status->value,
             'status_label' => $value->status->label(),
             'sort_order' => $value->sort_order,
@@ -213,8 +215,9 @@ final class ProductPresenter
                 'default' => $product->min_stock_default,
                 'overrides' => StockMinimum::snapshot($product),
             ],
-            // Image URLs and template files arrive with the upload slices (Phases 19 and 22); the raw
-            // storage paths are never exposed.
+            // The raw storage paths are never exposed: `image` holds the serving URLs (Phase 21) and
+            // the template files arrive with Phase 22.
+            'image' => ImageUrls::for($product, 'products.image.show', 'product'),
             'images' => ['has_main' => $product->image_display_path !== null, 'templates' => []],
         ];
     }

@@ -5,8 +5,13 @@ import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
 import AppTextarea from '@/components/AppTextarea.vue';
 import ColorPicker from '@/components/ColorPicker.vue';
+import ImageUploader from '@/components/products/ImageUploader.vue';
 import { update } from '@/routes/catalog/values';
 import { store } from '@/routes/catalog/attributes/values';
+import {
+    destroy as destroyImage,
+    store as storeImage,
+} from '@/routes/catalog/values/image';
 import type {
     CatalogAttributeValue,
     CatalogPresentation,
@@ -94,8 +99,17 @@ function submit(): void {
                 hint="Minúsculas y guiones, por ejemplo manga-corta. No puede ser cuerpo ni sombras."
                 :error="form.errors.svg_layer"
             />
-            <!-- Reserved for the value image uploader (Phase 21). -->
-            <slot name="image" />
+            <ImageUploader
+                v-if="value !== null"
+                label="Imagen (opcional)"
+                :alt="`Imagen de ${value.name}`"
+                :image="value.image"
+                :upload-to="storeImage(value.id)"
+                :remove-from="destroyImage(value.id)"
+            />
+            <p v-else class="font-body-md text-body-md text-on-surface-variant">
+                Podrá agregar la imagen del valor después de guardarlo.
+            </p>
             <div class="flex flex-col gap-space-sm md:flex-row">
                 <AppButton type="submit" :disabled="form.processing">
                     Guardar

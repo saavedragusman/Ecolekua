@@ -271,8 +271,9 @@ it('PRD-007 never deletes a location: there is no delete route', function () {
 
     $this->actingAs(locationManager())->deleteJson("/catalog/detail-locations/{$location->id}")->assertStatus(405);
 
+    // Removing an image (PRD-020, `DELETE .../image`) is not deleting the location.
     $deleteRoutes = collect(Route::getRoutes()->getRoutes())
-        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/detail-locations') && in_array('DELETE', $route->methods(), true));
+        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/detail-locations') && ! str_ends_with($route->uri(), '/image') && in_array('DELETE', $route->methods(), true));
 
     expect($deleteRoutes)->toHaveCount(0)
         ->and(DetailLocation::query()->count())->toBe(1);
@@ -316,6 +317,7 @@ it('PRD-007 page GET /catalog/detail-locations renders catalog/DetailLocations l
                 'id' => $first->id,
                 'name' => 'abertura',
                 'svg_layer' => null,
+                'image' => null,
                 'status' => 'active',
                 'status_label' => 'Activo',
             ])
