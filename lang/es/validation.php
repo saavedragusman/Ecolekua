@@ -122,6 +122,23 @@ return [
     'stock_minimum_size_not_allowed' => 'La talla no está admitida por el producto.',
     'stock_minimum_size_restricted' => 'La talla está fuera de la restricción de la combinación.',
 
+    // Resolution of a product selection (spec 003, PRD-011).
+    'selection_unavailable' => 'La selección no está disponible.',
+    'selection_ambiguous' => 'La selección coincide con más de una combinación.',
+    'selection_value_required' => 'Elija un valor.',
+    'selection_value_not_allowed' => 'El valor elegido no está admitido.',
+    'selection_color_not_offered' => 'El color elegido no está disponible para esta selección.',
+    'selection_value_restricted' => 'El valor elegido no está admitido por la combinación.',
+    'selection_custom_color_not_admitted' => 'Este producto no admite color personalizado.',
+    'selection_custom_tone_invalid' => 'Indique el tono del color personalizado con un código válido (#RRGGBB).',
+    'selection_custom_note_too_long' => 'La nota del color personalizado admite como máximo 100 caracteres.',
+    'selection_location_not_admitted' => 'La ubicación de detalle no está admitida por el producto.',
+    'selection_location_color_invalid' => 'El color del detalle debe ser un color activo de la paleta.',
+    'selection_customization_not_admitted' => 'La personalización no está admitida por el producto.',
+    'selection_attribute_not_declared' => 'El producto no tiene este atributo.',
+    'selection_location_repeated' => 'Esta ubicación ya fue elegida.',
+    'selection_customization_repeated' => 'Esta personalización ya fue elegida.',
+
     'password' => [
         'letters' => 'El campo :attribute debe contener al menos una letra.',
         'mixed' => 'El campo :attribute debe contener al menos una mayúscula y una minúscula.',
