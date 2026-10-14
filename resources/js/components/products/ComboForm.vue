@@ -38,6 +38,8 @@ const props = defineProps<{
 // A row keeps a local key so adding and removing components never reuses the state of another one.
 type Row = {
     key: number;
+    // The stored component the row edits; null for a component added in this form.
+    id: number | null;
     product_id: number | '';
     quantity: string;
     values: CombinationValueMap;
@@ -65,7 +67,13 @@ function copyMap(map: CombinationValueMap): CombinationValueMap {
 }
 
 function blankRow(): Row {
-    return { key: nextKey++, product_id: '', quantity: '1', values: {} };
+    return {
+        key: nextKey++,
+        id: null,
+        product_id: '',
+        quantity: '1',
+        values: {},
+    };
 }
 
 const form = useForm<FormData>({
@@ -76,6 +84,7 @@ const form = useForm<FormData>({
         props.initial.components.length > 0
             ? props.initial.components.map((component) => ({
                   key: nextKey++,
+                  id: component.id,
                   product_id: component.product_id,
                   quantity: String(component.quantity),
                   values: copyMap(component.values),
@@ -89,6 +98,7 @@ form.transform((data) => ({
     code: data.code,
     portal_visible: data.portal_visible,
     components: data.components.map((row) => ({
+        id: row.id,
         product_id: row.product_id,
         quantity: row.quantity,
         values: Object.fromEntries(

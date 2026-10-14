@@ -127,7 +127,7 @@ class SyncComboItemPrices
             'updated_by' => $actor->id,
         ]);
 
-        $this->audit->handle(AuditAction::ComboItemPriceCreated, $actor, $price, newValues: self::snapshot($combo, $component, $number, $amount), context: $auditContext, origin: $origin);
+        $this->audit->handle(AuditAction::ComboItemPriceCreated, $actor, $price, newValues: self::snapshot($combo->code, $number, $component, $amount), context: $auditContext, origin: $origin);
     }
 
     /**
@@ -135,11 +135,11 @@ class SyncComboItemPrices
      */
     private function update(ComboItemPrice $price, Combo $combo, ComboComponent $component, int $number, BigDecimal $amount, User $actor, ?AuditOrigin $origin, array $auditContext): void
     {
-        $previous = self::snapshot($combo, $component, $number, $price->unit_price);
+        $previous = self::snapshot($combo->code, $number, $component, $price->unit_price);
 
         $price->update(['unit_price' => Money::toStorage($amount, 2), 'updated_by' => $actor->id]);
 
-        $this->audit->handle(AuditAction::ComboItemPriceUpdated, $actor, $price, oldValues: $previous, newValues: self::snapshot($combo, $component, $number, $amount), context: $auditContext, origin: $origin);
+        $this->audit->handle(AuditAction::ComboItemPriceUpdated, $actor, $price, oldValues: $previous, newValues: self::snapshot($combo->code, $number, $component, $amount), context: $auditContext, origin: $origin);
     }
 
     /**
@@ -147,7 +147,7 @@ class SyncComboItemPrices
      */
     private function delete(ComboItemPrice $price, Combo $combo, ComboComponent $component, int $number, User $actor, ?AuditOrigin $origin, array $auditContext): void
     {
-        $previous = self::snapshot($combo, $component, $number, $price->unit_price);
+        $previous = self::snapshot($combo->code, $number, $component, $price->unit_price);
 
         $price->delete();
 
@@ -155,14 +155,15 @@ class SyncComboItemPrices
     }
 
     /**
-     * What the audit keeps of a component price, with the amount as a canonical string.
+     * What the audit keeps of a component price, with the amount as a canonical string. Public because
+     * the combo edit (DEC-COT-44) audits the prices it deletes with the same shape.
      *
      * @return array{combo_code: ?string, component: int, product: string, quantity: int, price: string}
      */
-    private static function snapshot(Combo $combo, ComboComponent $component, int $number, BigDecimal $amount): array
+    public static function snapshot(?string $comboCode, int $number, ComboComponent $component, BigDecimal $amount): array
     {
         return [
-            'combo_code' => $combo->code,
+            'combo_code' => $comboCode,
             'component' => $number,
             'product' => $component->product->name,
             'quantity' => $component->quantity,

@@ -13,6 +13,7 @@ use App\Models\User;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia as Assert;
 
 // COT-005 (DEC-COT-06): the unit price of each combo component, saved in one request. The combo price is
 // never stored. The price page ships later, so the write endpoint answers a redirect back (003 precedent).
@@ -280,4 +281,223 @@ it('COT-005 declares the price route for a combo', function () {
 
     expect($route->uri())->toBe('pricing/combos/{combo}/prices')
         ->and($route->methods())->toContain('PUT');
+});
+
+// DEC-COT-44 (design Decision 12): editing the components of a combo (003) keeps the price of every
+// component whose product does not change, even when its quantity or order changes. A new component, or
+// one with another product, has no price.
+
+/**
+ * Prices the stored components of a combo in their order, one amount per component.
+ */
+function priceComboComponents(Combo $combo, string ...$amounts): void
+{
+    foreach ($combo->components()->get()->values() as $index => $component) {
+        ComboItemPrice::factory()->create(['combo_component_id' => $component->id, 'unit_price' => $amounts[$index]]);
+    }
+}
+
+/**
+ * The price of each stored component of a combo, in combo order, as `[product, quantity, price|null]`.
+ *
+ * @return list<array{0: string, 1: int, 2: ?string}>
+ */
+function comboComponentPrices(Combo $combo): array
+{
+    return array_values($combo->components()->with(['product', 'price'])->get()->map(fn (ComboComponent $component): array => [
+        $component->product->name,
+        $component->quantity,
+        $component->price?->unit_price->toScale(2)->toString(),
+    ])->all());
+}
+
+/**
+ * One component of the edit payload that names the stored component it edits.
+ *
+ * @param  array<string, list<string>>  $values
+ * @return array{id: int, product_id: int, quantity: int, values: array<int, list<int>>}
+ */
+function comboComponentWithId(array $catalog, ComboComponent $stored, string $product, int $quantity, array $values = []): array
+{
+    return ['id' => $stored->id, ...comboComponent($catalog, $product, $quantity, $values)];
+}
+
+it('DEC-COT-44 keeps the component prices when the quantity or the order of the components changes', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+    priceComboComponents($combo, '10.00', '5.00', '20.00');
+    [$diaper, $pad, $cover] = $combo->components()->get()->all();
+    $priceIds = ComboItemPrice::query()->orderBy('id')->pluck('id')->all();
+
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [
+            comboComponentWithId($catalog, $cover, 'Protector de cama', 1),
+            comboComponentWithId($catalog, $diaper, 'Pañal antiderrame', 4, ['Talla' => ['3XG', '4XG', '5XG']]),
+            comboComponentWithId($catalog, $pad, 'Absorbente', 3),
+        ],
+    ]))->assertRedirect("/combos/{$combo->id}");
+
+    expect(comboComponentPrices($combo))->toBe([
+        ['Protector de cama', 1, '20.00'],
+        ['Pañal antiderrame', 4, '10.00'],
+        ['Absorbente', 3, '5.00'],
+    ])
+        ->and($combo->components()->pluck('id')->all())->toBe([$cover->id, $diaper->id, $pad->id])
+        ->and(ComboItemPrice::query()->orderBy('id')->pluck('id')->all())->toBe($priceIds)
+        ->and(comboAudit(AuditAction::ComboUpdated)->sole()->old_values)->not->toHaveKey('deleted_item_prices');
+});
+
+it('DEC-COT-44 drops the price of a component whose product is replaced and lists it in the combo audit', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+    priceComboComponents($combo, '10.00', '5.00', '20.00');
+    [$diaper, $pad, $cover] = $combo->components()->get()->all();
+
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [
+            comboComponentWithId($catalog, $diaper, 'Pañal antiderrame', 2, ['Talla' => ['3XG', '4XG', '5XG']]),
+            comboComponentWithId($catalog, $pad, 'Pañal ecológico', 3),
+            comboComponentWithId($catalog, $cover, 'Protector de cama', 1),
+        ],
+    ]))->assertRedirect("/combos/{$combo->id}");
+
+    $audit = comboAudit(AuditAction::ComboUpdated)->sole();
+
+    expect(comboComponentPrices($combo))->toBe([
+        ['Pañal antiderrame', 2, '10.00'],
+        ['Pañal ecológico', 3, null],
+        ['Protector de cama', 1, '20.00'],
+    ])
+        ->and(ComboComponent::query()->whereKey($pad->id)->exists())->toBeFalse()
+        ->and($audit->old_values['deleted_item_prices'])->toEqual([
+            ['combo_code' => 'K-ORO', 'component' => 2, 'product' => 'Absorbente', 'quantity' => 3, 'price' => '5.00'],
+        ])
+        ->and($audit->new_values)->not->toHaveKey('deleted_item_prices')
+        ->and(comboPriceAuditRows())->toHaveCount(0);
+});
+
+it('DEC-COT-44 drops the price of a removed component and leaves a new one without price', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+    priceComboComponents($combo, '10.00', '5.00', '20.00');
+    [$diaper, , $cover] = $combo->components()->get()->all();
+
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [
+            comboComponentWithId($catalog, $diaper, 'Pañal antiderrame', 2, ['Talla' => ['3XG', '4XG', '5XG']]),
+            comboComponentWithId($catalog, $cover, 'Protector de cama', 1),
+            comboComponent($catalog, 'Pañal ecológico', 2),
+        ],
+    ]))->assertRedirect("/combos/{$combo->id}");
+
+    expect(comboComponentPrices($combo))->toBe([
+        ['Pañal antiderrame', 2, '10.00'],
+        ['Protector de cama', 1, '20.00'],
+        ['Pañal ecológico', 2, null],
+    ])
+        ->and(comboAudit(AuditAction::ComboUpdated)->sole()->old_values['deleted_item_prices'])->toEqual([
+            ['combo_code' => 'K-ORO', 'component' => 2, 'product' => 'Absorbente', 'quantity' => 3, 'price' => '5.00'],
+        ]);
+});
+
+it('DEC-COT-44 keeps the prices of an edit without ids by pairing each product with its stored components in order', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog, ['components' => [
+        comboComponent($catalog, 'Pañal antiderrame', 1, ['Talla' => ['3XG']]),
+        comboComponent($catalog, 'Pañal antiderrame', 2, ['Talla' => ['4XG']]),
+        comboComponent($catalog, 'Absorbente', 1),
+    ]]);
+    priceComboComponents($combo, '11.00', '12.00', '13.00');
+
+    // An older client or a caller without ids: the k-th id-less entry of a product takes the k-th stored
+    // component of that product, whatever the new order.
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [
+            comboComponent($catalog, 'Absorbente', 1),
+            comboComponent($catalog, 'Pañal antiderrame', 5, ['Talla' => ['3XG']]),
+            comboComponent($catalog, 'Pañal antiderrame', 6, ['Talla' => ['4XG']]),
+        ],
+    ]))->assertRedirect("/combos/{$combo->id}");
+
+    expect(comboComponentPrices($combo))->toBe([
+        ['Absorbente', 1, '13.00'],
+        ['Pañal antiderrame', 5, '11.00'],
+        ['Pañal antiderrame', 6, '12.00'],
+    ])
+        ->and(comboAudit(AuditAction::ComboUpdated)->sole()->old_values)->not->toHaveKey('deleted_item_prices');
+});
+
+it('DEC-COT-44 tells apart two components of the same product by their ids', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog, ['components' => [
+        comboComponent($catalog, 'Pañal antiderrame', 1, ['Talla' => ['3XG']]),
+        comboComponent($catalog, 'Pañal antiderrame', 2, ['Talla' => ['4XG']]),
+    ]]);
+    priceComboComponents($combo, '11.00', '12.00');
+    [$first, $second] = $combo->components()->get()->all();
+
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [
+            comboComponentWithId($catalog, $second, 'Pañal antiderrame', 2, ['Talla' => ['4XG']]),
+            comboComponentWithId($catalog, $first, 'Pañal antiderrame', 1, ['Talla' => ['3XG']]),
+        ],
+    ]))->assertRedirect("/combos/{$combo->id}");
+
+    expect(comboComponentPrices($combo))->toBe([
+        ['Pañal antiderrame', 2, '12.00'],
+        ['Pañal antiderrame', 1, '11.00'],
+    ])
+        ->and($combo->components()->pluck('id')->all())->toBe([$second->id, $first->id]);
+});
+
+it('DEC-COT-44 rejects a component id of another combo, or unknown, on its field and changes nothing', function (bool $unknown) {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+    priceComboComponents($combo, '10.00', '5.00', '20.00');
+    $other = makeCombo($catalog, ['name' => 'Kit Plata', 'code' => 'K-PLATA']);
+    $foreignId = $unknown ? 9000000 : $other->components()->first()->id;
+    $before = comboComponentPrices($combo);
+
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [
+            ['id' => $foreignId, ...comboComponent($catalog, 'Pañal antiderrame', 2, ['Talla' => ['3XG', '4XG', '5XG']])],
+            comboComponent($catalog, 'Absorbente', 3),
+        ],
+    ]))->assertUnprocessable()->assertJsonValidationErrors(['components.0.id']);
+
+    expect(comboComponentPrices($combo))->toBe($before)
+        ->and(comboAudit(AuditAction::ComboUpdated))->toHaveCount(0);
+})->with(['another combo' => [false], 'unknown' => [true]]);
+
+it('DEC-COT-44 rejects a component id on create, where every component is new', function () {
+    $catalog = comboCatalog();
+    $stored = makeCombo($catalog)->components()->first();
+
+    postCombo($this, comboCreator(), comboPayload($catalog, [
+        'name' => 'Kit Plata',
+        'code' => 'K-PLATA',
+        'components' => [comboComponentWithId($catalog, $stored, 'Absorbente', 3)],
+    ]))->assertUnprocessable()->assertJsonValidationErrors(['components.0.id']);
+
+    expect(Combo::query()->count())->toBe(1);
+});
+
+it('DEC-COT-44 rejects an id that is not an integer', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [['id' => 'x', ...comboComponent($catalog, 'Absorbente', 3)]],
+    ]))->assertUnprocessable()->assertJsonValidationErrors(['components.0.id']);
+});
+
+it('DEC-COT-44 gives the combo edit form the id of each stored component so it can send it back', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+    $ids = $combo->components()->pluck('id')->all();
+
+    $this->actingAs(comboEditor())->get("/combos/{$combo->id}/edit")->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->where('initial.components.0.id', $ids[0])
+        ->where('initial.components.1.id', $ids[1])
+        ->where('initial.components.2.id', $ids[2]));
 });

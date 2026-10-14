@@ -42,6 +42,8 @@ final class ComboRules
             'portal_visible' => ['nullable', 'boolean'],
             'components' => ['required', 'array', 'min:1'],
             'components.*' => ['array'],
+            // The stored component an entry edits (DEC-COT-44); checked against the combo in validateComponents().
+            'components.*.id' => ['nullable', 'integer'],
             'components.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')],
             'components.*.quantity' => ['required', 'integer', 'between:1,'.self::QUANTITY_MAX],
             'components.*.values' => ['sometimes', 'nullable', 'array'],
@@ -78,16 +80,20 @@ final class ComboRules
      * - the product is active when added as a component; a product that is already a component of the
      *   combo being edited (`$heldProductIds`) is kept even if it was deactivated since (DEC-PRD-64).
      *
+     * - an `id`, when sent, is one of the components of the combo being edited (`$ownComponentIds`); on
+     *   creation there is none, so any id is rejected (DEC-COT-44).
+     *
      * The same product may appear in several components (N-3). An attribute without values is not
      * restricted. Callers hold the locks of the products.
      *
      * @param  array<array-key, mixed>  $components  shaped by `rules()`
      * @param  list<int>  $heldProductIds  products of the components the combo being edited already has
-     * @return list<array{product_id: int, quantity: int, values: array<int, list<int>>}>
+     * @param  list<int>  $ownComponentIds  components the combo being edited already has
+     * @return list<array{id: ?int, product_id: int, quantity: int, values: array<int, list<int>>}>
      *
-     * @throws ValidationException on `components.{i}.product_id` or `components.{i}.values.{attributeId}`
+     * @throws ValidationException on `components.{i}.id`, `components.{i}.product_id` or `components.{i}.values.{attributeId}`
      */
-    public static function validateComponents(array $components, array $heldProductIds = []): array
+    public static function validateComponents(array $components, array $heldProductIds = [], array $ownComponentIds = []): array
     {
         $components = array_values($components);
         $products = Product::query()->whereIn('id', array_map(fn (mixed $component): int => (int) $component['product_id'], $components))->get()->keyBy('id');
@@ -99,7 +105,13 @@ final class ComboRules
             $product = $products->get((int) $component['product_id']);
             $values = CombinationRules::normalize((array) ($component['values'] ?? []));
 
-            $normalized[] = ['product_id' => (int) $component['product_id'], 'quantity' => (int) $component['quantity'], 'values' => $values];
+            $id = isset($component['id']) ? (int) $component['id'] : null;
+
+            $normalized[] = ['id' => $id, 'product_id' => (int) $component['product_id'], 'quantity' => (int) $component['quantity'], 'values' => $values];
+
+            if ($id !== null && ! in_array($id, $ownComponentIds, true)) {
+                $errors["components.{$index}.id"] = __('validation.combo_component_foreign');
+            }
 
             if ($product === null) {
                 $errors["components.{$index}.product_id"] = __('validation.combo_component_product_unknown');

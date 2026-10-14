@@ -367,5 +367,32 @@ Design choices: the audit `component` is the 1-based number of the component in 
 ### Suggested commit
 `feat(004): registrar precios de ítems de combo [COT-005, DEC-COT-06]`
 
+Committed as `e7df039`.
+
+## Phase 6b (PR 11, `feat/004-pricing-and-quotations-6b-combo-component-identity`, base PR 10): tasks 6.1 to 6.4 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 6.1 (DEC-COT-44) | `tests/Feature/Pricing/ComboItemPriceTest.php`, `tests/Feature/Products/ComboLifecycleTest.php` | Feature (HTTP) | 003 products suite green before | 11 failed: prices lost on reorder/quantity, id-less fallback, ids of the same product; 302 instead of 422 for foreign/unknown/non-integer id and id on create; `initial.components.0.id` absent; component row recreated (117 vs 116) | 584 passed + 1 skipped (pre-existing) across `Feature/Products` and the file | reorder + quantity, replaced product, removed + new component, id-less k-th pairing, two components of one product by id, foreign/unknown id, id on create, non-integer id, edit form ids | `matches()` kept as the early exit, ignoring ids (6.3) |
+| 6.2 (DEC-COT-44) | — | — | — | — | `ComboComponents::replace` keeps identity and returns deleted prices; `ComboRules` `components.*.id` + own-combo check; `UpdateCombo` passes own ids and adds `old_values.deleted_item_prices`; `SyncComboItemPrices::snapshot` public (same audit shape); `ProductPresenter::comboForm` sends `id`; `ComboForm.vue` sends it back (null for new rows) | — | — |
+
+Deviations from the task text: the 003 "component ids kept" case lives in `ComboLifecycleTest.php` (where the combo edit tests are) instead of `ComboTest.php` (creation and list). The 003 combo form now sends `components.*.id` (Decision 12 requires it; task 6.2 did not list the presenter and Vue files). `deleted_item_prices` uses each component's number and quantity before the edit and the combo code after it.
+
+### Gate (PR 11, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed after `pnpm check:fix` formatted `ComboForm.vue`
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed
+- `sail artisan test`: passed, 2039 tests (2037 passed, 2 skipped, 10925 assertions)
+
+### Size
+408 authored changed lines (374 additions, 34 deletions) excluding `tasks.md`, `apply-progress.md`: 147 production (PHP and lang), 14 frontend, 247 tests.
+
+### Suggested commit
+`feat(004): conservar los componentes y sus precios al editar un combo [COT-005, DEC-COT-44]`
+
 ### Remaining
-Phase 6b (PR 11): DEC-COT-44 half of 6.1/6.2 plus 6.3 and the 6.4 gate.
+Phase 7 (PR 12): commercial parameters.
