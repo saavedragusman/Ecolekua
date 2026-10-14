@@ -182,4 +182,162 @@ Created: `app/Actions/Pricing/AssignPriceScheme.php`, `app/Http/Requests/Pricing
 Authored changed lines (excluding `tasks.md`, `apply-progress.md`): about 633 (53 additions + 2 deletions in 3 modified files; 578 in 4 new files: production about 186, tests 392). Within the ~800 estimate and under the 1,100 split threshold; `size:exception` per the accepted 004 policy.
 
 ### Remaining
-Task 4.4 commit pending. Next: Phase 5a.
+Task 4.4 commit: done (`27f884d`). Next: Phase 5a, below.
+
+## Phase 5a (PR 7, `feat/004-pricing-and-quotations-5a-combination-prices`, base PR 6): tasks 5a.1, 5a.2, 5a.5, 5a.6 done; 5a.3 and 5a.4 (`MissingPrices`, E-26) ship in PR 8
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 5a.1/5a.2 | `tests/Feature/Pricing/CombinationPriceTest.php` | Integration (HTTP) | `--group=cot` 244 tests green before (Phase 4 state) | 32 tests: 1 passed (the 404 of an unknown product, vacuous before the route), 29 failed (404 instead of 302/422/403: no route), 2 errors (`PermissionName::ProductsManage` undefined: a test typo, fixed to `ProductsUpdate`; `getByName()` null on the route name) | First GREEN run 30/32; the 2 failures were `toBe` on JSON audit payloads (MySQL JSON reorders keys: `toEqual`, as noted in Phase 3). Then 32/32 | E-05 register 3 tiers then change one, comma/dot/integer input; only changed cells written (same value written as `40`, no audit, `updated_at` untouched; third identical save writes no audit at all); E-06 zero, `0,00`, negative, 3 decimals, text, exponent, plus smallest (0.01) and 2-decimal positives accepted, several invalid cells reported together with none saved, negotiation tier; DEC-COT-32 delete with audit and null over an empty cell; inactive combination; foreign combination, unknown ids, foreign tier, product without scheme, duplicate cell; size group required / foreign / unexpected and a grouped price per group; fixed scheme implicit tier; 6 malformed payloads; 404; E-07 403 audited with `pricing.view` only and with products permissions only; route declared | `AffectedPrices::sizeGroupName()` extracted so audit rows and the table share the group name; PHPStan: 4 errors (`__()` returns `array\|string`), fixed with `Lang::string()` |
+| 5a.5 | architecture suites | Refactor | green | n/a | `NoManualForbiddenTest`, `ProtectedByDefaultTest` pass in the full suite; no `abort(403)` | n/a | none |
+
+### Gate (2026-10-13)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.52s)
+- `sail artisan test`: passed, 1920 tests (1918 passed, 2 skipped, 10419 assertions)
+- Harness (no reset): `sail artisan route:list --name=pricing.products.prices` shows `PUT pricing/products/{product}/prices`.
+
+### Files
+Modified: `app/Support/Pricing/AffectedPrices.php` (`sizeGroupName()`), `lang/es/validation.php`, `routes/web.php`, `openspec/changes/004-pricing-and-quotations/tasks.md`.
+Created: `app/Actions/Pricing/SyncCombinationPrices.php`, `app/Http/Requests/Pricing/SyncCombinationPricesRequest.php`, `app/Http/Controllers/Pricing/ProductPriceController.php`, `tests/Feature/Pricing/CombinationPriceTest.php`.
+
+### Deviations from design / choices the design did not fix
+1. Request shape: `cells` (min 1) each `{combination_id, size_group_id|null, price_tier_id, price}`; `price` must be present and is a string (JSON numbers are rejected so no float travels); `null` deletes (DEC-COT-32). An empty string becomes `null` through the app middleware, so it also deletes.
+2. Error fields: foreign combination on `cells.{i}.combination_id`; unknown or foreign tier on `cells.{i}.price_tier_id`; negotiation tier on `cells.{i}.price` (as the task says); group rules on `cells.{i}.size_group_id`; a repeated cell on `cells.{i}.price_tier_id`; a product without a scheme (or whose scheme changed under the lock) on `cells`. The design only fixed `cells.{i}.price` for E-06.
+3. Cells are validated entirely before any write (one invalid cell saves nothing; all errors reported together).
+4. Lock order: the scheme row (when the product has one), then the product row, re-checking that the scheme did not change.
+5. Audit payload: `old_values` and `new_values` both carry the full `{code, size_group, tier, price}` (created: `old_values` empty; deleted: `new_values` empty). `size_group` is the sizes joined by ", " until `SizeGroupLabel` (PR 8); replace then.
+6. Tasks 5a.3 and 5a.4 (`MissingPrices`, E-26, COT-025 list flag) are not in this PR by the 2026-10-13 regrouping, so the commit cites COT-003, E-05, E-06, E-07 and DEC-COT-32 only.
+
+### Work unit evidence
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest tests/Feature/Pricing/CombinationPriceTest.php`: passed, 32 tests, 141 assertions |
+| Runtime harness | `route:list --name=pricing.products.prices`: the PUT route is listed |
+| Rollback boundary | revert `SyncCombinationPrices`, its request, `ProductPriceController`, the route and its `use`, the lang entries, `AffectedPrices::sizeGroupName` and the test file |
+
+### Size
+Authored changed lines (excluding `tasks.md`, `apply-progress.md`): about 789 (30 additions + 1 deletion in 3 modified files; 758 in 4 new files: production about 315, tests 443). Under the 1,100 split threshold; `size:exception` per the accepted 004 policy.
+
+### Remaining
+PR 8 (Phase 5b1 plus tasks 5a.3 and 5a.4): see the next section. (Earlier note: "Next: PR 8".)
+
+## Phase 5b1 + 5a.3/5a.4 (PR 8, `feat/004-pricing-and-quotations-5b1-size-group-core`, base PR 7): tasks 5b.1, 5b.2, 5a.3, 5a.4 done; gate green; NOT committed (size rule)
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 5b.1/5b.2 (label, rules, plan) | `tests/Unit/Pricing/{SizeGroupLabelTest,SizeGroupRulesTest,SizeGroupPlanTest}.php` | Unit (pure) | N/A (new) | 40 tests, 0 passed: 38 errors (`SizeGroupLabel`, `SizeGroupRules`, `SizeGroupPlan` not found) and 2 failures (an `Error` instead of `InvalidArgumentException`) | First GREEN attempt: the whole suite died silently (PHP fatal, `keptGroups()` declared twice, public accessor and private helper); fixed by renaming the helper to `matchStoredGroups`, then 39/40; the one failure was a test bug (a price without group is rightly listed when the proposal has groups), fixed in the test; then 40/40 | label: single run, runs with gaps, lone size, two neighbours, input order, palette gaps, repeated id, non numeric sizes, unknown size and empty group refused. rules: valid partitions in any order, empty list, repeated size, size left out, order of the names, both errors together, repeat inside one group, empty group, foreign size. plan: equal set, order-insensitive, DEC-COT-58 assign (one and several ungrouped sizes), move between groups, move plus join, merge, split, ungrouped to grouped (with and without prices), grouped to ungrouped, null prices left alone when ungrouping, kept group keeps its prices, one claim per stored group, empty stored group, extra size from another group, listing order, labels, token (sha256, null, order independent, value, updated_at, added/missing price, ignores kept prices) | none needed |
+| 5a.3/5a.4 | `tests/Feature/Pricing/CombinationPriceTest.php` (`E-26`) | Integration (DB, query log) | 32 tests of the file green before | 12 tests, 12 errors (`MissingPrices` not found) | 12/12 on the first run | missing tier, all priced tiers without prices and no negotiation tier, inactive ignored, complete and not-requested products left out, per-group cells, ungrouped sizes, size restriction of the combination, ungrouped combination reports no sizes, inactive grouped combination, product without scheme, many products, empty list (0 queries); every case with data asserts 2 queries | PHPStan: 4 errors (`??=` on a reference, `stdClass` rows typed as shaped objects) fixed by indexing the array directly and typing rows `stdClass` |
+| refactor | all of the above | Refactor | green | n/a | `pint`, `types:check` 0 errors; focused 52 tests green; `CombinationPriceTest` 44 green | n/a | n/a |
+
+### Gate (2026-10-13)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.25s)
+- `sail artisan test`: passed, 1972 tests (1970 passed, 2 skipped, 10556 assertions)
+- Harness: N/A (pure classes and one query class, no route); `E-26` runs `MissingPrices` against MySQL and counts the SQL statements.
+
+### Files
+Modified: `tests/Feature/Pricing/CombinationPriceTest.php` (+269: E-26 tests and their helpers), `openspec/changes/004-pricing-and-quotations/tasks.md`.
+Created: `app/Support/Pricing/{SizeGroupLabel,SizeGroupRules,SizeGroupPlan,MissingPrices}.php`, `tests/Unit/Pricing/{SizeGroupLabelTest,SizeGroupRulesTest,SizeGroupPlanTest}.php`.
+
+### Design choices and deviations
+1. `SizeGroupLabel::of(list<int> $sizeIds, array<int,string> $palette)`: the design only says "from its sizes in size-value order"; contiguity needs the sizes the combination admits, so the palette (id => name, in size order) is a parameter. Throws `InvalidArgumentException` for an empty group or a size outside the palette. The CSV normalization of "-" versus "–" is not included (CSV phase).
+2. `SizeGroupPlan::diff(stored, proposed, ungrouped, prices, palette)`: `$prices` is a list of plain rows `{id, size_group_id, tier, tier_order, price, updated_at}` (strings), not an Eloquent `Collection` as in the design signature, so the class is pure and unit-testable without the app container (`Unit` tests are plain). The Action of PR 9 maps `CombinationPrice` + tier to the rows. The extra `palette` parameter labels the dropped groups. Extra accessors: `keptGroups()` (proposed index => stored id), `droppedGroupIds()`, `newGroupIndexes()`, `deletedPriceIds()`, `requiresConfirmation()`.
+3. Prices without group are deleted whenever the proposal has groups (they cannot coexist with groups); with an empty proposal they are left alone. The listing order puts the "Sin grupo" prices first, then the stored group order, then tier order. The confirm token only hashes the deleted prices (id, price string, `updated_at`), sorted by id, so it is stable under input order and ignores kept groups.
+4. `SizeGroupRules::validate(groups, admitted)`: errors `groups` (repeated or missing sizes, one Spanish message naming the sizes) and `groups.{i}` (empty group, foreign size). Same shape as `SchemeRules`.
+5. `MissingPrices::forProducts()` returns `array<productId, list<{combination_id, code, missing: list<{size_group_id, price_tier_id, tier}>, ungrouped_sizes: array<sizeId, name>}>>`, only incomplete combinations. Admitted sizes follow the `ProductPresenter::stockEditor` rule (restriction of the combination on the size attribute, otherwise every allowed size of the product's size order attribute). Products without a scheme are not listed (they are not quotable for another reason, COT-025 first clause). Two raw queries (`DB::table`), no Eloquent hydration.
+6. `AffectedPrices::sizeGroupName()` (sizes joined by ", ") is NOT replaced by `SizeGroupLabel` in this PR: tasks.md does not say where, and a faithful label needs the admitted sizes of the combination, which PR 9 loads for the Actions. Replace it there (the audits of `SyncCombinationPrices` and the scheme changes then use the label).
+7. Process slip to disclose: the E-26 tests were appended to `CombinationPriceTest.php` with a shell heredoc (one `cat >>` command) instead of the Edit tool. The content is a pure append reviewed afterwards; nothing else was edited that way.
+8. `.codegraph/` was created by `gentle-ai codegraph init` (project rule) and is untracked; it is not part of the PR files.
+
+### Work unit evidence
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest --group=cot --filter='SizeGroupPlan\|SizeGroupLabel\|SizeGroupRules\|E-26 \|DEC-COT-53\|DEC-COT-58\|E-08 '`: passed, 52 tests, 137 assertions; `CombinationPriceTest.php`: 44 passed |
+| Runtime harness | N/A: pure classes and one query class, no route; E-26 exercises the query on MySQL |
+| Rollback boundary | revert the four Support classes, the three unit test files and the E-26 block (plus its imports) of `CombinationPriceTest.php` |
+
+### Size and proposed split (commit withheld)
+Authored changed lines (excluding `tasks.md`, `apply-progress.md`): **1,271** (269 additions in the modified test file; new files: production 549 = `SizeGroupPlan` 221, `MissingPrices` 171, `SizeGroupRules` 84, `SizeGroupLabel` 73; tests 453 = `SizeGroupPlanTest` 312, `SizeGroupRulesTest` 77, `SizeGroupLabelTest` 64). The estimate was ~700; the tests are the bulk (722). Over the 1,100 rule, so nothing was committed. Proposed split, both halves already green independently (no shared code between them):
+- **PR 8a** (~830): `SizeGroupLabel`, `SizeGroupRules`, `SizeGroupPlan` and their three unit test files (tasks 5b.1, 5b.2). Commit: `feat(004): derivar etiquetas, validar particiones y planificar el cambio de grupos de talla [DEC-COT-53, DEC-COT-58, E-08]`.
+- **PR 8b** (~440): `MissingPrices` and the E-26 block of `CombinationPriceTest.php` (tasks 5a.3, 5a.4). Commit: `feat(004): marcar combinaciones activas con precios y tallas sin definir [COT-025, E-26]`.
+Everything is in the working tree on `feat/004-pricing-and-quotations-5b1-size-group-core`; 8b would branch from 8a (PR 9 then targets 8b).
+
+### Remaining
+Split applied: PR 8a `180ec79`, PR 8b `ad864b8`. PR 9 (5b.3-5b.7): see the next section.
+
+## Phase 5b2 (PR 9a, `feat/004-pricing-and-quotations-5b2-size-group-endpoints`, base PR 8b): tasks 5b.3, 5b.4, 5b.6 done; 5b.7 gate green; split applied (5b.5 ships in PR 9b)
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 5b.3/5b.4 (E-08, E-70, DEC-COT-53/58) | `tests/Feature/Pricing/SizeGroupTest.php` | Integration (HTTP) | `tests/Feature/Products` + `Pricing`: 707 tests (706 passed, 1 skipped) green before | 30 tests (25 after the split; the figures below are from the unsplit run): 2 passed (404 of an unknown combination, vacuous before the route; the "edit removes no size" regression), 23 failed (404 instead of 302/422/403/200), 5 errors (route names null, `getByName()`) | 28/30 on the first GREEN run (one failure: the preview test counted the test user and session inserts as preview writes; one error: a test built two fixtures and created `Talla` twice), 29/30 after fixing the fixture, 30/30 after excluding the framework's own inserts; both fixes were in the tests, not the code | valid groups 28–36/38–44 with order and audit; repeats 36 and leaves 44 out (message asserted); empty group and foreign size; restricted combination admits a subset; product without the size order attribute (axis, then absent); 5 malformed payloads; 404; identical groups = no write, no audit; preview lists 3 prices with display `1.150,00`, no lock, no write, no audit; preview without prices; PUT without token 422; PUT with token (locks, deletes, one audit, `MissingPrices` 6 cells); stale token after an edit and after an added price, then fresh token succeeds; remove groups (order group, tier); merge; DEC-COT-58 assign keeps ids and prices; move drops both groups; 403 x3 audited; routes | `SizeGroupState`, `AdmittedSizes` extracted; PHPStan: 7 errors fixed by real typing |
+| 5a (label) | `tests/Feature/Pricing/CombinationPriceTest.php` | Integration | 44 tests green | the grouped-price test expected the derived label `S–M`/`L`: failed with `S, M` | passed after `AffectedPrices::sizeGroupLabel` | two groups; scheme-change audit also asserts `28–36` (SizeGroupTest) | none |
+| 5b.5 (DEC-COT-48) | n/a | n/a | n/a | moved to PR 9b | n/a | n/a | n/a |
+| 5b.6 | all | Refactor | green | n/a | `composer types:check` 0 errors; `app/Support/Products/Selection` untouched | n/a | n/a |
+
+### Gate (PR 9a, 2026-10-14, after the split)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.28s)
+- `sail artisan test`: passed, 1997 tests (1995 passed, 2 skipped, 10726 assertions)
+- Harness (no reset, from the unsplit run): `sail artisan route:list --name=pricing.size-groups` lists `POST pricing/combinations/{combination}/size-groups/preview` and `PUT pricing/combinations/{combination}/size-groups`.
+
+### Files (PR 9a)
+Modified: `app/Actions/Pricing/SyncCombinationPrices.php`, `app/Support/Pricing/AffectedPrices.php`, `lang/es/validation.php`, `routes/web.php`, `tests/Feature/Pricing/CombinationPriceTest.php`, `openspec/changes/004-pricing-and-quotations/tasks.md`.
+Created: `app/Actions/Pricing/{PreviewSizeGroups,SyncSizeGroups}.php`, `app/Http/Controllers/Pricing/SizeGroupController.php`, `app/Http/Requests/Pricing/SizeGroupsRequest.php`, `app/Support/Pricing/{AdmittedSizes,SizeGroupState}.php`, `tests/Feature/Pricing/SizeGroupTest.php`.
+
+### Design choices and deviations
+1. `SizeGroupLabel` replaces `AffectedPrices::sizeGroupName()`: `sizeGroupLabel(?SizeGroup, palette)`. The palette (what the combination admits) comes from the new `AdmittedSizes::forCombinations()` (two queries for any number of combinations). The label is strict: a group with no sizes, or sizes outside the palette, throws `InvalidArgumentException`; the existing grouped-price test was updated to declare sizes (its second group had none). `SyncCombinationPrices` labels only the groups of cells it writes, so a rejected cell never reaches the label.
+2. `SizeGroupState` (new, `app/Support/Pricing/`) loads palette, stored groups and price rows once for the preview and the save (`loadValidated()` applies `SizeGroupRules`); the Actions stay short and share one answer. Palette order, not stored order, orders the sizes inside a group.
+3. Request fields: `groups` (list of lists of size ids; an empty list removes the grouping; required) and optional `confirm_token`. Preview is `POST` with the same body. Errors: `groups` (partition errors, "Confirme la eliminación de los precios afectados.", "Los precios cambiaron; revise de nuevo los grupos.", "Esta combinación no admite grupos de talla."), `groups.{i}`.
+4. A combination whose product does not declare Talla as an **order** attribute is refused with 422 `groups` even for an empty list (nothing to group, nothing to remove).
+5. Saving groups identical to the stored ones (same sizes, same order) returns without writing or auditing. A token sent when nothing is deleted is ignored.
+6. Audit `pricing.size_groups_updated` (subject: the combination): `old_values {partition, deleted_prices}` and `new_values {partition}` with partitions as size names per group (palette order); `deleted_prices` rows are `{code, size_group, tier, price}` like every other 004 audit (design Decision 10 text says `{group, tier, price}`; the audit table does not fix the keys). DEC-COT-48 audits add `removed_sizes` to `old_values` and `context.reason = size_removed` (plus the import marker when the caller has one).
+7. The preview answers `group` as the label or `null` (the UI shows "Sin grupo"), `price` as `{value, display}` (`40.00` / `40,00`, `1150.00` / `1.150,00`).
+8. (PR 9b, not in PR 9a) `SizeGroupMaintenance` has `removeSizes()` (as designed) and `restrictTo(Combination, restrictions, actor)`, which `UpdateCombination` calls: it finds the sizes the saved restriction no longer admits (`AdmittedSizes::narrowedBy`) and skips every query when the combination has no groups. Both 003 hooks run **before** the change is persisted, so the groups are labelled against the sizes they were defined for.
+9. `SyncSizeGroups` locks only the product row (the lock that price writes and 003 combination writes take); it does not read tiers, so the scheme lock is not needed (no deadlock: SyncCombinationPrices takes scheme then product).
+
+### Work unit evidence
+| Evidence | Value |
+|---|---|
+| Focused test | `sail pest tests/Feature/Pricing/SizeGroupTest.php tests/Feature/Pricing/CombinationPriceTest.php`: passed, 74 tests; `sail pest tests/Feature/Products tests/Feature/Pricing tests/Unit`: 1190 passed, 1 skipped |
+| Runtime harness | `route:list --name=pricing.size-groups`: both routes listed |
+| Rollback boundary | revert the 3 Actions, request, controller, 2 routes and the `use`, `AdmittedSizes`, `SizeGroupState`, the 3 lang lines, the two 003 hook calls (and constructor parameters), `sizeGroupLabel` in `AffectedPrices`/`SyncCombinationPrices`, and the test edits |
+
+### Size and split (applied)
+The unsplit work was 1,427 authored lines (below); it was split as proposed. PR 9a (this commit) holds about 1,073 (67 changed in 5 modified files; 1,006 in 6 new files); PR 9b holds the rest. Details of the unsplit measurement: authored changed lines (excluding `tasks.md`, `apply-progress.md`): **1,427** (101 changed in 7 modified files: 72 additions, 29 deletions; 1,326 in 8 new files: production 649 = `SizeGroupMaintenance` 157, `SizeGroupState` 141, `SyncSizeGroups` 118, `AdmittedSizes` 110, `SizeGroupsRequest` 51, `PreviewSizeGroups` 38, `SizeGroupController` 34; tests 677). The estimate was ~550; the endpoint/state classes and the 30-test file are the bulk. Over the 1,100 rule, so nothing was committed. Proposed split (by construction 9a does not need 9b; not executed separately):
+- **PR 9a** (~1,080): everything except DEC-COT-48: `PreviewSizeGroups`, `SyncSizeGroups`, `SizeGroupState`, `AdmittedSizes::forCombinations`, request, controller, routes, lang, the `SizeGroupLabel` replacement (`AffectedPrices`, `SyncCombinationPrices`, `CombinationPriceTest` edit) and the SizeGroupTest sections E-08, E-70, DEC-COT-58, authorization and routes (tasks 5b.3, 5b.4 and 5b.6). Commit: `feat(004): definir grupos de talla con confirmación de eliminación de precios [COT-004, E-08, E-70, DEC-COT-53, DEC-COT-58]`.
+- **PR 9b** (~350): `SizeGroupMaintenance`, `AdmittedSizes::narrowedBy`, the two 003 hooks and the 5 DEC-COT-48 tests with `sgEditor` and `sgStructure` (task 5b.5). Commit: `feat(004): sacar la talla de su grupo de talla al quitarla del producto o de la combinación [COT-004, DEC-COT-48]`.
+PR 9a is committed (`588d48c`) on `feat/004-pricing-and-quotations-5b2-size-group-endpoints`; PR 9b branches from it as `feat/004-pricing-and-quotations-5b2b-size-group-maintenance`.
+
+## Phase 5b2b (PR 9b, `feat/004-pricing-and-quotations-5b2b-size-group-maintenance`, base PR 9a): task 5b.5 done; gate green
+
+Restores the DEC-COT-48 content withheld from PR 9a, identical to the full Phase 5b2 work: `SizeGroupMaintenance` (new), `AdmittedSizes::narrowedBy`, the two 003 hooks (`SyncProductAttributes`, `UpdateCombination`, with their constructor parameter) and the 5 DEC-COT-48 tests with `sgEditor` and `sgStructure` in `SizeGroupTest.php`. TDD evidence and design choice 8 are in the Phase 5b2 section above (RED: 4 of the 5 DEC-COT-48 tests failed before the hooks; the fifth is a regression guard).
+
+### Gate (PR 9b, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.39s)
+- `sail artisan test`: passed, 2002 tests (2000 passed, 2 skipped, 10758 assertions)
+
+### Size
+About 358 authored changed lines (excluding `tasks.md`, `apply-progress.md`): 195 additions and 6 deletions in 4 modified files, 157 in `SizeGroupMaintenance`.
+
+### Remaining
+Phase 6 (PR 10).
