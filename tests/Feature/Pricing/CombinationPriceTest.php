@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AttributeSpecialUse;
 use App\Enums\AuditAction;
 use App\Enums\CatalogStatus;
 use App\Enums\PermissionName;
@@ -7,17 +8,21 @@ use App\Enums\PriceSchemeType;
 use App\Enums\PriceTierKind;
 use App\Models\AttributeValue;
 use App\Models\AuditLog;
+use App\Models\CatalogAttribute;
 use App\Models\CatalogCode;
 use App\Models\Combination;
 use App\Models\CombinationPrice;
 use App\Models\PriceScheme;
 use App\Models\PriceTier;
 use App\Models\Product;
+use App\Models\ProductAttribute;
 use App\Models\ProductCategory;
 use App\Models\SizeGroup;
 use App\Models\User;
+use App\Support\Pricing\MissingPrices;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 
 // COT-003 (E-05, E-06, E-07, DEC-COT-32): the price table of one product, saved in one request.
@@ -336,11 +341,13 @@ it('COT-004 requires the size group of a grouped combination and prices each gro
     $small = SizeGroup::factory()->create(['combination_id' => $combination->id, 'sort_order' => 1]);
     $large = SizeGroup::factory()->create(['combination_id' => $combination->id, 'sort_order' => 2]);
 
-    $names = ['S', 'M'];
+    $sizes = missingDeclareSizes($product, ['S', 'M', 'L']);
 
-    foreach ($names as $name) {
-        $small->sizes()->attach(AttributeValue::factory()->create(['name' => $name])->id, ['combination_id' => $combination->id]);
+    foreach (['S', 'M'] as $name) {
+        $small->sizes()->attach($sizes[$name], ['combination_id' => $combination->id]);
     }
+
+    $large->sizes()->attach($sizes['L'], ['combination_id' => $combination->id]);
 
     savePriceTable($product, [priceCell($combination, $detal, '40.00')])
         ->assertUnprocessable()
@@ -348,12 +355,12 @@ it('COT-004 requires the size group of a grouped combination and prices each gro
 
     savePriceTable($product, [priceCell($combination, $detal, '40.00', $small), priceCell($combination, $detal, '44.00', $large)])->assertRedirect();
 
-    $audit = priceAuditRows(AuditAction::PriceCreated)->first();
+    $audits = priceAuditRows(AuditAction::PriceCreated);
 
+    // The audit names a group by its derived label (SizeGroupLabel): a run of neighbours is "S–M".
     expect(CombinationPrice::query()->where('size_group_id', $small->id)->sole()->unit_price->toString())->toBe('40.00')
         ->and(CombinationPrice::query()->where('size_group_id', $large->id)->sole()->unit_price->toString())->toBe('44.00')
-        ->and($audit->new_values['size_group'])->toBeString()->toContain('S')
-        ->and($audit->new_values['size_group'])->toContain('M');
+        ->and($audits->pluck('new_values.size_group')->all())->toBe(['S–M', 'L']);
 });
 
 it('COT-004 rejects a size group of another combination and a size group on an ungrouped combination', function () {
@@ -440,4 +447,268 @@ it('COT-003 declares the price table route for a product', function () {
 
     expect($route->uri())->toBe('pricing/products/{product}/prices')
         ->and($route->methods())->toContain('PUT');
+});
+
+// COT-025 (E-26): the price list marks the active combinations that still miss a price. The list page
+// ships later, so the query is tested directly; it must answer for many products in two queries.
+
+/**
+ * Declares Talla as an order attribute of the product with these allowed sizes, in this order.
+ *
+ * @param  list<string>  $names
+ * @return array<string, int> size name => value id
+ */
+function missingDeclareSizes(Product $product, array $names): array
+{
+    $attribute = CatalogAttribute::query()->where('special_use', AttributeSpecialUse::Size->value)->first()
+        ?? CatalogAttribute::factory()->size()->create();
+    $declared = ProductAttribute::factory()->order()->create(['product_id' => $product->id, 'catalog_attribute_id' => $attribute->id]);
+    $ids = [];
+
+    foreach ($names as $position => $name) {
+        $value = AttributeValue::query()->where('catalog_attribute_id', $attribute->id)->where('name', $name)->first()
+            ?? AttributeValue::factory()->create(['catalog_attribute_id' => $attribute->id, 'name' => $name, 'sort_order' => $position + 1]);
+        $declared->allowedValues()->attach($value->id);
+        $ids[$name] = $value->id;
+    }
+
+    return $ids;
+}
+
+/**
+ * A size group of the combination holding the given sizes.
+ *
+ * @param  list<int>  $sizeIds
+ */
+function missingGroup(Combination $combination, int $order, array $sizeIds): SizeGroup
+{
+    $group = SizeGroup::factory()->create(['combination_id' => $combination->id, 'sort_order' => $order]);
+
+    foreach ($sizeIds as $sizeId) {
+        $group->sizes()->attach($sizeId, ['combination_id' => $combination->id]);
+    }
+
+    return $group;
+}
+
+function missingPrice(Combination $combination, PriceTier $tier, ?SizeGroup $group = null): void
+{
+    CombinationPrice::factory()->create(['combination_id' => $combination->id, 'price_tier_id' => $tier->id, 'size_group_id' => $group?->id]);
+}
+
+/**
+ * Runs the query and returns its answer with the number of SQL statements it issued.
+ *
+ * @param  list<int>  $productIds
+ * @return array{0: array<int, list<array<string, mixed>>>, 1: int}
+ */
+function missingPricesWithQueryCount(array $productIds): array
+{
+    DB::enableQueryLog();
+    DB::flushQueryLog();
+    $missing = MissingPrices::forProducts($productIds);
+    $count = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    return [$missing, $count];
+}
+
+it('E-26 reports the tier a combination has no price in, in two queries', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    $missing = priceTableCombination($product, '110-1');
+    $complete = priceTableCombination($product, '110-2');
+    $detal = priceTableTier($scheme, 'Detal');
+    $intermedio = priceTableTier($scheme, 'Intermedio');
+    $mayor = priceTableTier($scheme, 'Mayor');
+
+    missingPrice($missing, $detal);
+    missingPrice($missing, $mayor);
+
+    foreach ([$detal, $intermedio, $mayor] as $tier) {
+        missingPrice($complete, $tier);
+    }
+
+    [$answer, $queries] = missingPricesWithQueryCount([$product->id]);
+
+    expect($queries)->toBe(2)
+        ->and(array_keys($answer))->toBe([$product->id])
+        ->and($answer[$product->id])->toHaveCount(1)
+        ->and($answer[$product->id][0])->toBe([
+            'combination_id' => $missing->id,
+            'code' => '110-1',
+            'missing' => [['size_group_id' => null, 'price_tier_id' => $intermedio->id, 'tier' => 'Intermedio']],
+            'ungrouped_sizes' => [],
+        ]);
+});
+
+it('E-26 lists every priced tier of a combination without prices and never the negotiation tier', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    $combination = priceTableCombination($product, '110-1');
+
+    [$answer] = missingPricesWithQueryCount([$product->id]);
+
+    expect(array_column($answer[$product->id][0]['missing'], 'tier'))->toBe(['Detal', 'Intermedio', 'Mayor'])
+        ->and($answer[$product->id][0]['combination_id'])->toBe($combination->id);
+});
+
+it('E-26 ignores inactive combinations', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    $active = priceTableCombination($product, '110-1');
+    priceTableCombination($product, '110-2', CatalogStatus::Inactive);
+
+    [$answer] = missingPricesWithQueryCount([$product->id]);
+
+    expect(array_column($answer[$product->id], 'combination_id'))->toBe([$active->id]);
+});
+
+it('E-26 leaves out the products whose combinations are all complete and the products not asked for', function () {
+    $scheme = priceTableScheme();
+    $complete = priceTableProduct($scheme);
+    $incomplete = priceTableProduct($scheme);
+    $notAsked = priceTableProduct($scheme);
+    $done = priceTableCombination($complete, '110-1');
+    priceTableCombination($incomplete, '120-1');
+    priceTableCombination($notAsked, '130-1');
+
+    foreach (['Detal', 'Intermedio', 'Mayor'] as $label) {
+        missingPrice($done, priceTableTier($scheme, $label));
+    }
+
+    [$answer, $queries] = missingPricesWithQueryCount([$complete->id, $incomplete->id]);
+
+    expect($queries)->toBe(2)
+        ->and(array_keys($answer))->toBe([$incomplete->id]);
+});
+
+it('E-26 reports each priced tier without a price in each size group', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    $sizes = missingDeclareSizes($product, ['28', '30', '32', '34']);
+    $combination = priceTableCombination($product, '184');
+    $small = missingGroup($combination, 1, [$sizes['28'], $sizes['30']]);
+    $large = missingGroup($combination, 2, [$sizes['32'], $sizes['34']]);
+    $detal = priceTableTier($scheme, 'Detal');
+
+    foreach (['Detal', 'Intermedio', 'Mayor'] as $label) {
+        missingPrice($combination, priceTableTier($scheme, $label), $small);
+    }
+
+    missingPrice($combination, $detal, $large);
+
+    [$answer, $queries] = missingPricesWithQueryCount([$product->id]);
+
+    expect($queries)->toBe(2)
+        ->and($answer[$product->id][0]['missing'])->toBe([
+            ['size_group_id' => $large->id, 'price_tier_id' => priceTableTier($scheme, 'Intermedio')->id, 'tier' => 'Intermedio'],
+            ['size_group_id' => $large->id, 'price_tier_id' => priceTableTier($scheme, 'Mayor')->id, 'tier' => 'Mayor'],
+        ])
+        ->and($answer[$product->id][0]['ungrouped_sizes'])->toBe([]);
+});
+
+it('E-26 reports the admitted sizes without a group of a grouped combination', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    $sizes = missingDeclareSizes($product, ['28', '30', '32', '34']);
+    $combination = priceTableCombination($product, '184');
+    $small = missingGroup($combination, 1, [$sizes['28']]);
+    $large = missingGroup($combination, 2, [$sizes['30']]);
+
+    foreach ([$small, $large] as $group) {
+        foreach (['Detal', 'Intermedio', 'Mayor'] as $label) {
+            missingPrice($combination, priceTableTier($scheme, $label), $group);
+        }
+    }
+
+    [$answer, $queries] = missingPricesWithQueryCount([$product->id]);
+
+    expect($queries)->toBe(2)
+        ->and($answer[$product->id])->toHaveCount(1)
+        ->and($answer[$product->id][0]['missing'])->toBe([])
+        ->and($answer[$product->id][0]['ungrouped_sizes'])->toBe([$sizes['32'] => '32', $sizes['34'] => '34']);
+});
+
+it('E-26 judges the admitted sizes by the restriction of the combination when it has one', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    $sizes = missingDeclareSizes($product, ['28', '30', '32', '34']);
+    $attributeId = AttributeValue::query()->findOrFail($sizes['28'])->catalog_attribute_id;
+    $combination = priceTableCombination($product, '184');
+    $combination->values()->attach([$sizes['28'], $sizes['30'], $sizes['32']], ['catalog_attribute_id' => $attributeId]);
+    $group = missingGroup($combination, 1, [$sizes['28']]);
+
+    foreach (['Detal', 'Intermedio', 'Mayor'] as $label) {
+        missingPrice($combination, priceTableTier($scheme, $label), $group);
+    }
+
+    [$answer] = missingPricesWithQueryCount([$product->id]);
+
+    // 34 is allowed by the product but not by the combination: only 30 and 32 miss a group.
+    expect($answer[$product->id][0]['ungrouped_sizes'])->toBe([$sizes['30'] => '30', $sizes['32'] => '32']);
+});
+
+it('E-26 does not report sizes of a combination without groups: they take the ungrouped price', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    missingDeclareSizes($product, ['28', '30']);
+    $combination = priceTableCombination($product, '184');
+
+    foreach (['Detal', 'Intermedio', 'Mayor'] as $label) {
+        missingPrice($combination, priceTableTier($scheme, $label));
+    }
+
+    [$answer, $queries] = missingPricesWithQueryCount([$product->id]);
+
+    expect($queries)->toBe(2)
+        ->and($answer)->toBe([]);
+});
+
+it('E-26 does not report an inactive grouped combination with sizes and prices missing', function () {
+    $scheme = priceTableScheme();
+    $product = priceTableProduct($scheme);
+    $sizes = missingDeclareSizes($product, ['28', '30']);
+    $combination = priceTableCombination($product, '184', CatalogStatus::Inactive);
+    missingGroup($combination, 1, [$sizes['28']]);
+
+    [$answer] = missingPricesWithQueryCount([$product->id]);
+
+    expect($answer)->toBe([]);
+});
+
+it('E-26 does not report a product without a scheme: its lines are not quotable for that other reason', function () {
+    $product = priceTableProduct(null);
+    $sizes = missingDeclareSizes($product, ['28', '30']);
+    $combination = priceTableCombination($product, '110-1');
+    missingGroup($combination, 1, [$sizes['28']]);
+
+    [$answer, $queries] = missingPricesWithQueryCount([$product->id]);
+
+    expect($queries)->toBe(2)
+        ->and($answer)->toBe([]);
+});
+
+it('E-26 answers many products with the same two queries and keeps each one apart', function () {
+    $scheme = priceTableScheme();
+    $first = priceTableProduct($scheme);
+    $second = priceTableProduct($scheme);
+    $firstCombination = priceTableCombination($first, '110-1');
+    $secondCombination = priceTableCombination($second, '120-1');
+    $sizes = missingDeclareSizes($second, ['28', '30']);
+    missingGroup($secondCombination, 1, [$sizes['28']]);
+
+    [$answer, $queries] = missingPricesWithQueryCount([$first->id, $second->id]);
+
+    expect($queries)->toBe(2)
+        ->and(array_column($answer[$first->id], 'combination_id'))->toBe([$firstCombination->id])
+        ->and(array_column($answer[$second->id], 'combination_id'))->toBe([$secondCombination->id])
+        ->and($answer[$second->id][0]['ungrouped_sizes'])->toBe([$sizes['30'] => '30']);
+});
+
+it('E-26 runs no query for an empty list of products', function () {
+    [$answer, $queries] = missingPricesWithQueryCount([]);
+
+    expect($answer)->toBe([])
+        ->and($queries)->toBe(0);
 });

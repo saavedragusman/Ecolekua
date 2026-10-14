@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\SizeGroup;
 use App\Models\User;
 use App\Support\Audit\AuditOrigin;
+use App\Support\Pricing\AdmittedSizes;
 use App\Support\Pricing\AffectedPrices;
 use App\Support\Pricing\InvalidAmount;
 use App\Support\Pricing\Money;
@@ -75,6 +76,7 @@ class SyncCombinationPrices
                 ->get()
                 ->keyBy('id');
             $groups = SizeGroup::query()->whereIn('combination_id', $combinations->keys())->with('sizes')->get()->keyBy('id');
+            $palettes = AdmittedSizes::forCombinations(array_values(array_map(intval(...), $combinations->keys()->all())));
             $stored = CombinationPrice::query()->whereIn('combination_id', $combinations->keys())->get()->keyBy(
                 fn (CombinationPrice $price): string => self::cellKey($price->combination_id, $price->price_tier_id, $price->size_group_id),
             );
@@ -127,17 +129,18 @@ class SyncCombinationPrices
                 $combination = $combinations->get($cell['combination_id']);
                 $tier = $tiers->get($cell['price_tier_id']);
                 $group = isset($cell['size_group_id']) ? $groups->get($cell['size_group_id']) : null;
+                $label = AffectedPrices::sizeGroupLabel($group, $palettes[$combination->id] ?? []);
                 $existing = $stored->get(self::cellKey($combination->id, $tier->id, $group?->id));
                 $amount = $amounts[$index];
 
                 if ($amount === null) {
                     if ($existing !== null) {
-                        $this->delete($existing, $combination, $group, $tier, $actor, $origin, $auditContext);
+                        $this->delete($existing, $combination, $label, $tier, $actor, $origin, $auditContext);
                     }
                 } elseif ($existing === null) {
-                    $this->create($combination, $group, $tier, $amount, $actor, $origin, $auditContext);
+                    $this->create($combination, $group, $label, $tier, $amount, $actor, $origin, $auditContext);
                 } elseif (! $existing->unit_price->isEqualTo($amount)) {
-                    $this->update($existing, $combination, $group, $tier, $amount, $actor, $origin, $auditContext);
+                    $this->update($existing, $combination, $label, $tier, $amount, $actor, $origin, $auditContext);
                 }
             }
         });
@@ -190,7 +193,7 @@ class SyncCombinationPrices
     /**
      * @param  array<string, mixed>  $auditContext
      */
-    private function create(Combination $combination, ?SizeGroup $group, PriceTier $tier, BigDecimal $amount, User $actor, ?AuditOrigin $origin, array $auditContext): void
+    private function create(Combination $combination, ?SizeGroup $group, ?string $groupLabel, PriceTier $tier, BigDecimal $amount, User $actor, ?AuditOrigin $origin, array $auditContext): void
     {
         $price = CombinationPrice::query()->create([
             'combination_id' => $combination->id,
@@ -200,27 +203,27 @@ class SyncCombinationPrices
             'updated_by' => $actor->id,
         ]);
 
-        $this->audit->handle(AuditAction::PriceCreated, $actor, $price, newValues: self::snapshot($combination, $group, $tier, $amount), context: $auditContext, origin: $origin);
+        $this->audit->handle(AuditAction::PriceCreated, $actor, $price, newValues: self::snapshot($combination, $groupLabel, $tier, $amount), context: $auditContext, origin: $origin);
     }
 
     /**
      * @param  array<string, mixed>  $auditContext
      */
-    private function update(CombinationPrice $price, Combination $combination, ?SizeGroup $group, PriceTier $tier, BigDecimal $amount, User $actor, ?AuditOrigin $origin, array $auditContext): void
+    private function update(CombinationPrice $price, Combination $combination, ?string $groupLabel, PriceTier $tier, BigDecimal $amount, User $actor, ?AuditOrigin $origin, array $auditContext): void
     {
-        $previous = self::snapshot($combination, $group, $tier, $price->unit_price);
+        $previous = self::snapshot($combination, $groupLabel, $tier, $price->unit_price);
 
         $price->update(['unit_price' => Money::toStorage($amount, 2), 'updated_by' => $actor->id]);
 
-        $this->audit->handle(AuditAction::PriceUpdated, $actor, $price, oldValues: $previous, newValues: self::snapshot($combination, $group, $tier, $amount), context: $auditContext, origin: $origin);
+        $this->audit->handle(AuditAction::PriceUpdated, $actor, $price, oldValues: $previous, newValues: self::snapshot($combination, $groupLabel, $tier, $amount), context: $auditContext, origin: $origin);
     }
 
     /**
      * @param  array<string, mixed>  $auditContext
      */
-    private function delete(CombinationPrice $price, Combination $combination, ?SizeGroup $group, PriceTier $tier, User $actor, ?AuditOrigin $origin, array $auditContext): void
+    private function delete(CombinationPrice $price, Combination $combination, ?string $groupLabel, PriceTier $tier, User $actor, ?AuditOrigin $origin, array $auditContext): void
     {
-        $previous = self::snapshot($combination, $group, $tier, $price->unit_price);
+        $previous = self::snapshot($combination, $groupLabel, $tier, $price->unit_price);
 
         $price->delete();
 
@@ -232,11 +235,11 @@ class SyncCombinationPrices
      *
      * @return array{code: ?string, size_group: ?string, tier: string, price: string}
      */
-    private static function snapshot(Combination $combination, ?SizeGroup $group, PriceTier $tier, BigDecimal $amount): array
+    private static function snapshot(Combination $combination, ?string $groupLabel, PriceTier $tier, BigDecimal $amount): array
     {
         return [
             'code' => $combination->code,
-            'size_group' => AffectedPrices::sizeGroupName($group),
+            'size_group' => $groupLabel,
             'tier' => $tier->label,
             'price' => Money::toStorage($amount, 2),
         ];

@@ -12,8 +12,7 @@ use Illuminate\Validation\ValidationException;
  * the answer given when the change was not confirmed. One row per price, with the strings the audit
  * keeps under `deleted_prices` (`{code, size_group, tier, price}`, money as a canonical string).
  *
- * `size_group` is the sizes of the group joined by ", " until the size group label arrives with the
- * size groups slice (COT-004); an ungrouped price has `null`.
+ * `size_group` is the derived label of the group (`SizeGroupLabel`, COT-004); an ungrouped price has `null`.
  */
 final class AffectedPrices
 {
@@ -59,6 +58,7 @@ final class AffectedPrices
             ->orderBy('id')
             ->get();
 
+        $palettes = AdmittedSizes::forCombinations(array_values(array_unique(array_map(fn (CombinationPrice $price): int => $price->combination_id, $prices->all()))));
         $rows = [];
 
         foreach ($prices as $price) {
@@ -66,7 +66,7 @@ final class AffectedPrices
                 'id' => $price->id,
                 'product_id' => $price->combination->product_id,
                 'code' => $price->combination->code,
-                'size_group' => self::sizeGroupName($price->sizeGroup),
+                'size_group' => self::sizeGroupLabel($price->sizeGroup, $palettes[$price->combination_id] ?? []),
                 'tier' => $price->tier->label,
                 'price' => Money::toStorage($price->unit_price, 2),
             ];
@@ -76,12 +76,15 @@ final class AffectedPrices
     }
 
     /**
-     * How the audit names a size group until `SizeGroupLabel` arrives with the size groups slice: the
-     * sizes of the group joined by ", " (`null` for an ungrouped price). The group needs its `sizes` loaded.
+     * How the audits name a size group: its derived label, such as "28–36" (`null` for an ungrouped
+     * price). The group needs its `sizes` loaded; `$palette` is what its combination admits
+     * (`AdmittedSizes`).
+     *
+     * @param  array<int, string>  $palette  size value id => name, in size order
      */
-    public static function sizeGroupName(?SizeGroup $group): ?string
+    public static function sizeGroupLabel(?SizeGroup $group, array $palette): ?string
     {
-        return $group?->sizes->pluck('name')->implode(', ');
+        return $group === null ? null : SizeGroupLabel::of(array_values(array_map(intval(...), $group->sizes->modelKeys())), $palette);
     }
 
     /**
