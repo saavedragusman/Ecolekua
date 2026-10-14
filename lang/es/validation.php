@@ -79,6 +79,8 @@ return [
     'size_groups_prices_changed' => 'Los precios cambiaron; revise de nuevo los grupos.',
     'price_invalid' => 'El precio debe ser un monto mayor que cero con a lo sumo 2 decimales.',
     'price_cell_duplicate' => 'Esta celda aparece más de una vez en la solicitud.',
+    'combo_price_component_foreign' => 'El componente no pertenece a este combo.',
+    'combo_price_component_duplicate' => 'Este componente aparece más de una vez en la solicitud.',
     'offered_colors_invalid' => 'Solo se pueden elegir valores del atributo de color.',
     'offered_colors_inactive' => 'No se puede ofrecer un color inactivo.',
 

@@ -14,6 +14,7 @@ use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Pricing\ComboPriceController;
 use App\Http\Controllers\Pricing\PriceSchemeController;
 use App\Http\Controllers\Pricing\ProductPriceController;
 use App\Http\Controllers\Pricing\ProductSchemeController;
@@ -172,6 +173,9 @@ Route::put('/pricing/products/{product}/scheme', [ProductSchemeController::class
 
 // Price table of a product (COT-003): one save for every combination, tier and size group.
 Route::put('/pricing/products/{product}/prices', [ProductPriceController::class, 'update'])->whereNumber('product')->name('pricing.products.prices.update');
+
+// Component prices of a combo (COT-005): one save for every component; the combo price is never stored.
+Route::put('/pricing/combos/{combo}/prices', [ComboPriceController::class, 'update'])->whereNumber('combo')->name('pricing.combos.prices.update');
 
 // Size groups of a combination (COT-004, E-70): the preview is read-only and returns the confirmation
 // token the PUT needs when the change deletes prices.

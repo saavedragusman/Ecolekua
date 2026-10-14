@@ -341,3 +341,31 @@ About 358 authored changed lines (excluding `tasks.md`, `apply-progress.md`): 19
 
 ### Remaining
 Phase 6 (PR 10).
+
+## Phase 6a (PR 10, `feat/004-pricing-and-quotations-6a-combo-item-prices`, base PR 9b): price half of tasks 6.1/6.2 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 6.1 (prices) | `tests/Feature/Pricing/ComboItemPriceTest.php` | Feature (HTTP) | new file | 22 failed + 3 errors: route absent (404), `getByName` null; 2 fixture collisions fixed (unique combo/product names) | 26/26 passed, 102 assertions | create/update/delete audit snapshots, component number by combo order (not id), unchanged value `22,5 = 22.50` writes nothing, 6 invalid amounts, foreign component, duplicate, inactive combo, malformed payloads, 404, 403 audited, 403 with product permissions only | none needed |
+| 6.2 (prices) | — | — | — | — | `SyncComboItemPrices`, `SyncComboItemPricesRequest`, `ComboPriceController`, route `PUT /pricing/combos/{combo}/prices`, 2 lang lines | — | — |
+
+Design choices: the audit `component` is the 1-based number of the component in the combo order (`sort_order`, then id), the same "número de componente" the price import uses (spec §COT-028 columns); `product` is the product name (products have no code). The combo row is the lock (Decision 12).
+
+### Gate (PR 10, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.37s)
+- `sail artisan test`: passed, 2028 tests (2026 passed, 2 skipped, 10862 assertions)
+
+### Size
+522 authored changed lines (excluding `tasks.md`, `apply-progress.md`): 239 production in 5 files, 283 tests.
+
+### Suggested commit
+`feat(004): registrar precios de ítems de combo [COT-005, DEC-COT-06]`
+
+### Remaining
+Phase 6b (PR 11): DEC-COT-44 half of 6.1/6.2 plus 6.3 and the 6.4 gate.
