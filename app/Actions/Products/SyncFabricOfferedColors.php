@@ -9,6 +9,7 @@ use App\Enums\AuditAction;
 use App\Enums\CatalogStatus;
 use App\Models\AttributeValue;
 use App\Models\User;
+use App\Support\Audit\AuditOrigin;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,12 +25,13 @@ class SyncFabricOfferedColors
 
     /**
      * @param  list<int>  $colorIds
+     * @param  array<string, mixed>  $auditContext  the import marker of the initial load (PRD-018)
      *
      * @throws ValidationException when the value is not a fabric or a color is invalid
      */
-    public function handle(AttributeValue $fabricValue, array $colorIds, User $actor): void
+    public function handle(AttributeValue $fabricValue, array $colorIds, User $actor, ?AuditOrigin $origin = null, array $auditContext = []): void
     {
-        DB::transaction(function () use ($fabricValue, $colorIds, $actor): void {
+        DB::transaction(function () use ($fabricValue, $colorIds, $actor, $origin, $auditContext): void {
             $fabricValue = AttributeValue::query()->with('catalogAttribute')->lockForUpdate()->findOrFail($fabricValue->id);
 
             if ($fabricValue->catalogAttribute->special_use !== AttributeSpecialUse::Fabric) {
@@ -69,6 +71,8 @@ class SyncFabricOfferedColors
                 $fabricValue,
                 oldValues: ['removed' => $removed->pluck('name')->sort()->values()->all()],
                 newValues: ['added' => $added->pluck('name')->sort()->values()->all()],
+                context: $auditContext,
+                origin: $origin,
             );
         });
     }

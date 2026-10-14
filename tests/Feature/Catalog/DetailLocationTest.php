@@ -271,8 +271,9 @@ it('PRD-007 never deletes a location: there is no delete route', function () {
 
     $this->actingAs(locationManager())->deleteJson("/catalog/detail-locations/{$location->id}")->assertStatus(405);
 
+    // Removing an image (PRD-020, `DELETE .../image`) is not deleting the location.
     $deleteRoutes = collect(Route::getRoutes()->getRoutes())
-        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/detail-locations') && in_array('DELETE', $route->methods(), true));
+        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/detail-locations') && ! str_ends_with($route->uri(), '/image') && in_array('DELETE', $route->methods(), true));
 
     expect($deleteRoutes)->toHaveCount(0)
         ->and(DetailLocation::query()->count())->toBe(1);
@@ -302,25 +303,30 @@ it('PRD-016 denies each location write to a user without products.catalog and au
 ]);
 
 it('PRD-007 page GET /catalog/detail-locations renders catalog/DetailLocations listed by name, inactive ones included', function () {
+    // Lowercase 'abertura' before capitalized 'Bolsillo' and lowercase 'pechera' after 'Manga' only
+    // hold with a case-insensitive order: a binary order would put every capital first.
     DetailLocation::factory()->create(['name' => 'pechera', 'svg_layer' => 'pechera']);
-    $first = DetailLocation::factory()->create(['name' => 'Bolsillo', 'svg_layer' => null]);
+    DetailLocation::factory()->create(['name' => 'Bolsillo', 'svg_layer' => null]);
+    $first = DetailLocation::factory()->create(['name' => 'abertura', 'svg_layer' => null]);
     DetailLocation::factory()->inactive()->create(['name' => 'Manga', 'svg_layer' => 'manga']);
 
     $this->actingAs(locationManager())->get('/catalog/detail-locations')->assertOk()->assertInertia(function (Assert $page) use ($first) {
         $page->component('catalog/DetailLocations')
-            ->has('locations', 3)
+            ->has('locations', 4)
             ->where('locations.0', [
                 'id' => $first->id,
-                'name' => 'Bolsillo',
+                'name' => 'abertura',
                 'svg_layer' => null,
+                'image' => null,
                 'status' => 'active',
                 'status_label' => 'Activo',
             ])
-            ->where('locations.1.name', 'Manga')
-            ->where('locations.1.svg_layer', 'manga')
-            ->where('locations.1.status', 'inactive')
-            ->where('locations.1.status_label', 'Inactivo')
-            ->where('locations.2.name', 'pechera')
+            ->where('locations.1.name', 'Bolsillo')
+            ->where('locations.2.name', 'Manga')
+            ->where('locations.2.svg_layer', 'manga')
+            ->where('locations.2.status', 'inactive')
+            ->where('locations.2.status_label', 'Inactivo')
+            ->where('locations.3.name', 'pechera')
             ->where('can.manage', true);
     });
 });

@@ -12,11 +12,14 @@ use App\Enums\PermissionName;
 use App\Models\AttributeValue;
 use App\Models\AuditLog;
 use App\Models\CatalogAttribute;
+use App\Models\Product;
+use App\Models\ProductAttribute;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 
 function attributeManager(): User
 {
@@ -383,6 +386,247 @@ it('PRD-002 accepts a well-formed svg layer and rejects malformed or reserved on
     'reserved sombras' => ['sombras', false],
 ]);
 
+it('DEC-PRD-97 rejects an svg layer on a new value of a color attribute and writes nothing', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+
+    $this->actingAs(attributeManager())
+        ->postJson("/catalog/attributes/{$color->id}/values", ['name' => 'Azul marino', 'tone' => '#1F3A5F', 'svg_layer' => 'azul-marino'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect(AttributeValue::query()->count())->toBe(0)
+        ->and(attributeAuditRows(AuditAction::CatalogCreated)->count())->toBe(0);
+});
+
+it('DEC-PRD-97 rejects an svg layer on an existing value of a color attribute and changes nothing', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    $value = AttributeValue::factory()->for($color)->withTone('#112233')->create(['name' => 'Gris']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Gris oscuro', 'svg_layer' => 'gris'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect($value->fresh()->name)->toBe('Gris')
+        ->and($value->fresh()->svg_layer)->toBeNull()
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated)->count())->toBe(0);
+});
+
+it('DEC-PRD-97 still accepts an empty svg layer on the values of a color attribute', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$color->id}/values", ['name' => 'Verde', 'tone' => '#2E7D32', 'svg_layer' => null])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Verde hoja', 'svg_layer' => null])
+        ->assertRedirect();
+
+    expect($value->fresh()->name)->toBe('Verde hoja')
+        ->and($value->fresh()->svg_layer)->toBeNull();
+});
+
+it('DEC-PRD-97 keeps accepting an svg layer on the values of a non-color attribute', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$sleeves->id}/values", ['name' => 'Corta', 'svg_layer' => 'manga-corta'])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Corta', 'svg_layer' => 'manga'])
+        ->assertRedirect();
+
+    expect($value->fresh()->svg_layer)->toBe('manga');
+});
+
+it('DEC-PRD-97 clears the svg layer of every value when an unused attribute becomes color and audits the previous layers', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Acabado']);
+    $layered = AttributeValue::factory()->for($attribute)->withTone('#112233')->create(['name' => 'Liso', 'svg_layer' => 'liso']);
+    $other = AttributeValue::factory()->for($attribute)->withTone('#445566')->create(['name' => 'Rayado', 'svg_layer' => 'rayado']);
+    $plain = AttributeValue::factory()->for($attribute)->withTone('#778899')->create(['name' => 'Mate', 'svg_layer' => null]);
+    $foreign = AttributeValue::factory()->for(CatalogAttribute::factory()->create(['name' => 'Manga']))->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Acabado', 'presentation' => 'color', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Color)
+        ->and($layered->fresh()->svg_layer)->toBeNull()
+        ->and($other->fresh()->svg_layer)->toBeNull()
+        ->and($plain->fresh()->svg_layer)->toBeNull()
+        ->and($foreign->fresh()->svg_layer)->toBe('manga-corta');
+
+    $valueAudits = attributeAuditRows(AuditAction::CatalogUpdated)->where('entity_type', $layered->getMorphClass());
+
+    expect($valueAudits)->toHaveCount(2)
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->old_values)->toEqual(['svg_layer' => 'liso'])
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->new_values)->toEqual(['svg_layer' => null])
+        ->and($valueAudits->firstWhere('entity_id', $other->id)->old_values)->toEqual(['svg_layer' => 'rayado'])
+        ->and($valueAudits->firstWhere('entity_id', $plain->id))->toBeNull();
+});
+
+it('DEC-PRD-97 keeps the svg layers when an unused attribute changes to a non-color presentation', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Manga']);
+    $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Manga', 'presentation' => 'image', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->presentation)->toBe(AttributePresentation::Image)
+        ->and($value->fresh()->svg_layer)->toBe('manga-corta');
+});
+
+it('DEC-PRD-97 leaves the svg layers untouched when a declared attribute is rejected from becoming color', function () {
+    $sleeve = CatalogAttribute::factory()->create(['name' => 'Manga']);
+    ProductAttribute::factory()->axis()->create([
+        'product_id' => Product::factory()->create(['name' => 'Camisa corporativa'])->id,
+        'catalog_attribute_id' => $sleeve->id,
+    ]);
+    $value = AttributeValue::factory()->for($sleeve)->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$sleeve->id}", ['name' => 'Manga', 'presentation' => 'color', 'special_use' => null])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['presentation']);
+
+    expect($sleeve->fresh()->presentation)->toBe(AttributePresentation::Text)
+        ->and($value->fresh()->svg_layer)->toBe('manga-corta')
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
+it('DEC-PRD-100 rejects an svg layer on a new value of a Tela, Talla or Género attribute and writes nothing', function (string $state, string $name) {
+    $attribute = CatalogAttribute::factory()->{$state}()->create();
+
+    $this->actingAs(attributeManager())
+        ->postJson("/catalog/attributes/{$attribute->id}/values", ['name' => $name, 'svg_layer' => 'valor-con-capa'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect(AttributeValue::query()->count())->toBe(0)
+        ->and(attributeAuditRows(AuditAction::CatalogCreated)->count())->toBe(0);
+})->with([
+    'Tela' => ['fabric', 'Drill'],
+    'Talla' => ['size', 'M'],
+    'Género' => ['gender', 'Dama'],
+]);
+
+it('DEC-PRD-100 rejects an svg layer on an existing value of a Tela, Talla or Género attribute and changes nothing', function (string $state, string $name) {
+    $attribute = CatalogAttribute::factory()->{$state}()->create();
+    $value = AttributeValue::factory()->for($attribute)->create(['name' => $name]);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/values/{$value->id}", ['name' => "{$name} 2", 'svg_layer' => 'valor-con-capa'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['svg_layer']);
+
+    expect($value->fresh()->name)->toBe($name)
+        ->and($value->fresh()->svg_layer)->toBeNull()
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated)->count())->toBe(0);
+})->with([
+    'Tela' => ['fabric', 'Drill'],
+    'Talla' => ['size', 'M'],
+    'Género' => ['gender', 'Dama'],
+]);
+
+it('DEC-PRD-100 still accepts an empty svg layer on the values of a Tela, Talla or Género attribute', function (string $state) {
+    $attribute = CatalogAttribute::factory()->{$state}()->create();
+    $actor = attributeManager();
+
+    $this->actingAs($actor)
+        ->postJson("/catalog/attributes/{$attribute->id}/values", ['name' => 'Valor', 'svg_layer' => null])
+        ->assertRedirect();
+
+    $value = AttributeValue::query()->sole();
+
+    $this->actingAs($actor)
+        ->putJson("/catalog/values/{$value->id}", ['name' => 'Valor renombrado', 'svg_layer' => null])
+        ->assertRedirect();
+
+    expect($value->fresh()->name)->toBe('Valor renombrado')
+        ->and($value->fresh()->svg_layer)->toBeNull();
+})->with(['fabric', 'size', 'gender']);
+
+it('DEC-PRD-100 keeps accepting an svg layer on the values of an attribute without special use', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    CatalogAttribute::factory()->size()->create();
+
+    $this->actingAs(attributeManager())
+        ->postJson("/catalog/attributes/{$sleeves->id}/values", ['name' => 'Corta', 'svg_layer' => 'manga-corta'])
+        ->assertRedirect();
+
+    expect(AttributeValue::query()->sole()->svg_layer)->toBe('manga-corta');
+});
+
+it('DEC-PRD-100 clears the svg layer of every value when an unused attribute gets a Tela, Talla or Género special use and audits the previous layers', function (AttributeSpecialUse $use) {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Modelo']);
+    $layered = AttributeValue::factory()->for($attribute)->create(['name' => 'Uno', 'svg_layer' => 'uno']);
+    $other = AttributeValue::factory()->for($attribute)->create(['name' => 'Dos', 'svg_layer' => 'dos']);
+    $plain = AttributeValue::factory()->for($attribute)->create(['name' => 'Tres', 'svg_layer' => null]);
+    $foreign = AttributeValue::factory()->for(CatalogAttribute::factory()->create(['name' => 'Manga']))->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Modelo', 'presentation' => 'text', 'special_use' => $use->value])
+        ->assertRedirect();
+
+    expect($attribute->fresh()->special_use)->toBe($use)
+        ->and($layered->fresh()->svg_layer)->toBeNull()
+        ->and($other->fresh()->svg_layer)->toBeNull()
+        ->and($plain->fresh()->svg_layer)->toBeNull()
+        ->and($foreign->fresh()->svg_layer)->toBe('manga-corta');
+
+    $valueAudits = attributeAuditRows(AuditAction::CatalogUpdated)->where('entity_type', $layered->getMorphClass());
+
+    expect($valueAudits)->toHaveCount(2)
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->old_values)->toEqual(['svg_layer' => 'uno'])
+        ->and($valueAudits->firstWhere('entity_id', $layered->id)->new_values)->toEqual(['svg_layer' => null])
+        ->and($valueAudits->firstWhere('entity_id', $other->id)->old_values)->toEqual(['svg_layer' => 'dos'])
+        ->and($valueAudits->firstWhere('entity_id', $plain->id))->toBeNull();
+})->with([AttributeSpecialUse::Fabric, AttributeSpecialUse::Size, AttributeSpecialUse::Gender]);
+
+it('DEC-PRD-100 keeps the svg layers when an unused attribute is edited without gaining a special use', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Manga']);
+    $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => 'manga-corta']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Manga larga', 'presentation' => 'text', 'special_use' => null])
+        ->assertRedirect();
+
+    expect($value->fresh()->svg_layer)->toBe('manga-corta');
+});
+
+it('DEC-PRD-100 leaves the svg layers untouched when a declared attribute is rejected from getting a special use', function () {
+    $attribute = CatalogAttribute::factory()->create(['name' => 'Modelo']);
+    $product = Product::factory()->create(['name' => 'Camisa corporativa']);
+    ProductAttribute::factory()->axis()->create(['product_id' => $product->id, 'catalog_attribute_id' => $attribute->id]);
+    $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => 'modelo-a']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$attribute->id}", ['name' => 'Modelo', 'presentation' => 'text', 'special_use' => 'size'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['special_use']);
+
+    expect($attribute->fresh()->special_use)->toBeNull()
+        ->and($value->fresh()->svg_layer)->toBe('modelo-a')
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+});
+
+it('DEC-PRD-100 page GET /catalog/attributes/{attribute} exposes the special use so the form hides the layer', function () {
+    $size = CatalogAttribute::factory()->size()->create();
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$size->id}")->assertOk()->assertInertia(
+        fn (Assert $page) => $page->component('catalog/AttributeShow')->where('attribute.special_use', 'size')
+    );
+});
+
 it('PRD-002 renames a value and audits the old and new name', function () {
     $attribute = CatalogAttribute::factory()->create();
     $value = AttributeValue::factory()->for($attribute)->create(['name' => 'Corta', 'description' => 'Hasta el codo']);
@@ -569,8 +813,9 @@ it('PRD-002 never deletes attributes or values: there are no delete routes', fun
     $this->actingAs(attributeManager())->deleteJson("/catalog/attributes/{$attribute->id}")->assertStatus(405);
     $this->actingAs(attributeManager())->deleteJson("/catalog/values/{$value->id}")->assertStatus(405);
 
+    // Removing an image (PRD-020, `DELETE .../image`) is not deleting the value.
     $deleteRoutes = collect(Route::getRoutes()->getRoutes())
-        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/') && in_array('DELETE', $route->methods(), true));
+        ->filter(fn ($route) => str_starts_with($route->uri(), 'catalog/') && ! str_ends_with($route->uri(), '/image') && in_array('DELETE', $route->methods(), true));
 
     expect($deleteRoutes)->toHaveCount(0)
         ->and(CatalogAttribute::query()->count())->toBe(1)
@@ -611,7 +856,7 @@ it('PRD-016 denies each attribute and value write to a user without products.cat
 
 // --- Hooks filled by later slices ------------------------------------------------------------
 
-it('DEC-PRD-51 call sites of the in-use hooks do not alter attribute lifecycle and edits while no product table exists', function () {
+it('DEC-PRD-51 call sites of the in-use hooks do not alter attribute lifecycle and edits while no product declares the attribute', function () {
     $attribute = CatalogAttribute::factory()->fabric()->create();
     $value = AttributeValue::factory()->for($attribute)->create(['svg_layer' => null]);
     $actor = attributeManager();
@@ -638,6 +883,116 @@ it('DEC-PRD-53 call sites of the layer hook let a value gain, change and lose it
 
         expect($value->fresh()->svg_layer)->toBe($layer);
     }
+});
+
+// --- Attributes in use (E-69, DEC-PRD-51) ----------------------------------------------------
+
+/**
+ * The attribute Tela declared by the given product (here, the active "Camisa corporativa" by default).
+ */
+function declaredFabric(?Product $product = null): array
+{
+    $fabric = CatalogAttribute::factory()->fabric()->create();
+    $product ??= Product::factory()->create(['name' => 'Camisa corporativa']);
+    ProductAttribute::factory()->axis()->create(['product_id' => $product->id, 'catalog_attribute_id' => $fabric->id]);
+
+    return [$fabric, $product];
+}
+
+it('E-69 rejects deactivating an attribute declared by an active product, naming it, and leaves attribute and audit unchanged', function () {
+    [$fabric] = declaredFabric();
+    Product::factory()->create(['name' => 'Gorra']);
+
+    $response = $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['status']);
+
+    expect($response->json('errors.status.0'))->toContain('Camisa corporativa')->not->toContain('Gorra')
+        ->and($fabric->fresh()->status)->toBe(CatalogStatus::Active)
+        ->and(attributeAuditRows(AuditAction::CatalogDeactivated))->toHaveCount(0);
+});
+
+it('E-69 rejects clearing, changing and assigning the special use or changing the presentation of a declared attribute', function (array $payload, string $field) {
+    [$fabric] = declaredFabric();
+    $before = ['presentation' => $fabric->presentation, 'special_use' => $fabric->special_use];
+
+    $response = $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'text', 'special_use' => 'fabric', ...$payload])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors([$field]);
+
+    expect($response->json("errors.{$field}.0"))->toContain('Camisa corporativa')
+        ->and($fabric->fresh()->presentation)->toBe($before['presentation'])
+        ->and($fabric->fresh()->special_use)->toBe($before['special_use'])
+        ->and(attributeAuditRows(AuditAction::CatalogUpdated))->toHaveCount(0);
+})->with([
+    'clear special use' => [['special_use' => null], 'special_use'],
+    'change special use' => [['special_use' => 'gender'], 'special_use'],
+    'change presentation' => [['presentation' => 'image'], 'presentation'],
+]);
+
+it('E-69 rejects giving a special use to a declared attribute that has none', function () {
+    $size = CatalogAttribute::factory()->create(['name' => 'Talla']);
+    $product = Product::factory()->create(['name' => 'Camisa corporativa']);
+    ProductAttribute::factory()->create(['product_id' => $product->id, 'catalog_attribute_id' => $size->id]);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$size->id}", ['name' => 'Talla', 'presentation' => 'text', 'special_use' => 'size'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['special_use']);
+
+    expect($size->fresh()->special_use)->toBeNull();
+});
+
+it('E-69 still lets a declared attribute be renamed while presentation and special use stay', function () {
+    [$fabric] = declaredFabric();
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela principal', 'presentation' => 'text', 'special_use' => 'fabric'])
+        ->assertRedirect();
+
+    expect($fabric->fresh()->name)->toBe('Tela principal');
+});
+
+it('E-69 lets a declared attribute be deactivated once its product is inactive, but still blocks presentation and use changes', function () {
+    [$fabric, $product] = declaredFabric();
+    $product->forceFill(['status' => CatalogStatus::Inactive])->save();
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'image', 'special_use' => 'fabric'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['presentation']);
+
+    $this->actingAs(attributeManager())
+        ->putJson("/catalog/attributes/{$fabric->id}", ['name' => 'Tela', 'presentation' => 'text', 'special_use' => null])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['special_use']);
+
+    $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")->assertRedirect();
+
+    expect($fabric->fresh()->status)->toBe(CatalogStatus::Inactive);
+});
+
+it('E-69 keeps an inactive attribute declared by an inactive product inactive, as a no-op', function () {
+    [$fabric, $product] = declaredFabric();
+    $product->forceFill(['status' => CatalogStatus::Inactive])->save();
+    $fabric->forceFill(['status' => CatalogStatus::Inactive])->save();
+
+    $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")->assertRedirect();
+
+    expect($fabric->fresh()->status)->toBe(CatalogStatus::Inactive)
+        ->and(attributeAuditRows(AuditAction::CatalogDeactivated))->toHaveCount(0);
+});
+
+it('E-69 names every active product that declares the attribute, in alphabetical order', function () {
+    [$fabric] = declaredFabric();
+    $second = Product::factory()->create(['name' => 'Bata']);
+    ProductAttribute::factory()->axis()->create(['product_id' => $second->id, 'catalog_attribute_id' => $fabric->id]);
+
+    $response = $this->actingAs(attributeManager())->postJson("/catalog/attributes/{$fabric->id}/deactivate")
+        ->assertUnprocessable();
+
+    expect($response->json('errors.status.0'))->toContain('«Bata», «Camisa corporativa»');
 });
 
 // --- Colors offered in a fabric (E-46) -------------------------------------------------------
@@ -784,4 +1139,178 @@ it('PRD-016 denies offered color changes to a user without products.catalog and 
     expect($fabric->offeredColors()->count())->toBe(3)
         ->and(attributeAuditRows(AuditAction::CatalogFabricColorsUpdated))->toHaveCount(0)
         ->and(AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole()->context['route'])->toBe('catalog.values.offered-colors.update');
+});
+
+// --- Pages (PRD-002, spec section 8) ----------------------------------------------------------
+
+it('PRD-002 page GET /catalog/attributes lists the attributes in sort order with labels and value counts, inactive ones included', function () {
+    $size = CatalogAttribute::factory()->size()->create(['sort_order' => 3]);
+    $fabric = CatalogAttribute::factory()->fabric()->create(['sort_order' => 1]);
+    $color = CatalogAttribute::factory()->color()->inactive()->create(['sort_order' => 2]);
+    AttributeValue::factory()->for($fabric)->count(2)->create();
+    AttributeValue::factory()->for($fabric)->inactive()->create();
+    AttributeValue::factory()->for($color)->withTone()->create();
+
+    $this->actingAs(attributeManager())->get('/catalog/attributes')->assertOk()->assertInertia(function (Assert $page) use ($fabric, $size) {
+        $page->component('catalog/Attributes')
+            ->has('attributes', 3)
+            ->where('attributes.0', [
+                'id' => $fabric->id,
+                'name' => 'Tela',
+                'presentation' => 'text',
+                'presentation_label' => 'Texto',
+                'special_use' => 'fabric',
+                'special_use_label' => 'Tela',
+                'status' => 'active',
+                'status_label' => 'Activo',
+                'sort_order' => 1,
+                'values_count' => 3,
+            ])
+            ->where('attributes.1.presentation', 'color')
+            ->where('attributes.1.presentation_label', 'Color')
+            ->where('attributes.1.special_use', null)
+            ->where('attributes.1.special_use_label', null)
+            ->where('attributes.1.status', 'inactive')
+            ->where('attributes.1.status_label', 'Inactivo')
+            ->where('attributes.1.values_count', 1)
+            ->where('attributes.2.id', $size->id)
+            ->where('attributes.2.values_count', 0)
+            ->where('options.presentations', [
+                ['value' => 'text', 'label' => 'Texto'],
+                ['value' => 'image', 'label' => 'Imagen'],
+                ['value' => 'color', 'label' => 'Color'],
+            ])
+            ->where('options.special_uses', [
+                ['value' => 'fabric', 'label' => 'Tela'],
+                ['value' => 'size', 'label' => 'Talla'],
+                ['value' => 'gender', 'label' => 'Género'],
+            ])
+            ->where('can.manage', true);
+    });
+});
+
+it('DEC-PRD-97 page GET /catalog/attributes/{attribute} lists the svg layer of the values of a non-color attribute', function () {
+    $sleeves = CatalogAttribute::factory()->create();
+    AttributeValue::factory()->for($sleeves)->create(['name' => 'Corta', 'svg_layer' => 'manga-corta', 'sort_order' => 1]);
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$sleeves->id}")->assertOk()->assertInertia(
+        fn (Assert $page) => $page->component('catalog/AttributeShow')->where('values.0.svg_layer', 'manga-corta')
+    );
+});
+
+it('PRD-002 page renders an empty list of attributes', function () {
+    $this->actingAs(attributeManager())->get('/catalog/attributes')->assertInertia(
+        fn (Assert $page) => $page->component('catalog/Attributes')->has('attributes', 0)->where('can.manage', true)
+    );
+});
+
+it('PRD-002 page GET /catalog/attributes/{attribute} lists the ordered values of a color attribute with tone, description, layer and status', function () {
+    $color = CatalogAttribute::factory()->color()->create();
+    CatalogAttribute::factory()->fabric()->create();
+    $second = AttributeValue::factory()->for($color)->withTone('#1f3a5f')->inactive()->create(['name' => 'Azul marino', 'description' => 'Oscuro', 'sort_order' => 2]);
+    $first = AttributeValue::factory()->for($color)->withTone('#FFFFFF')->create(['name' => 'Blanco', 'sort_order' => 1]);
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$color->id}")->assertOk()->assertInertia(function (Assert $page) use ($color, $first, $second) {
+        $page->component('catalog/AttributeShow')
+            ->where('attribute', [
+                'id' => $color->id,
+                'name' => 'Color',
+                'presentation' => 'color',
+                'presentation_label' => 'Color',
+                'special_use' => null,
+                'special_use_label' => null,
+                'status' => 'active',
+                'status_label' => 'Activo',
+                'sort_order' => $color->sort_order,
+                'values_count' => 2,
+            ])
+            ->has('values', 2)
+            ->where('values.0', [
+                'id' => $first->id,
+                'name' => 'Blanco',
+                'description' => null,
+                'tone' => '#FFFFFF',
+                'svg_layer' => null,
+                'image' => null,
+                'status' => 'active',
+                'status_label' => 'Activo',
+                'sort_order' => 1,
+                'offered_colors' => null,
+            ])
+            ->where('values.1.id', $second->id)
+            ->where('values.1.description', 'Oscuro')
+            ->where('values.1.svg_layer', null)
+            ->where('values.1.status', 'inactive')
+            ->where('values.1.status_label', 'Inactivo')
+            ->where('palette', [])
+            ->where('can.manage', true);
+    });
+});
+
+it('E-46 page of the fabric attribute exposes each value\'s offered colors and the active palette to choose from', function () {
+    ['fabric' => $fabric, 'navy' => $navy, 'white' => $white, 'green' => $green, 'pearl' => $pearl, 'palette' => $palette] = fabricWithOfferedColors();
+    $navy->update(['sort_order' => 1]);
+    $white->update(['sort_order' => 2]);
+    $green->update(['sort_order' => 3]);
+    $pearl->update(['sort_order' => 4]);
+    $inactiveColor = AttributeValue::factory()->for($palette)->withTone('#000000')->inactive()->create(['name' => 'Negro', 'sort_order' => 5]);
+    $fabric->offeredColors()->attach($inactiveColor->id);
+    $plain = AttributeValue::factory()->for($fabric->catalogAttribute)->create(['name' => 'DRILL', 'sort_order' => 2]);
+    $fabric->update(['sort_order' => 1]);
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$fabric->catalog_attribute_id}")->assertOk()->assertInertia(function (Assert $page) use ($fabric, $navy, $white, $green, $pearl, $inactiveColor, $plain) {
+        $page->component('catalog/AttributeShow')
+            ->where('attribute.special_use', 'fabric')
+            ->where('values.0.id', $fabric->id)
+            ->where('values.0.offered_colors', [
+                ['id' => $navy->id, 'name' => 'Azul marino', 'tone' => '#1F3A5F', 'status' => 'active'],
+                ['id' => $white->id, 'name' => 'Blanco', 'tone' => '#FFFFFF', 'status' => 'active'],
+                ['id' => $green->id, 'name' => 'Verde', 'tone' => '#2E7D32', 'status' => 'active'],
+                ['id' => $inactiveColor->id, 'name' => 'Negro', 'tone' => '#000000', 'status' => 'inactive'],
+            ])
+            ->where('values.1.id', $plain->id)
+            ->where('values.1.offered_colors', [])
+            ->where('palette', [
+                ['id' => $navy->id, 'name' => 'Azul marino', 'tone' => '#1F3A5F', 'status' => 'active'],
+                ['id' => $white->id, 'name' => 'Blanco', 'tone' => '#FFFFFF', 'status' => 'active'],
+                ['id' => $green->id, 'name' => 'Verde', 'tone' => '#2E7D32', 'status' => 'active'],
+                ['id' => $pearl->id, 'name' => 'Gris perla', 'tone' => '#C9CCD1', 'status' => 'active'],
+            ]);
+    });
+});
+
+it('E-46 page of the fabric attribute has an empty palette when no color attribute exists', function () {
+    $fabric = AttributeValue::factory()->for(CatalogAttribute::factory()->fabric())->create();
+
+    $this->actingAs(attributeManager())->get("/catalog/attributes/{$fabric->catalog_attribute_id}")->assertInertia(
+        fn (Assert $page) => $page->component('catalog/AttributeShow')->where('palette', [])->where('values.0.offered_colors', [])
+    );
+});
+
+it('PRD-016 pages of the attribute catalog are forbidden without products.catalog, even with products.view, and audit the denial', function (array $permissions, string $path, string $route) {
+    $actor = userWithPermissions(...$permissions);
+    $attribute = CatalogAttribute::factory()->create();
+
+    $this->actingAs($actor)->get(str_replace('{id}', (string) $attribute->id, $path))->assertForbidden();
+
+    $audit = AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole();
+
+    expect($audit->actor_id)->toBe($actor->id)
+        ->and($audit->context['route'])->toBe($route);
+})->with([
+    'index, products.view alone' => [[PermissionName::ProductsView], '/catalog/attributes', 'catalog.attributes.index'],
+    'index, every product permission but catalog' => [[PermissionName::ProductsView, PermissionName::ProductsCreate, PermissionName::ProductsUpdate, PermissionName::ProductsDeactivate, PermissionName::ProductsDelete], '/catalog/attributes', 'catalog.attributes.index'],
+    'show, products.view alone' => [[PermissionName::ProductsView], '/catalog/attributes/{id}', 'catalog.attributes.show'],
+    'show, every product permission but catalog' => [[PermissionName::ProductsView, PermissionName::ProductsCreate, PermissionName::ProductsUpdate, PermissionName::ProductsDeactivate, PermissionName::ProductsDelete], '/catalog/attributes/{id}', 'catalog.attributes.show'],
+]);
+
+it('PRD-016 pages of the attribute catalog redirect a guest to the login', function () {
+    $attribute = CatalogAttribute::factory()->create();
+
+    $this->get('/catalog/attributes')->assertRedirect('/login');
+    $this->get("/catalog/attributes/{$attribute->id}")->assertRedirect('/login');
+});
+
+it('PRD-002 page of an unknown attribute is not found', function () {
+    $this->actingAs(attributeManager())->get('/catalog/attributes/999999')->assertNotFound();
 });

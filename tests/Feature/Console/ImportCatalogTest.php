@@ -1,0 +1,1087 @@
+<?php
+
+use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Products\CreateCombination;
+use App\Actions\Products\CreateCombo;
+use App\Actions\Products\CreateProduct;
+use App\Enums\AttributePresentation;
+use App\Enums\AttributeRole;
+use App\Enums\AttributeSpecialUse;
+use App\Enums\AuditAction;
+use App\Models\AttributeValue;
+use App\Models\AuditLog;
+use App\Models\CatalogAttribute;
+use App\Models\CatalogCode;
+use App\Models\Combination;
+use App\Models\Combo;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\StockMinimumOverride;
+use App\Models\User;
+use App\Support\Audit\AuditOrigin;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+/*
+ * `catalog:import`, colors and combinations (PRD-018, E-32, design Decision 19). Every CSV file is
+ * fictitious and generated at runtime in a temporary directory that is removed after each test: no
+ * file is ever committed. Row numbers are physical lines (header = 1, first data row = 2).
+ */
+
+beforeEach(function () {
+    $this->catalogImportDirectory = sys_get_temp_dir().'/catalog-import-'.bin2hex(random_bytes(6));
+    mkdir($this->catalogImportDirectory);
+});
+
+afterEach(function () {
+    foreach (glob($this->catalogImportDirectory.'/*') ?: [] as $file) {
+        unlink($file);
+    }
+
+    rmdir($this->catalogImportDirectory);
+});
+
+const CIMP_COMBINATION_COLUMNS = ['categoria', 'producto', 'linea', 'modo', 'stock_minimo', 'codigo', 'ejes', 'pedido', 'descripcion'];
+
+const CIMP_COMBO_COLUMNS = ['codigo', 'nombre', 'producto', 'cantidad', 'valores'];
+
+const CIMP_COLOR_COLUMNS = ['color', 'tono', 'telas'];
+
+/**
+ * Writes a file with the given content and returns its path.
+ */
+function cimpFile(string $content, string $name): string
+{
+    $path = test()->catalogImportDirectory.'/'.$name;
+    file_put_contents($path, $content);
+
+    return $path;
+}
+
+/**
+ * CSV text from rows keyed by column name, in the order of `$columns`.
+ *
+ * @param  list<string>  $columns
+ * @param  list<array<string, string>>  $rows
+ */
+function cimpCsv(array $columns, array $rows, string $delimiter = ','): string
+{
+    $stream = fopen('php://memory', 'w+');
+    fputcsv($stream, $columns, $delimiter, '"', '');
+
+    foreach ($rows as $row) {
+        fputcsv($stream, array_map(fn (string $column): string => $row[$column] ?? '', $columns), $delimiter, '"', '');
+    }
+
+    rewind($stream);
+
+    return (string) stream_get_contents($stream);
+}
+
+/**
+ * A combination row with fictitious values; the overrides replace any column.
+ *
+ * @param  array<string, string>  $overrides
+ * @return array<string, string>
+ */
+function cimpRow(array $overrides = []): array
+{
+    return $overrides + [
+        'categoria' => 'Camisas',
+        'producto' => 'Camisa corporativa',
+        'linea' => 'uniformes',
+        'modo' => 'bajo_pedido',
+        'stock_minimo' => '',
+        'codigo' => '110-1',
+        'ejes' => 'Tela=ALG-OXF Pima|Modelo=Columbia|Género=Dama',
+        'pedido' => 'Talla=XS,S,M,L,XL|Color=',
+        'descripcion' => 'Camisa ficticia',
+    ];
+}
+
+/**
+ * Four valid rows: a shirt with fabric (two restricted rows and one unrestricted) and a cap with
+ * its own colors.
+ *
+ * @return list<array<string, string>>
+ */
+function cimpRows(): array
+{
+    return [
+        cimpRow(['pedido' => 'Talla=XS,S,M,L|Color=']),
+        cimpRow(['codigo' => '110-2', 'ejes' => 'Tela=ALG-OXF Pima|Modelo=Columbia|Género=Caballero', 'pedido' => 'Talla=S,M,L,XL|Color=']),
+        cimpRow(['codigo' => '110-3', 'ejes' => 'Tela=Dril Fino|Modelo=Columbia|Género=Dama']),
+        cimpRow([
+            'categoria' => 'Gorras', 'producto' => 'Gorra', 'modo' => 'stock_con_minimo', 'stock_minimo' => '6',
+            'codigo' => '210-1', 'ejes' => '', 'pedido' => 'Color=Rojo,Azul', 'descripcion' => 'Gorra ficticia',
+        ]),
+    ];
+}
+
+/**
+ * The palette: two fabrics offer colors, Verde is palette only.
+ *
+ * @return list<array<string, string>>
+ */
+function cimpColors(): array
+{
+    return [
+        ['color' => 'Rojo', 'tono' => '#ff0000', 'telas' => 'ALG-OXF Pima|Dril Fino'],
+        ['color' => 'Azul', 'tono' => '#0000FF', 'telas' => 'ALG-OXF Pima'],
+        ['color' => 'Verde', 'tono' => '#00FF00', 'telas' => ''],
+    ];
+}
+
+function cimpAuthor(): User
+{
+    return User::factory()->create(['email' => 'autor@ecolekua.test']);
+}
+
+/**
+ * Builds the three files (valid ones unless given) and runs the command; an option set to `null`
+ * is not passed. Returns the exit code and the whole console output.
+ *
+ * @param  list<array<string, string>>|null  $combinations
+ * @param  list<array<string, string>>|null  $colors
+ * @param  array<string, string|null>  $options
+ * @return array{0: int, 1: string}
+ */
+function cimpRun(?array $combinations = null, ?array $colors = null, array $options = [], string $combosContent = ''): array
+{
+    $arguments = [
+        '--combinations' => cimpFile(cimpCsv(CIMP_COMBINATION_COLUMNS, $combinations ?? cimpRows()), 'combinaciones.csv'),
+        '--combos' => cimpFile($combosContent !== '' ? $combosContent : cimpCsv(CIMP_COMBO_COLUMNS, []), 'combos.csv'),
+        '--colors' => cimpFile(cimpCsv(CIMP_COLOR_COLUMNS, $colors ?? cimpColors()), 'colores.csv'),
+        '--author' => 'autor@ecolekua.test',
+    ];
+
+    foreach ($options as $name => $value) {
+        if ($value === null) {
+            unset($arguments["--{$name}"]);
+        } else {
+            $arguments["--{$name}"] = $value;
+        }
+    }
+
+    $exit = Artisan::call('catalog:import', $arguments);
+
+    return [$exit, Artisan::output()];
+}
+
+/**
+ * The rows of the error table printed by the command: `[file, row, column, reason]`.
+ *
+ * @return list<array{0: string, 1: string, 2: string, 3: string}>
+ */
+function cimpReport(string $output): array
+{
+    $rows = [];
+
+    foreach (explode("\n", $output) as $line) {
+        if (! str_starts_with($line, '|')) {
+            continue;
+        }
+
+        $cells = array_map(trim(...), explode('|', trim($line, "| \t\r")));
+
+        if (count($cells) === 4 && $cells[0] !== 'Archivo') {
+            $rows[] = [$cells[0], $cells[1], $cells[2], $cells[3]];
+        }
+    }
+
+    return $rows;
+}
+
+/**
+ * The reason reported for a file, row and column, or null when nothing was reported there.
+ *
+ * @param  list<array{0: string, 1: string, 2: string, 3: string}>  $report
+ */
+function cimpReason(array $report, string $file, int $row, string $column): ?string
+{
+    foreach ($report as $entry) {
+        if ($entry[0] === $file && $entry[1] === (string) $row && $entry[2] === $column) {
+            return $entry[3];
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Row counts of every table the import writes.
+ *
+ * @return array<string, int>
+ */
+function cimpCatalogCounts(): array
+{
+    return [
+        'categories' => ProductCategory::query()->count(),
+        'attributes' => CatalogAttribute::query()->count(),
+        'values' => AttributeValue::query()->count(),
+        'products' => Product::query()->count(),
+        'product_attributes' => DB::table('product_attributes')->count(),
+        'combinations' => Combination::query()->count(),
+        'codes' => CatalogCode::query()->count(),
+        'combos' => Combo::query()->count(),
+        'offered_colors' => DB::table('fabric_offered_colors')->count(),
+    ];
+}
+
+/**
+ * Asserts the failed run left the catalog and the audit trail untouched.
+ */
+function cimpExpectUntouched(int $auditBefore): void
+{
+    expect(array_sum(cimpCatalogCounts()))->toBe(0)
+        ->and(AuditLog::query()->count())->toBe($auditBefore);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 0: author, options, empty catalog, files and headers
+// ---------------------------------------------------------------------------------------------
+
+it('PRD-018 requires an active internal author and imports nothing without one', function (?string $email) {
+    $inactive = User::factory()->inactive()->create(['email' => 'inactivo@ecolekua.test']);
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+
+    [$exit, $output] = cimpRun(options: ['author' => $email === 'inactive' ? $inactive->email : $email]);
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain($email === null ? 'Debe indicar el autor' : 'El autor indicado no existe o está inactivo');
+    cimpExpectUntouched($auditBefore);
+})->with([
+    'missing' => [null],
+    'unknown' => ['nadie@ecolekua.test'],
+    'inactive' => ['inactive'],
+]);
+
+it('PRD-018 requires the three file options', function (string $missing, string $label) {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+
+    [$exit, $output] = cimpRun(options: [$missing => null]);
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain("Debe indicar el archivo {$label}")
+        ->and($output)->toContain("--{$missing}");
+    cimpExpectUntouched($auditBefore);
+})->with([
+    'combinations' => ['combinations', 'de combinaciones'],
+    'combos' => ['combos', 'de combos'],
+    'colors' => ['colors', 'de colores'],
+]);
+
+it('PRD-018 imports only into an empty catalog', function (Closure $seed) {
+    cimpAuthor();
+    $seed();
+    $before = cimpCatalogCounts();
+    $auditBefore = AuditLog::query()->count();
+
+    [$exit, $output] = cimpRun();
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain('El catálogo no está vacío')
+        ->and(cimpCatalogCounts())->toBe($before)
+        ->and(AuditLog::query()->count())->toBe($auditBefore);
+})->with([
+    'a category' => [fn () => ProductCategory::factory()->create()],
+    'an attribute' => [fn () => CatalogAttribute::factory()->create()],
+    'a product' => [fn () => Product::factory()->create()],
+    'a combo' => [fn () => Combo::factory()->create()],
+]);
+
+it('PRD-018 rejects a file whose header is not the exact one and names the file', function (string $file, string $content, string $reason) {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $wrong = cimpFile($content, 'mal.csv');
+
+    [$exit, $output] = cimpRun(options: [$file => $wrong]);
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain($reason);
+    cimpExpectUntouched($auditBefore);
+})->with([
+    'combinations missing column' => ['combinations', "categoria,producto\nA,B\n", 'Faltan las columnas: linea, modo'],
+    'colors unknown column' => ['colors', "color,tono,telas,extra\nA,#000000,,x\n", 'Columnas no reconocidas: extra'],
+    'combos missing column' => ['combos', "codigo,nombre\n", 'Faltan las columnas: producto, cantidad, valores'],
+]);
+
+it('PRD-018 names the file in the header problem', function () {
+    cimpAuthor();
+
+    [, $output] = cimpRun(options: ['colors' => cimpFile("color\n", 'mal.csv')]);
+
+    expect($output)->toContain('colores')
+        ->and($output)->toContain('Faltan las columnas: tono, telas');
+});
+
+it('PRD-018 accepts the combos and colors files with only a header', function () {
+    cimpAuthor();
+
+    [$exit, $output] = cimpRun([cimpRow()], colors: []);
+
+    expect($exit)->toBe(0)
+        ->and($output)->toContain('Se importó')
+        ->and(Combination::query()->count())->toBe(1)
+        ->and(AttributeValue::query()->whereHas('catalogAttribute', fn ($query) => $query->where('presentation', AttributePresentation::Color->value))->count())->toBe(0);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Phase 1: E-32 (partial), one file per failure class
+// ---------------------------------------------------------------------------------------------
+
+it('E-32 reports an invalid row by file, row and column and imports nothing', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[1]['linea'] = 'ropa';
+    $rows[2]['modo'] = 'raro';
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain('Archivo')
+        ->and($output)->toContain('Motivo')
+        ->and(cimpReason($report, 'combinaciones', 3, 'linea'))->not->toBeNull()
+        ->and(cimpReason($report, 'combinaciones', 4, 'modo'))->not->toBeNull()
+        ->and(cimpReason($report, 'combinaciones', 2, 'linea'))->toBeNull();
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 reports a repeated code in the file ignoring letter case', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[0]['codigo'] = 'abc-1';
+    $rows[1]['codigo'] = 'ABC-1';
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 3, 'codigo'))->toBe('Código repetido en la fila 2.')
+        ->and($output)->not->toContain('ABC-1');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 reports a color without tone and a malformed tone', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $colors = cimpColors();
+    $colors[0]['tono'] = '';
+    $colors[1]['tono'] = 'azul';
+
+    [$exit, $output] = cimpRun(colors: $colors);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'colores', 2, 'tono'))->not->toBeNull()
+        ->and(cimpReason($report, 'colores', 3, 'tono'))->not->toBeNull()
+        ->and(cimpReason($report, 'colores', 4, 'tono'))->toBeNull();
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 reports a repeated color name in the colors file', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $colors = cimpColors();
+    $colors[2]['color'] = 'rojo';
+
+    [$exit, $output] = cimpRun(colors: $colors);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'colores', 4, 'color'))->toBe('Color repetido en la fila 2.');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 reports a fabric of the colors file that is not a Tela value of the combinations file', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $colors = cimpColors();
+    $colors[1]['telas'] = 'ALG-OXF Pima|Seda Imaginaria';
+
+    [$exit, $output] = cimpRun(colors: $colors);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'colores', 3, 'telas'))->not->toBeNull()
+        ->and($output)->not->toContain('Seda Imaginaria');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 reports a color of a product without fabric that is not in the palette', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[3]['pedido'] = 'Color=Rojo,Rosa';
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 5, 'pedido'))->not->toBeNull();
+    cimpExpectUntouched($auditBefore);
+});
+
+it('DEC-PRD-48 reports a stock_minimo that disagrees with the first row of the product', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $cap = ['categoria' => 'Gorras', 'producto' => 'Gorra', 'modo' => 'stock_con_minimo', 'pedido' => 'Color=Rojo'];
+    $rows = [
+        cimpRow($cap + ['stock_minimo' => '6', 'codigo' => '210-1', 'ejes' => 'Modelo=Plana']),
+        cimpRow($cap + ['stock_minimo' => '8', 'codigo' => '210-2', 'ejes' => 'Modelo=Curva']),
+    ];
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 3, 'stock_minimo'))->toBe('Difiere del stock mínimo de la fila 2.');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('DEC-PRD-48 accepts equal minimums on every row and stores the product default', function () {
+    cimpAuthor();
+    $cap = ['categoria' => 'Gorras', 'producto' => 'Gorra', 'modo' => 'stock_con_minimo', 'stock_minimo' => '6', 'pedido' => 'Color=Rojo'];
+
+    [$exit] = cimpRun([
+        cimpRow($cap + ['codigo' => '210-1', 'ejes' => 'Modelo=Plana']),
+        cimpRow($cap + ['codigo' => '210-2', 'ejes' => 'Modelo=Curva']),
+    ], colors: [['color' => 'Rojo', 'tono' => '#FF0000', 'telas' => '']]);
+
+    expect($exit)->toBe(0)
+        ->and(Product::query()->where('name', 'Gorra')->value('min_stock_default'))->toBe(6)
+        ->and(DB::table('stock_minimum_overrides')->count())->toBe(0);
+});
+
+it('DEC-PRD-50 rejects Tela listed in pedido and Color listed in ejes', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = [
+        cimpRow(['codigo' => '1', 'ejes' => 'Modelo=Columbia', 'pedido' => 'Tela=ALG-OXF Pima|Talla=S']),
+        cimpRow(['producto' => 'Otra camisa', 'codigo' => '2', 'ejes' => 'Color=Rojo|Modelo=Columbia', 'pedido' => 'Talla=S']),
+    ];
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combinaciones', 2, 'pedido'))->toBe(__('validation.structure_role_fabric'))
+        ->and(cimpReason($report, 'combinaciones', 3, 'ejes'))->toBe(__('validation.structure_role_color'));
+    cimpExpectUntouched($auditBefore);
+});
+
+it('PRD-018 rejects rows of the same product that disagree in category, line, mode or axes', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = [
+        cimpRow(['codigo' => '1']),
+        cimpRow(['codigo' => '2', 'categoria' => 'Otras', 'ejes' => 'Tela=ALG-OXF Pima|Modelo=Columbia|Género=Caballero']),
+        cimpRow(['codigo' => '3', 'linea' => 'pañales', 'ejes' => 'Tela=ALG-OXF Pima|Modelo=Columbia|Género=Otro']),
+        cimpRow(['codigo' => '4', 'modo' => 'stock_agotable', 'ejes' => 'Modelo=Columbia|Tela=ALG-OXF Pima|Género=Otro2']),
+    ];
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combinaciones', 3, 'categoria'))->toBe('Difiere de la categoría de la fila 2.')
+        ->and(cimpReason($report, 'combinaciones', 4, 'linea'))->toBe('Difiere de la línea de la fila 2.')
+        ->and(cimpReason($report, 'combinaciones', 5, 'modo'))->toBe('Difiere del modo de la fila 2.')
+        ->and(cimpReason($report, 'combinaciones', 5, 'ejes'))->toBe('El orden de los ejes difiere del de la fila 2.');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('PRD-018 rejects a combination that overlaps an earlier one on every axis', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = [
+        cimpRow(['codigo' => '1', 'ejes' => 'Modelo=Columbia|Género=Dama,Caballero', 'pedido' => 'Talla=S']),
+        cimpRow(['codigo' => '2', 'ejes' => 'Modelo=Columbia|Género=Caballero', 'pedido' => 'Talla=S']),
+    ];
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 3, 'ejes'))->toBe('Coincide con la combinación de la fila 2 en todos sus ejes.');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('PRD-018 rejects an order attribute without values unless it is the color of a product with fabric', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[0]['pedido'] = 'Talla=|Color=';
+    $rows[3]['pedido'] = 'Color=';
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combinaciones', 2, 'pedido'))->not->toBeNull()
+        ->and(cimpReason($report, 'combinaciones', 5, 'pedido'))->not->toBeNull()
+        ->and(cimpReason($report, 'combinaciones', 3, 'pedido'))->toBeNull();
+    cimpExpectUntouched($auditBefore);
+});
+
+it('PRD-018 rejects color values on a product that declares the fabric', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[0]['pedido'] = 'Talla=XS,S,M,L|Color=Rojo';
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 2, 'pedido'))->toBe(__('validation.structure_color_values_not_allowed'));
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 never prints cell values, even for every failure class at once', function () {
+    cimpAuthor();
+    $rows = cimpRows();
+    $rows[0]['producto'] = 'Zzqx secreto';
+    $rows[0]['linea'] = 'Wwvy oculta';
+    $rows[0]['codigo'] = 'Qqrt-999';
+    $rows[1]['codigo'] = 'qqrt-999';
+    $colors = cimpColors();
+    $colors[0]['color'] = 'Jjkl privado';
+    $colors[0]['tono'] = 'Mmnb';
+
+    [$exit, $output] = cimpRun($rows, $colors);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReport($output))->not->toBe([]);
+
+    foreach (['Zzqx', 'Wwvy', 'Qqrt', 'Jjkl', 'Mmnb'] as $secret) {
+        expect($output)->not->toContain($secret);
+    }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Phase 2: creation through the real Actions, in one transaction
+// ---------------------------------------------------------------------------------------------
+
+it('PRD-018 creates the catalog from valid files in one run', function () {
+    cimpAuthor();
+
+    [$exit, $output] = cimpRun();
+
+    expect($exit)->toBe(0)
+        ->and($output)->toContain('Se importó')
+        ->and(cimpCatalogCounts())->toBe([
+            'categories' => 2,
+            'attributes' => 5,
+            'values' => 13,
+            'products' => 2,
+            'product_attributes' => 6,
+            'combinations' => 4,
+            'codes' => 4,
+            'combos' => 0,
+            'offered_colors' => 3,
+        ])
+        ->and(ProductCategory::query()->orderBy('sort_order')->pluck('name')->all())->toBe(['Camisas', 'Gorras'])
+        ->and(CatalogCode::query()->orderBy('code')->pluck('code')->all())->toBe(['110-1', '110-2', '110-3', '210-1']);
+});
+
+it('DEC-PRD-49 assigns the special uses to Tela, Genero and Talla and Color as the color attribute', function () {
+    cimpAuthor();
+
+    cimpRun();
+    $attributes = CatalogAttribute::query()->orderBy('sort_order')->get()->keyBy('name');
+
+    expect($attributes->keys()->all())->toBe(['Tela', 'Modelo', 'Género', 'Talla', 'Color'])
+        ->and($attributes['Tela']->special_use)->toBe(AttributeSpecialUse::Fabric)
+        ->and($attributes['Género']->special_use)->toBe(AttributeSpecialUse::Gender)
+        ->and($attributes['Talla']->special_use)->toBe(AttributeSpecialUse::Size)
+        ->and($attributes['Modelo']->special_use)->toBeNull()
+        ->and($attributes['Modelo']->presentation)->toBe(AttributePresentation::Text)
+        ->and($attributes['Color']->presentation)->toBe(AttributePresentation::Color)
+        ->and($attributes['Color']->special_use)->toBeNull();
+});
+
+it('PRD-018 creates the palette in file order with uppercase tones and the offered colors per fabric', function () {
+    cimpAuthor();
+
+    cimpRun();
+    $color = CatalogAttribute::query()->where('name', 'Color')->firstOrFail();
+    $palette = $color->values()->orderBy('sort_order')->get();
+    $fabric = fn (string $name) => AttributeValue::query()->where('name', $name)->firstOrFail()->offeredColors()->orderBy('name')->pluck('name')->all();
+
+    expect($palette->pluck('name')->all())->toBe(['Rojo', 'Azul', 'Verde'])
+        ->and($palette->pluck('tone')->all())->toBe(['#FF0000', '#0000FF', '#00FF00'])
+        ->and($fabric('ALG-OXF Pima'))->toBe(['Azul', 'Rojo'])
+        ->and($fabric('Dril Fino'))->toBe(['Rojo']);
+});
+
+it('PRD-018 creates values in order of first appearance and never sets an SVG layer', function () {
+    cimpAuthor();
+
+    cimpRun();
+    $values = fn (string $attribute) => CatalogAttribute::query()->where('name', $attribute)->firstOrFail()->values()->orderBy('sort_order')->pluck('name')->all();
+
+    expect($values('Tela'))->toBe(['ALG-OXF Pima', 'Dril Fino'])
+        ->and($values('Género'))->toBe(['Dama', 'Caballero'])
+        ->and($values('Talla'))->toBe(['XS', 'S', 'M', 'L', 'XL'])
+        ->and(AttributeValue::query()->whereNotNull('svg_layer')->count())->toBe(0);
+});
+
+it('DEC-PRD-50 declares Tela as an axis, Color as an order attribute and a color without values on a fabric product', function () {
+    cimpAuthor();
+
+    cimpRun();
+    $structure = function (string $product): array {
+        return Product::query()->where('name', $product)->firstOrFail()
+            ->productAttributes()->with(['catalogAttribute', 'allowedValues'])->orderBy('sort_order')->get()
+            ->map(fn ($row): array => [
+                $row->catalogAttribute->name,
+                $row->role,
+                $row->allowedValues->sortBy('sort_order')->pluck('name')->all(),
+            ])->all();
+    };
+
+    expect($structure('Camisa corporativa'))->toBe([
+        ['Tela', AttributeRole::Axis, ['ALG-OXF Pima', 'Dril Fino']],
+        ['Modelo', AttributeRole::Axis, ['Columbia']],
+        ['Género', AttributeRole::Axis, ['Dama', 'Caballero']],
+        ['Talla', AttributeRole::Order, ['XS', 'S', 'M', 'L', 'XL']],
+        ['Color', AttributeRole::Order, []],
+    ])->and($structure('Gorra'))->toBe([
+        ['Color', AttributeRole::Order, ['Rojo', 'Azul']],
+    ]);
+});
+
+it('DEC-PRD-36 turns a row whose order values are a strict subset of the product into a restriction', function () {
+    cimpAuthor();
+
+    cimpRun();
+    $talla = CatalogAttribute::query()->where('name', 'Talla')->firstOrFail();
+    $restriction = fn (string $code) => CatalogCode::query()->where('code', $code)->firstOrFail()->combination
+        ->values()->wherePivot('catalog_attribute_id', $talla->id)->orderBy('attribute_values.sort_order')->pluck('attribute_values.name')->all();
+
+    expect($restriction('110-1'))->toBe(['XS', 'S', 'M', 'L'])
+        ->and($restriction('110-2'))->toBe(['S', 'M', 'L', 'XL'])
+        ->and($restriction('110-3'))->toBe([])
+        ->and($restriction('210-1'))->toBe([]);
+});
+
+it('PRD-018 stores the product data of the first row and the description of each combination', function () {
+    cimpAuthor();
+
+    cimpRun();
+    $cap = Product::query()->where('name', 'Gorra')->firstOrFail();
+
+    expect($cap->business_line->value)->toBe('uniforms')
+        ->and($cap->supply_mode->value)->toBe('stock_with_minimum')
+        ->and($cap->min_stock_default)->toBe(6)
+        ->and($cap->category->name)->toBe('Gorras')
+        ->and(CatalogCode::query()->where('code', '210-1')->firstOrFail()->combination->description)->toBe('Gorra ficticia');
+});
+
+it('PRD-018 audits every created row as an import with the console origin and the author', function () {
+    $author = cimpAuthor();
+    $auditBefore = (int) AuditLog::query()->max('id');
+
+    cimpRun();
+    $logs = AuditLog::query()->where('id', '>', $auditBefore)->get();
+
+    expect($logs)->not->toBeEmpty()
+        ->and($logs->pluck('action')->unique()->sort()->values()->all())->toBe([
+            AuditAction::CatalogCreated->value,
+            AuditAction::CatalogFabricColorsUpdated->value,
+            AuditAction::ProductAttributesUpdated->value,
+            AuditAction::CombinationCreated->value,
+            AuditAction::ProductCreated->value,
+        ]);
+
+    foreach ($logs as $log) {
+        expect($log->actor_id)->toBe($author->id)
+            ->and($log->context['import'])->toBeTrue()
+            ->and($log->context['source'])->toBe('console')
+            ->and($log->context['command'])->toBe('catalog:import')
+            ->and($log->context['import_file'])->toBeIn(['combinaciones', 'colores'])
+            ->and($log->context['import_row'])->toBeInt();
+    }
+
+    $red = $logs->first(fn (AuditLog $log): bool => $log->action === AuditAction::CatalogCreated->value && ($log->new_values['name'] ?? null) === 'Rojo');
+    $shirt = $logs->first(fn (AuditLog $log): bool => $log->action === AuditAction::CombinationCreated->value && ($log->new_values['code'] ?? null) === '110-2');
+
+    expect($red->context['import_file'])->toBe('colores')
+        ->and($red->context['import_row'])->toBe(2)
+        ->and($shirt->context['import_file'])->toBe('combinaciones')
+        ->and($shirt->context['import_row'])->toBe(3);
+});
+
+it('PRD-018 rolls everything back when an exception happens in the middle of the run', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $this->app->bind(CreateCombination::class, fn ($app) => new class($app->make(RecordAuditEvent::class)) extends CreateCombination
+    {
+        private int $calls = 0;
+
+        public function handle(Product $product, array $data, User $actor, ?AuditOrigin $origin = null, array $auditContext = []): Combination
+        {
+            if (++$this->calls > 2) {
+                throw new RuntimeException('fallo forzado');
+            }
+
+            return parent::handle($product, $data, $actor, $origin, $auditContext);
+        }
+    });
+
+    [$exit, $output] = cimpRun();
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain('No se importó nada')
+        ->and($output)->toContain('RuntimeException')
+        ->and($output)->not->toContain('fallo forzado');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 reports a row rejected while creating, rolls everything back and never prints the value', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $this->app->bind(CreateProduct::class, fn ($app) => new class($app->make(RecordAuditEvent::class)) extends CreateProduct
+    {
+        private int $calls = 0;
+
+        public function handle(array $data, User $actor, ?AuditOrigin $origin = null, array $auditContext = []): Product
+        {
+            if (++$this->calls > 1) {
+                throw ValidationException::withMessages(['name' => __('validation.product_name_unique')]);
+            }
+
+            return parent::handle($data, $actor, $origin, $auditContext);
+        }
+    });
+
+    [$exit, $output] = cimpRun();
+
+    expect($exit)->toBe(1)
+        ->and(cimpReport($output))->toBe([['combinaciones', '5', 'producto', __('validation.product_name_unique')]])
+        ->and($output)->not->toContain('Gorra');
+    cimpExpectUntouched($auditBefore);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Decisions DEC-PRD-101..104 (confirmed 2026-10-12)
+// ---------------------------------------------------------------------------------------------
+
+it('DEC-PRD-101 rejects an order attribute without values, except the empty color of a product with fabric', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[0]['pedido'] = 'Talla=|Color=';
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combinaciones', 2, 'pedido'))->not->toBeNull()
+        ->and(cimpReason($report, 'combinaciones', 3, 'pedido'))->toBeNull();
+    cimpExpectUntouched($auditBefore);
+});
+
+it('DEC-PRD-102 rejects a color of a product without fabric that is not in the palette', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[3]['pedido'] = 'Color=Rojo,Naranja';
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 5, 'pedido'))->toBe(__('validation.catalog_import_color_not_in_palette'))
+        ->and($output)->not->toContain('Naranja');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('DEC-PRD-103 rejects rows of a product that change the order of the axes and keeps the per-row restriction of a common set', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+    $rows[1]['ejes'] = 'Modelo=Columbia|Tela=ALG-OXF Pima|Género=Caballero';
+
+    [$exit, $output] = cimpRun($rows);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason(cimpReport($output), 'combinaciones', 3, 'ejes'))->toBe(__('validation.catalog_import_differs_axes', ['row' => 2]));
+    cimpExpectUntouched($auditBefore);
+
+    // The valid set: the product allows XS..XL and each row restricts it to a subset (or none).
+    [$exit] = cimpRun();
+    $talla = CatalogAttribute::query()->where('name', 'Talla')->firstOrFail();
+    $restricted = Combination::query()->get()->filter(fn (Combination $combination): bool => $combination->values()
+        ->wherePivot('catalog_attribute_id', $talla->id)->exists());
+
+    expect($exit)->toBe(0)
+        ->and($restricted)->toHaveCount(2);
+});
+
+it('DEC-PRD-104 rejects an attribute named like a special use without matching it exactly', function (string $name, string $column) {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $rows = cimpRows();
+
+    if ($column === 'ejes') {
+        $rows[0]['ejes'] = "Tela=ALG-OXF Pima|Modelo=Columbia|{$name}=Dama";
+    } else {
+        $rows[0]['pedido'] = "{$name}=XS,S,M,L|Color=";
+    }
+
+    [$exit, $output] = cimpRun($rows);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combinaciones', 2, $column))->toBe(__('validation.catalog_import_special_use_lookalike'))
+        ->and($output)->not->toContain($name);
+    cimpExpectUntouched($auditBefore);
+})->with([
+    'plural size' => ['tallas', 'pedido'],
+    'accented plural size' => ['Tallás', 'pedido'],
+    'synonym sex' => ['sexo', 'ejes'],
+    'synonym talle' => ['Talle', 'pedido'],
+    'synonym tejido' => ['Tejido', 'ejes'],
+    'plural fabric' => ['Telas', 'ejes'],
+    'typo gender' => ['Genro', 'ejes'],
+    'plural gender' => ['Géneros', 'ejes'],
+]);
+
+it('DEC-PRD-104 still imports attributes whose name does not resemble a special use', function () {
+    cimpAuthor();
+    $rows = cimpRows();
+    $rows[0]['pedido'] = 'Talla=XS,S,M,L|Manga=Corta,Larga|Color=';
+    $rows[1]['pedido'] = 'Talla=S,M,L,XL|Manga=Corta,Larga|Color=';
+    $rows[2]['pedido'] = 'Talla=XS,S,M,L,XL|Manga=Corta,Larga|Color=';
+
+    [$exit] = cimpRun($rows);
+
+    expect($exit)->toBe(0)
+        ->and(CatalogAttribute::query()->whereIn('name', ['Modelo', 'Manga'])->pluck('special_use')->filter()->all())->toBe([]);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Combos (E-31, E-32, DEC-PRD-43, DEC-PRD-48)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Diaper rows (physical lines 6 and 7 after `cimpRows()`): one product with a size axis and its own
+ * colors; with `$extras`, a service and a product with fabric, also of the diaper line.
+ *
+ * @return list<array<string, string>>
+ */
+function cimpDiaperRows(bool $extras = false): array
+{
+    $diaper = ['categoria' => 'Pañales', 'producto' => 'Pañal adulto', 'linea' => 'pañales', 'modo' => 'stock_con_minimo', 'stock_minimo' => '20', 'pedido' => 'Color=Rojo,Azul'];
+    $rows = [
+        cimpRow($diaper + ['codigo' => 'P-M', 'ejes' => 'Talla=M', 'descripcion' => 'Pañal M']),
+        cimpRow($diaper + ['codigo' => 'P-G', 'ejes' => 'Talla=G', 'descripcion' => 'Pañal G']),
+    ];
+
+    if ($extras) {
+        $rows[] = cimpRow(['categoria' => 'Pañales', 'producto' => 'Servicio de ajuste', 'linea' => 'pañales', 'modo' => 'servicio', 'codigo' => 'S-1', 'ejes' => 'Talla=M', 'pedido' => 'Color=Rojo']);
+        $rows[] = cimpRow(['categoria' => 'Pañales', 'producto' => 'Pañal de tela', 'linea' => 'pañales', 'codigo' => 'PT-1', 'ejes' => 'Tela=Dril Fino', 'pedido' => 'Color=']);
+    }
+
+    return $rows;
+}
+
+/**
+ * A combo component row with fictitious values.
+ *
+ * @param  array<string, string>  $overrides
+ * @return array<string, string>
+ */
+function cimpComboRow(array $overrides = []): array
+{
+    return $overrides + ['codigo' => 'K-1', 'nombre' => 'Kit pañal', 'producto' => 'Pañal adulto', 'cantidad' => '2', 'valores' => ''];
+}
+
+/**
+ * Runs the command with the shirts, the diapers and the given combo rows.
+ *
+ * @param  list<array<string, string>>  $combos
+ * @return array{0: int, 1: string}
+ */
+function cimpRunCombos(array $combos, bool $extras = false): array
+{
+    return cimpRun([...cimpRows(), ...cimpDiaperRows($extras)], combosContent: cimpCsv(CIMP_COMBO_COLUMNS, $combos));
+}
+
+it('E-31 creates categories, attributes, products, combinations, combos, colors and colors per fabric in one run', function () {
+    cimpAuthor();
+
+    [$exit, $output] = cimpRunCombos([
+        cimpComboRow(['valores' => 'Talla=M']),
+        cimpComboRow(['producto' => 'Pañal adulto', 'cantidad' => '1', 'valores' => 'Color=Azul']),
+        cimpComboRow(['codigo' => 'K-2', 'nombre' => 'Kit sencillo', 'cantidad' => '3']),
+    ]);
+    $first = Combo::query()->where('name', 'Kit pañal')->firstOrFail();
+    $components = $first->components()->orderBy('sort_order')->get();
+    $restricted = fn (int $position): array => DB::table('combo_component_values')
+        ->where('combo_component_id', $components[$position]->id)
+        ->join('attribute_values', 'attribute_values.id', '=', 'combo_component_values.attribute_value_id')
+        ->pluck('attribute_values.name')->all();
+
+    expect($exit)->toBe(0)
+        ->and($output)->toContain('2 combos')
+        ->and(cimpCatalogCounts())->toMatchArray([
+            'categories' => 3, 'products' => 3, 'combinations' => 6, 'combos' => 2, 'offered_colors' => 3, 'codes' => 8,
+        ])
+        ->and(CatalogCode::query()->where('code', 'K-1')->firstOrFail()->combo_id)->toBe($first->id)
+        ->and($first->status->value)->toBe('active')
+        ->and($components->pluck('quantity')->all())->toBe([2, 1])
+        ->and($restricted(0))->toBe(['M'])
+        ->and($restricted(1))->toBe(['Azul'])
+        ->and(Combo::query()->where('name', 'Kit sencillo')->firstOrFail()->components()->count())->toBe(1);
+});
+
+it('DEC-PRD-105 creates the imported combos active and visible in the portal', function () {
+    cimpAuthor();
+
+    [$exit] = cimpRunCombos([cimpComboRow()]);
+    $combo = Combo::query()->where('name', 'Kit pañal')->firstOrFail();
+
+    expect($exit)->toBe(0)
+        ->and($combo->status->value)->toBe('active')
+        ->and($combo->portal_visible)->toBeTrue();
+});
+
+it('E-31 audits every created row as an import, including the combos, with the console origin and the author', function () {
+    $author = cimpAuthor();
+    $auditBefore = (int) AuditLog::query()->max('id');
+
+    cimpRunCombos([cimpComboRow(), cimpComboRow(['codigo' => 'K-2', 'nombre' => 'Kit sencillo'])]);
+    $logs = AuditLog::query()->where('id', '>', $auditBefore)->get();
+    $combos = $logs->where('action', AuditAction::ComboCreated->value);
+
+    expect($combos)->toHaveCount(2)
+        ->and($combos->pluck('context.import_file')->unique()->all())->toBe(['combos'])
+        ->and($combos->pluck('context.import_row')->sort()->values()->all())->toBe([2, 3]);
+
+    foreach ($logs as $log) {
+        expect($log->actor_id)->toBe($author->id)
+            ->and($log->context['import'])->toBeTrue()
+            ->and($log->context['source'])->toBe('console')
+            ->and($log->context['import_file'])->toBeIn(['combinaciones', 'combos', 'colores']);
+    }
+});
+
+it('E-31 reads the combos file with the semicolon delimiter and an accented, differently cased header', function () {
+    cimpAuthor();
+    $content = cimpCsv(CIMP_COMBO_COLUMNS, [cimpComboRow()], ';');
+    $combos = cimpFile(str_replace('codigo;nombre;producto', 'CODIGO;Nombre;PRODUCTO', $content), 'combos-puntoycoma.csv');
+
+    [$exit] = cimpRun([...cimpRows(), ...cimpDiaperRows()], options: ['combos' => $combos]);
+
+    expect($exit)->toBe(0)
+        ->and(Combo::query()->count())->toBe(1);
+});
+
+it('DEC-PRD-48 imports no minimum of its own per article, only the default of the product', function () {
+    cimpAuthor();
+
+    [$exit] = cimpRunCombos([cimpComboRow()]);
+
+    expect($exit)->toBe(0)
+        ->and(StockMinimumOverride::query()->count())->toBe(0)
+        ->and(Product::query()->where('name', 'Pañal adulto')->firstOrFail()->min_stock_default)->toBe(20);
+});
+
+it('E-31 accepts a color restriction on a diaper product with fabric when a fabric offers that color', function () {
+    cimpAuthor();
+
+    [$exit] = cimpRunCombos([cimpComboRow(['producto' => 'Pañal de tela', 'valores' => 'Color=Rojo'])], true);
+
+    expect($exit)->toBe(0)
+        ->and(Combo::query()->count())->toBe(1);
+});
+
+it('E-32 reports a combo failure by file, row and column and imports nothing', function (Closure $combos, bool $extras, int $row, string $column, ?string $key, array $parameters) {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+
+    [$exit, $output] = cimpRunCombos($combos(), $extras);
+    $reason = cimpReason(cimpReport($output), 'combos', $row, $column);
+
+    expect($exit)->toBe(1)
+        ->and($reason)->not->toBeNull()
+        ->and($output)->not->toContain('Se importó');
+
+    if ($key !== null) {
+        expect($reason)->toBe(__("validation.{$key}", $parameters));
+    }
+
+    cimpExpectUntouched($auditBefore);
+})->with([
+    'code of a combination, other letter case' => [fn () => [cimpComboRow(['codigo' => 'p-m'])], false, 2, 'codigo', 'catalog_import_code_repeated_in', ['row' => 6, 'file' => 'combinaciones']],
+    'code of another combo, other letter case' => [fn () => [cimpComboRow(), cimpComboRow(['codigo' => 'k-1', 'nombre' => 'Otro kit'])], false, 3, 'codigo', 'catalog_import_code_repeated', ['row' => 2]],
+    'component from the uniforms line' => [fn () => [cimpComboRow(['producto' => 'Gorra'])], false, 2, 'producto', 'combo_component_not_diapers', []],
+    'component that does not exist' => [fn () => [cimpComboRow(['producto' => 'Inexistente'])], false, 2, 'producto', 'combo_component_product_unknown', []],
+    'service component' => [fn () => [cimpComboRow(['producto' => 'Servicio de ajuste'])], true, 2, 'producto', 'combo_component_service', []],
+    'restriction outside the values of the product' => [fn () => [cimpComboRow(['valores' => 'Talla=XL'])], false, 2, 'valores', 'combo_component_value_not_allowed', []],
+    'restriction of an attribute the product does not have' => [fn () => [cimpComboRow(['valores' => 'Manga=Corta'])], false, 2, 'valores', 'combo_component_attribute_unknown', []],
+    'color a fabric of the product does not offer' => [fn () => [cimpComboRow(['producto' => 'Pañal de tela', 'valores' => 'Color=Azul'])], true, 2, 'valores', 'combo_component_value_not_allowed', []],
+    'attribute repeated in the restriction' => [fn () => [cimpComboRow(['valores' => 'Talla=M|Talla=G'])], false, 2, 'valores', 'catalog_import_list_repeated', []],
+    'quantity zero' => [fn () => [cimpComboRow(['cantidad' => '0'])], false, 2, 'cantidad', null, []],
+    'quantity not a number' => [fn () => [cimpComboRow(['cantidad' => 'dos'])], false, 2, 'cantidad', null, []],
+    'quantity above the limit' => [fn () => [cimpComboRow(['cantidad' => '1000'])], false, 2, 'cantidad', null, []],
+    'empty name' => [fn () => [cimpComboRow(['nombre' => ''])], false, 2, 'nombre', null, []],
+    'name equal to another combo in other letter case' => [fn () => [cimpComboRow(), cimpComboRow(['codigo' => 'K-2', 'nombre' => 'KIT PAÑAL'])], false, 3, 'nombre', 'combo_name_unique', []],
+    'rows of a code with different names' => [fn () => [cimpComboRow(), cimpComboRow(['nombre' => 'Otro nombre'])], false, 3, 'nombre', 'catalog_import_combo_name_differs', ['row' => 2]],
+]);
+
+it('E-32 reports every row of a combo that fails, with the cell values never printed', function () {
+    cimpAuthor();
+
+    [$exit, $output] = cimpRunCombos([
+        cimpComboRow(['codigo' => 'Zzqx-1', 'nombre' => 'Wwvy secreto', 'producto' => 'Jjkl oculto', 'valores' => 'Qqrt=Mmnb']),
+        cimpComboRow(['codigo' => 'Zzqx-2', 'nombre' => 'Wwvy secreto']),
+    ]);
+    $report = cimpReport($output);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReason($report, 'combos', 2, 'producto'))->toBe(__('validation.combo_component_product_unknown'))
+        ->and(cimpReason($report, 'combos', 3, 'nombre'))->toBe(__('validation.combo_name_unique'));
+
+    foreach (['Zzqx', 'Wwvy', 'Jjkl', 'Qqrt', 'Mmnb'] as $secret) {
+        expect($output)->not->toContain($secret);
+    }
+});
+
+it('PRD-018 rolls back the catalog when creating a combo fails in the middle of the run', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $this->app->bind(CreateCombo::class, fn ($app) => new class($app->make(RecordAuditEvent::class)) extends CreateCombo
+    {
+        public function handle(array $data, User $actor, ?AuditOrigin $origin = null, array $auditContext = []): Combo
+        {
+            throw new RuntimeException('fallo forzado');
+        }
+    });
+
+    [$exit, $output] = cimpRunCombos([cimpComboRow()]);
+
+    expect($exit)->toBe(1)
+        ->and($output)->toContain('No se importó nada')
+        ->and($output)->not->toContain('fallo forzado');
+    cimpExpectUntouched($auditBefore);
+});
+
+it('E-32 reports a combo rejected while creating and rolls everything back', function () {
+    cimpAuthor();
+    $auditBefore = AuditLog::query()->count();
+    $this->app->bind(CreateCombo::class, fn ($app) => new class($app->make(RecordAuditEvent::class)) extends CreateCombo
+    {
+        public function handle(array $data, User $actor, ?AuditOrigin $origin = null, array $auditContext = []): Combo
+        {
+            throw ValidationException::withMessages(['name' => __('validation.combo_name_unique')]);
+        }
+    });
+
+    [$exit, $output] = cimpRunCombos([cimpComboRow(), cimpComboRow(['codigo' => 'K-2', 'nombre' => 'Kit sencillo'])]);
+
+    expect($exit)->toBe(1)
+        ->and(cimpReport($output))->toBe([['combos', '2', 'nombre', __('validation.combo_name_unique')]]);
+    cimpExpectUntouched($auditBefore);
+});

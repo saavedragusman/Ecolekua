@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import AppButton from '@/components/AppButton.vue';
 import AppCard from '@/components/AppCard.vue';
 import AppInput from '@/components/AppInput.vue';
+import ActionErrors from '@/components/catalog/ActionErrors.vue';
 import CatalogSections from '@/components/catalog/CatalogSections.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import DataTable from '@/components/DataTable.vue';
 import type { DataTableColumn } from '@/components/DataTable.vue';
 import IconButton from '@/components/IconButton.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import { useScrollToForm } from '@/composables/useScrollToForm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import {
     activate,
@@ -39,6 +41,8 @@ const columns = computed<DataTableColumn[]>(() => [
 const formOpen = ref(false);
 const editing = ref<CatalogCategory | null>(null);
 const form = useForm({ name: '' });
+const formElement = useTemplateRef<HTMLFormElement>('formElement');
+const { scrollToForm } = useScrollToForm(formElement);
 
 const moveForm = useForm<{ direction: 'up' | 'down' }>({ direction: 'up' });
 const statusForm = useForm({});
@@ -55,6 +59,7 @@ function openEdit(category: CatalogCategory): void {
     form.name = category.name;
     form.clearErrors();
     formOpen.value = true;
+    void scrollToForm();
 }
 
 function closeForm(): void {
@@ -82,10 +87,12 @@ function moveCategory(
     direction: 'up' | 'down',
 ): void {
     moveForm.direction = direction;
+    moveForm.clearErrors();
     moveForm.submit(move(category.id), { preserveScroll: true });
 }
 
 // Deactivating asks for confirmation (design-system §7.10); reactivating is reversible and does not.
+// A rejection closes the dialog so the backend message shows on the page.
 const deactivating = ref<CatalogCategory | null>(null);
 const confirmingDeactivate = computed({
     get: () => deactivating.value !== null,
@@ -103,15 +110,17 @@ function deactivateCategory(): void {
         return;
     }
 
+    statusForm.clearErrors();
     statusForm.submit(deactivate(target.id), {
         preserveScroll: true,
-        onSuccess: () => {
+        onFinish: () => {
             deactivating.value = null;
         },
     });
 }
 
 function reactivateCategory(category: CatalogCategory): void {
+    statusForm.clearErrors();
     statusForm.submit(activate(category.id), { preserveScroll: true });
 }
 </script>
@@ -133,7 +142,12 @@ function reactivateCategory(category: CatalogCategory): void {
 
         <CatalogSections current="categories" />
 
-        <form v-if="can.manage && formOpen" novalidate @submit.prevent="submit">
+        <form
+            v-if="can.manage && formOpen"
+            ref="formElement"
+            novalidate
+            @submit.prevent="submit"
+        >
             <AppCard>
                 <h2 class="font-headline-sm text-headline-sm text-primary">
                     {{
@@ -161,12 +175,15 @@ function reactivateCategory(category: CatalogCategory): void {
             </AppCard>
         </form>
 
+        <ActionErrors :errors="{ ...moveForm.errors, ...statusForm.errors }" />
+
         <p class="font-body-md text-body-md text-on-surface-variant">
             Cambie el orden con las flechas. Las categorías no se eliminan: se
             desactivan.
         </p>
 
         <DataTable
+            fit
             :columns="columns"
             :rows="categories"
             row-key="id"
@@ -179,17 +196,19 @@ function reactivateCategory(category: CatalogCategory): void {
                 />
             </template>
             <template #cell-actions="{ row }">
-                <div class="flex flex-wrap items-center gap-space-sm">
+                <div
+                    class="flex flex-wrap items-center gap-x-space-md gap-y-space-sm"
+                >
                     <IconButton
                         icon="arrow_upward"
-                        variant="tool"
+                        variant="reorder"
                         :label="`Subir ${row.name}`"
                         :disabled="position(row) === 0 || moveForm.processing"
                         @click="moveCategory(row, 'up')"
                     />
                     <IconButton
                         icon="arrow_downward"
-                        variant="tool"
+                        variant="reorder"
                         :label="`Bajar ${row.name}`"
                         :disabled="
                             position(row) === categories.length - 1 ||
