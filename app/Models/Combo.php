@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
@@ -28,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read CatalogCode|null $catalogCode
  * @property-read Collection<int, ComboComponent> $components
+ * @property-read Collection<int, ComboItemPrice> $itemPrices
  */
 #[Fillable(['name', 'portal_visible', 'status'])]
 class Combo extends Model
@@ -75,6 +77,16 @@ class Combo extends Model
     public function components(): HasMany
     {
         return $this->hasMany(ComboComponent::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /**
+     * Prices of the components that have one (COT-005).
+     *
+     * @return HasManyThrough<ComboItemPrice, ComboComponent, $this>
+     */
+    public function itemPrices(): HasManyThrough
+    {
+        return $this->hasManyThrough(ComboItemPrice::class, ComboComponent::class);
     }
 
     /**

@@ -4,9 +4,14 @@ namespace App\Providers;
 
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
+use App\Models\CombinationPrice;
+use App\Models\ComboItemPrice;
+use App\Models\CommercialParameters;
 use App\Models\DetailLocation;
+use App\Models\PriceScheme;
 use App\Models\ProductCategory;
 use App\Policies\CatalogPolicy;
+use App\Policies\PricingPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->registerCatalogPolicy();
+        $this->registerPricingPolicy();
     }
 
     /**
@@ -40,6 +46,17 @@ class AppServiceProvider extends ServiceProvider
     {
         foreach ([ProductCategory::class, CatalogAttribute::class, AttributeValue::class, DetailLocation::class] as $model) {
             Gate::policy($model, CatalogPolicy::class);
+        }
+    }
+
+    /**
+     * The pricing models share one policy (design Decision 6), so it cannot be auto-discovered.
+     * `ExchangeRate` and `PriceImport` join the list in the phases that create them.
+     */
+    protected function registerPricingPolicy(): void
+    {
+        foreach ([PriceScheme::class, CombinationPrice::class, ComboItemPrice::class, CommercialParameters::class] as $model) {
+            Gate::policy($model, PricingPolicy::class);
         }
     }
 

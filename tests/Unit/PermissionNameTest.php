@@ -28,11 +28,17 @@ it('FND-017 defines exactly the permissions of the spec catalogs (001 and 002)',
         'products.deactivate',
         'products.delete',
         'products.catalog',
+        'quotations.view',
+        'quotations.create',
+        'quotations.negotiate',
+        'quotations.cancel',
+        'pricing.view',
+        'pricing.manage',
     ]);
 });
 
 it('FND-017 gives every permission a non-empty Spanish description', function () {
-    expect(PermissionName::cases())->toHaveCount(22);
+    expect(PermissionName::cases())->toHaveCount(28);
 
     foreach (PermissionName::cases() as $case) {
         expect($case->description())->toBeString()->not->toBe('');
@@ -51,6 +57,15 @@ it('PRD-016 uses the description text of spec 003 section 4', function () {
         ->and(PermissionName::ProductsDeactivate->description())->toBe('Desactivar y reactivar productos, combinaciones y combos')
         ->and(PermissionName::ProductsDelete->description())->toBe('Eliminar productos, combinaciones y combos sin historial')
         ->and(PermissionName::ProductsCatalog->description())->toBe('Gestionar categorías, atributos y sus valores, y ubicaciones de detalle, incluidos sus tonos, imágenes y capas');
+});
+
+it('COT-023 uses the description text of spec 004 section 4', function () {
+    expect(PermissionName::QuotationsView->description())->toBe('Ver cotizaciones, su detalle, su vista imprimible y el historial de cotizaciones en la ficha del cliente')
+        ->and(PermissionName::QuotationsCreate->description())->toBe('Crear y editar borradores, emitirlos, reenviarlos por correo, duplicar cotizaciones y descartar borradores')
+        ->and(PermissionName::QuotationsNegotiate->description())->toBe('Fijar o confirmar el precio de las líneas que requieren asesora y acordar su anticipo')
+        ->and(PermissionName::QuotationsCancel->description())->toBe('Anular cotizaciones emitidas')
+        ->and(PermissionName::PricingView->description())->toBe('Ver esquemas, precios, precios de combos, parámetros comerciales y tasas; exportar los precios a CSV y ver el historial de importaciones')
+        ->and(PermissionName::PricingManage->description())->toBe('Gestionar esquemas, asignarlos a productos, editar precios y parámetros comerciales, registrar la tasa manualmente, importar y aplicar actualizaciones masivas');
 });
 
 it('CLI-015 uses the description text of spec 002 section 4', function () {

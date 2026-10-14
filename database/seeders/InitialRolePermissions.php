@@ -9,7 +9,7 @@ use Closure;
 
 /**
  * Initial grants of permissions to roles, declared once as seed data (spec 001 section 9,
- * spec 002 section 4 DEC-CLI-11, spec 003 section 4 DEC-PRD-22). Role names appear here and only here; runtime code asks for
+ * spec 002 section 4 DEC-CLI-11, spec 003 section 4 DEC-PRD-22, spec 004 section 4 DEC-COT-25). Role names appear here and only here; runtime code asks for
  * permissions, never for role names.
  *
  * A (permission, role) pair is attached only when the permission was created in the current
@@ -48,6 +48,12 @@ final class InitialRolePermissions
         PermissionName::ProductsDeactivate->value => [self::ADMINISTRATOR, 'Gerente', 'Asesora de Ventas'],
         PermissionName::ProductsCatalog->value => [self::ADMINISTRATOR, 'Gerente', 'Asesora de Ventas'],
         PermissionName::ProductsDelete->value => [self::ADMINISTRATOR],
+        PermissionName::QuotationsView->value => [self::ADMINISTRATOR, 'Gerente', 'Asesora de Ventas', 'Finanzas'],
+        PermissionName::QuotationsCreate->value => [self::ADMINISTRATOR, 'Gerente', 'Asesora de Ventas'],
+        PermissionName::QuotationsNegotiate->value => [self::ADMINISTRATOR, 'Gerente', 'Asesora de Ventas'],
+        PermissionName::QuotationsCancel->value => [self::ADMINISTRATOR, 'Gerente', 'Asesora de Ventas'],
+        PermissionName::PricingView->value => [self::ADMINISTRATOR, 'Gerente', 'Asesora de Ventas', 'Finanzas'],
+        PermissionName::PricingManage->value => [self::ADMINISTRATOR, 'Gerente'],
     ];
 
     /**
