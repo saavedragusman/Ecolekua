@@ -453,5 +453,40 @@ Deviations and notes:
 ### Suggested commit
 `feat(004): registrar la tasa de cambio manual y consultar la vigente [COT-030, E-64]`
 
+Committed as `b1065fe`.
+
+## Phase 8b (PR 14, `feat/004-pricing-and-quotations-8b-exchange-rate-fetch`, base PR 13): 8.1-8.5, 8.7, 8.8 done; 8.6 partial; gate green, commit pending
+
+### 8.1 outcome
+`vendor/laravel/sail/runtimes/8.5/supervisord.conf` runs `command=%(ENV_SUPERVISOR_PHP_COMMAND)s` and the Dockerfile only sets it as a default `ENV`, so a service in `compose.yaml` overrides it with its own `environment` entry. Confirmed by `sail up -d` starting `scheduler` with `schedule:work`.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 8.2/8.3 | `tests/Unit/Pricing/RateParserTest.php` | Unit | new file | classes absent (20 errors with the fetch tests) | 22/22 | E-63 value, HALF_UP from the raw token beyond float precision, integer/short/exponent padding, 11 null cases, nested `promedio` ignored | the first version picked the token with `(float)` comparisons; `MoneyHasNoFloatTest` failed, replaced by a depth scan of the raw body |
+| 8.4/8.5 (fetch) | `tests/Feature/Pricing/ExchangeRateTest.php` | Feature (command + Action) | 8a part green | 14 "command does not exist", config null, schedule empty | 38/38 for the file | E-63 Caracas date (also when UTC is the next day), source date apart in UTC, second run sends nothing, any-origin rate of today blocks the call, missing/unreadable source date, 6 failure paths (log + event + nothing saved + previous day in force), 3 attempts with 2 s / 10 s (`Sleep::fake`), manual rate written during the call wins silently, schedule 07:00/07:30/08:00/09:00 `America/Caracas` without overlapping, config URL | — |
+
+Production: `RateParser`, `FetchExchangeRate`, `FetchExchangeRateCommand` (`exchange-rate:fetch`, always exits 0 so later runs still try), `ExchangeRateFetchFailed` (`ShouldDispatchAfterCommit`, reason only), the four schedule entries in `routes/console.php`, `config/services.php` `exchange_rate.url`, `Http::preventStrayRequests()` in `tests/TestCase.php` for the whole suite. Design detail: Laravel takes the backoff list as `retry([2000, 10000])` (3 attempts), not `retry(3, [2000, 10000])` as the design wrote.
+
+### 8.6 (infra), partial
+- `compose.yaml`: `scheduler` service (image `sail-8.5/app`, `SUPERVISOR_PHP_COMMAND` = `schedule:work`, same volume and network, depends on `laravel.test` and `mysql`). `sail up -d` started it; `sail artisan schedule:list` lists `exchange-rate:fetch` at 11:00, 11:30, 12:00 and 13:00 UTC (07:00-09:00 Caracas). The container was then **stopped** (`sail stop scheduler`) so the live API is not called without the user's say-so.
+- `.env.example` (`EXCHANGE_RATE_URL`): **not done**, the file is blocked by the permission settings; the config default already holds the URL.
+- `AGENTS.md` §2 line: **not done**, the file has uncommitted user edits; pending the user's decision.
+
+### Gate (PR 14, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed
+- `sail pnpm types:check`: passed
+- `sail pnpm build`: passed
+- `sail artisan test`: first run 1 failure (`MoneyHasNoFloatTest`: `(float)` in `RateParser`); after the fix passed, 2124 tests (2122 passed, 2 skipped, 11235 assertions)
+
+### Size
+466 authored changed lines (461 additions, 5 deletions) excluding `tasks.md`, `apply-progress.md`.
+
+### Suggested commit
+`feat(004): consultar la tasa de cambio diaria desde la API y programarla [COT-030, E-63, E-64]`
+
 ### Remaining
-Phase 8b (PR 14): 8.1-8.3, API fetch, schedule, failure event, scheduler service (8.6), 8.7.
+8.6 leftovers (`.env.example`, `AGENTS.md` line); then Phase 9 (PR 15): pure calculation classes.

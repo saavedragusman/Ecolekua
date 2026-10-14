@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    // Official exchange rate of the day (spec 004, COT-030, DEC-COT-01): read only by the scheduled
+    // `exchange-rate:fetch` command.
+    'exchange_rate' => [
+        'url' => env('EXCHANGE_RATE_URL', 'https://ve.dolarapi.com/v1/dolares/oficial'),
+    ],
+
 ];
