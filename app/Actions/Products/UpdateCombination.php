@@ -3,6 +3,7 @@
 namespace App\Actions\Products;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Pricing\SizeGroupMaintenance;
 use App\Enums\AuditAction;
 use App\Enums\CatalogStatus;
 use App\Models\CatalogCode;
@@ -23,11 +24,15 @@ use Illuminate\Validation\ValidationException;
  * and the combination second. The overlap check only applies while the combination is active (two
  * ACTIVE combinations cannot coincide, DEC-PRD-39); an inactive one is checked when it is reactivated
  * (E-59). The audit row carries only the fields that changed and nothing is written when nothing
- * changed (E-68, as `UpdateProduct`).
+ * changed (E-68, as `UpdateProduct`). A size the restriction no longer admits leaves its size groups
+ * (COT-004, DEC-COT-48).
  */
 class UpdateCombination
 {
-    public function __construct(private readonly RecordAuditEvent $audit) {}
+    public function __construct(
+        private readonly RecordAuditEvent $audit,
+        private readonly SizeGroupMaintenance $sizeGroups,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $data  validated input (see CombinationRules::rules()); `description` keeps its value when not sent
@@ -82,6 +87,10 @@ class UpdateCombination
         if ($registry->code !== $data['code']) {
             $registry->forceFill(['code' => $data['code']])->save();
         }
+
+        // COT-004, DEC-COT-48: the sizes the narrowed restriction no longer admits leave their size
+        // groups. It runs before the values change, while the groups still match what is admitted.
+        $this->sizeGroups->restrictTo($combination, $restrictions, $actor);
 
         ProductCombinations::syncValues($combination, $axes, $restrictions);
 

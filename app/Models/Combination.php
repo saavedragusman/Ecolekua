@@ -34,6 +34,8 @@ use Illuminate\Support\Carbon;
  * @property-read CatalogCode|null $catalogCode
  * @property-read Collection<int, AttributeValue> $values
  * @property-read Collection<int, Product> $customizations
+ * @property-read Collection<int, CombinationPrice> $prices
+ * @property-read Collection<int, SizeGroup> $sizeGroups
  */
 #[Fillable(['product_id', 'description', 'status', 'axis_signature'])]
 class Combination extends Model
@@ -99,6 +101,26 @@ class Combination extends Model
     public function customizations(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'combination_customizations', 'combination_id', 'service_product_id');
+    }
+
+    /**
+     * Registered prices per tier and size group (COT-003).
+     *
+     * @return HasMany<CombinationPrice, $this>
+     */
+    public function prices(): HasMany
+    {
+        return $this->hasMany(CombinationPrice::class);
+    }
+
+    /**
+     * Size groups that share a price, in their order (COT-004).
+     *
+     * @return HasMany<SizeGroup, $this>
+     */
+    public function sizeGroups(): HasMany
+    {
+        return $this->hasMany(SizeGroup::class)->orderBy('sort_order')->orderBy('id');
     }
 
     /**
