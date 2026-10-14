@@ -341,11 +341,13 @@ it('COT-004 requires the size group of a grouped combination and prices each gro
     $small = SizeGroup::factory()->create(['combination_id' => $combination->id, 'sort_order' => 1]);
     $large = SizeGroup::factory()->create(['combination_id' => $combination->id, 'sort_order' => 2]);
 
-    $names = ['S', 'M'];
+    $sizes = missingDeclareSizes($product, ['S', 'M', 'L']);
 
-    foreach ($names as $name) {
-        $small->sizes()->attach(AttributeValue::factory()->create(['name' => $name])->id, ['combination_id' => $combination->id]);
+    foreach (['S', 'M'] as $name) {
+        $small->sizes()->attach($sizes[$name], ['combination_id' => $combination->id]);
     }
+
+    $large->sizes()->attach($sizes['L'], ['combination_id' => $combination->id]);
 
     savePriceTable($product, [priceCell($combination, $detal, '40.00')])
         ->assertUnprocessable()
@@ -353,12 +355,12 @@ it('COT-004 requires the size group of a grouped combination and prices each gro
 
     savePriceTable($product, [priceCell($combination, $detal, '40.00', $small), priceCell($combination, $detal, '44.00', $large)])->assertRedirect();
 
-    $audit = priceAuditRows(AuditAction::PriceCreated)->first();
+    $audits = priceAuditRows(AuditAction::PriceCreated);
 
+    // The audit names a group by its derived label (SizeGroupLabel): a run of neighbours is "S–M".
     expect(CombinationPrice::query()->where('size_group_id', $small->id)->sole()->unit_price->toString())->toBe('40.00')
         ->and(CombinationPrice::query()->where('size_group_id', $large->id)->sole()->unit_price->toString())->toBe('44.00')
-        ->and($audit->new_values['size_group'])->toBeString()->toContain('S')
-        ->and($audit->new_values['size_group'])->toContain('M');
+        ->and($audits->pluck('new_values.size_group')->all())->toBe(['S–M', 'L']);
 });
 
 it('COT-004 rejects a size group of another combination and a size group on an ungrouped combination', function () {
