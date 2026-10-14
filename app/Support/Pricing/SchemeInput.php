@@ -57,14 +57,15 @@ final class SchemeInput
     }
 
     /**
-     * Shape of each tier of the submitted list.
+     * Shape of each tier of the submitted list. `$withId` also accepts the id of an existing tier.
      *
      * @return array<string, list<mixed>>
      */
-    public static function tierRules(): array
+    public static function tierRules(bool $withId): array
     {
         return [
             'tiers.*' => ['array'],
+            ...($withId ? ['tiers.*.id' => ['nullable', 'integer']] : []),
             'tiers.*.label' => ['required', 'string'],
             'tiers.*.min' => ['required', 'integer', 'min:1', 'max:'.self::QUANTITY_MAX],
             'tiers.*.max' => ['nullable', 'integer', 'min:1', 'max:'.self::QUANTITY_MAX],

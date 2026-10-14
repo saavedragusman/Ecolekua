@@ -6,16 +6,20 @@ use App\Enums\PermissionName;
 use App\Enums\PriceSchemeType;
 use App\Enums\PriceTierKind;
 use App\Models\AuditLog;
+use App\Models\CatalogCode;
+use App\Models\Combination;
 use App\Models\CombinationPrice;
 use App\Models\PriceScheme;
 use App\Models\PriceTier;
+use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\PriceSchemeSeeder;
 use Illuminate\Database\Eloquent\Collection;
 
-// COT-001 (E-01, E-02): price schemes and their tiers. Pages ship in Phase 22, so the write endpoints
-// answer a redirect back (003 precedent).
+// COT-001 (E-01, E-02, E-03, DEC-COT-23, DEC-COT-51, DEC-COT-57): price schemes and their tiers. Pages ship
+// in Phase 22, so the write endpoints answer a redirect back (003 precedent).
 
 function schemeManager(): User
 {
@@ -35,6 +39,57 @@ function schemeTestTiers(): array
         ['label' => '13–49', 'min' => 13, 'max' => 49, 'kind' => 'priced'],
         ['label' => 'Negociación', 'min' => 50, 'max' => null, 'kind' => 'negotiation'],
     ];
+}
+
+/**
+ * A stored tiered scheme (Detal 1-6, Especial 7+) assigned to no product.
+ */
+function storedTieredScheme(string $name = 'Pañales de adulto'): PriceScheme
+{
+    $scheme = PriceScheme::factory()->create(['name' => $name]);
+    $scheme->tiers()->create(['label' => 'Detal', 'min_quantity' => 1, 'max_quantity' => 6, 'kind' => PriceTierKind::Priced, 'sort_order' => 1]);
+    $scheme->tiers()->create(['label' => 'Especial', 'min_quantity' => 7, 'max_quantity' => null, 'kind' => PriceTierKind::Priced, 'sort_order' => 2]);
+
+    return $scheme->fresh();
+}
+
+/**
+ * The form state of a stored scheme, with every tier carrying its id.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function schemeFormState(PriceScheme $scheme, array $overrides = []): array
+{
+    return [
+        'name' => $scheme->name,
+        'type' => $scheme->type->value,
+        'tiers' => $scheme->tiers->map(fn (PriceTier $tier): array => [
+            'id' => $tier->id,
+            'label' => $tier->label,
+            'min' => $tier->min_quantity,
+            'max' => $tier->max_quantity,
+            'kind' => $tier->kind->value,
+        ])->all(),
+        ...$overrides,
+    ];
+}
+
+/**
+ * Registers a price of the given amount in a tier for a fresh active combination of a new product
+ * that uses the scheme.
+ */
+function schemePriceIn(PriceTier $tier, string $code, string $amount = '40.00', ?Product $product = null): CombinationPrice
+{
+    $product ??= Product::factory()->for(ProductCategory::factory(), 'category')->create(['price_scheme_id' => $tier->price_scheme_id]);
+    $combination = Combination::factory()->create(['product_id' => $product->id]);
+    CatalogCode::factory()->create(['combination_id' => $combination->id, 'code' => $code]);
+
+    return CombinationPrice::factory()->create([
+        'combination_id' => $combination->id,
+        'price_tier_id' => $tier->id,
+        'unit_price' => $amount,
+    ]);
 }
 
 /**
@@ -172,20 +227,326 @@ it('E-02 rejects a scheme name that repeats another one ignoring letter case', f
         ->and(schemeAuditRows())->toHaveCount(0);
 });
 
-it('COT-022 denies creating a scheme without pricing.manage, changes nothing and audits the denial', function () {
+it('DEC-COT-51 rejects an update that changes the type of the scheme and keeps the stored type', function () {
+    $scheme = storedTieredScheme();
+
+    $this->actingAs(schemeManager())
+        ->putJson("/pricing/schemes/{$scheme->id}", schemeFormState($scheme, ['type' => 'fixed']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['type']);
+
+    expect($scheme->fresh()->type)->toBe(PriceSchemeType::Tiered)
+        ->and(schemeAuditRows())->toHaveCount(0);
+});
+
+it('DEC-COT-51 accepts an update that repeats the stored type', function () {
+    $scheme = storedTieredScheme();
+
+    $this->actingAs(schemeManager())
+        ->putJson("/pricing/schemes/{$scheme->id}", schemeFormState($scheme, ['name' => 'Pañales de adulto 2']))
+        ->assertRedirect();
+
+    expect($scheme->fresh()->name)->toBe('Pañales de adulto 2')
+        ->and($scheme->fresh()->type)->toBe(PriceSchemeType::Tiered);
+});
+
+it('COT-001 changes labels and limits without touching the loaded prices and audits the tiers before and after', function () {
+    $scheme = storedTieredScheme();
+    [$detal, $especial] = $scheme->tiers->all();
+    $detalPrice = schemePriceIn($detal, '110-1');
+    $especialPrice = schemePriceIn($especial, '110-2', '32.00');
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'][0]['label'] = 'Menor';
+    $payload['tiers'][0]['max'] = 9;
+    $payload['tiers'][1]['label'] = 'Mayor';
+    $payload['tiers'][1]['min'] = 10;
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)->assertRedirect();
+
+    $tiers = $scheme->fresh()->tiers;
+
+    expect($tiers->pluck('id')->all())->toBe([$detal->id, $especial->id])
+        ->and($tiers->map(fn (PriceTier $tier): array => [$tier->label, $tier->min_quantity, $tier->max_quantity])->all())->toBe([['Menor', 1, 9], ['Mayor', 10, null]])
+        ->and($detalPrice->fresh()->unit_price->toString())->toBe('40.00')
+        ->and($especialPrice->fresh()->unit_price->toString())->toBe('32.00')
+        ->and(CombinationPrice::query()->count())->toBe(2);
+
+    $audit = schemeAuditRows()->sole();
+
+    expect($audit->action)->toBe(AuditAction::PriceSchemeUpdated->value)
+        ->and($audit->old_values)->toEqual(['tiers' => [
+            ['label' => 'Detal', 'min' => 1, 'max' => 6, 'kind' => 'priced'],
+            ['label' => 'Especial', 'min' => 7, 'max' => null, 'kind' => 'priced'],
+        ]])
+        ->and($audit->new_values)->toEqual(['tiers' => [
+            ['label' => 'Menor', 'min' => 1, 'max' => 9, 'kind' => 'priced'],
+            ['label' => 'Mayor', 'min' => 10, 'max' => null, 'kind' => 'priced'],
+        ]]);
+});
+
+it('COT-001 swaps the labels and the order of existing tiers without hitting the unique indexes', function () {
+    $scheme = storedTieredScheme();
+    [$first, $second] = $scheme->tiers->all();
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'] = [
+        ['id' => $second->id, 'label' => 'Detal', 'min' => 1, 'max' => 6, 'kind' => 'priced'],
+        ['id' => $first->id, 'label' => 'Especial', 'min' => 7, 'max' => null, 'kind' => 'priced'],
+    ];
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)->assertRedirect();
+
+    expect($scheme->fresh()->tiers->map(fn (PriceTier $tier): array => [$tier->id, $tier->label, $tier->sort_order])->all())->toBe([
+        [$second->id, 'Detal', 1],
+        [$first->id, 'Especial', 2],
+    ]);
+});
+
+it('COT-001 audits only the changed fields of a rename and writes nothing when nothing changed', function () {
+    $scheme = storedTieredScheme();
+    $actor = schemeManager();
+
+    $this->actingAs($actor)->putJson("/pricing/schemes/{$scheme->id}", schemeFormState($scheme, ['name' => 'Absorbentes']))->assertRedirect();
+
+    $audit = schemeAuditRows()->sole();
+
+    expect($audit->old_values)->toBe(['name' => 'Pañales de adulto'])
+        ->and($audit->new_values)->toBe(['name' => 'Absorbentes']);
+
+    $updatedAt = $scheme->fresh()->updated_at;
+    $this->travel(5)->minutes();
+
+    $this->actingAs($actor)->putJson("/pricing/schemes/{$scheme->id}", schemeFormState($scheme->fresh()))->assertRedirect();
+
+    expect(schemeAuditRows())->toHaveCount(1)
+        ->and($scheme->fresh()->updated_at->equalTo($updatedAt))->toBeTrue();
+});
+
+it('COT-001 adds a tier without creating prices for it and keeps the existing prices', function () {
+    $scheme = storedTieredScheme();
+    [$detal, $especial] = $scheme->tiers->all();
+    schemePriceIn($detal, '110-1');
+    schemePriceIn($especial, '110-2', '32.00');
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'] = [
+        ['id' => $detal->id, 'label' => 'Detal', 'min' => 1, 'max' => 6, 'kind' => 'priced'],
+        ['label' => '7–12', 'min' => 7, 'max' => 12, 'kind' => 'priced'],
+        ['id' => $especial->id, 'label' => 'Especial', 'min' => 13, 'max' => null, 'kind' => 'priced'],
+    ];
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)->assertRedirect();
+
+    $tiers = $scheme->fresh()->tiers;
+    $added = $tiers->firstWhere('label', '7–12');
+
+    expect($tiers->pluck('label')->all())->toBe(['Detal', '7–12', 'Especial'])
+        ->and($added->prices()->count())->toBe(0)
+        ->and(CombinationPrice::query()->count())->toBe(2);
+});
+
+it('DEC-COT-23 asks for confirmation before removing a tier that has prices and changes nothing without it', function () {
+    $scheme = storedTieredScheme();
+    $especial = $scheme->tiers->last();
+    $product = Product::factory()->for(ProductCategory::factory(), 'category')->create(['price_scheme_id' => $scheme->id]);
+    schemePriceIn($especial, '110-1', '32.00', $product);
+    schemePriceIn($especial, '110-2', '30.00', $product);
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'] = [['id' => $scheme->tiers->first()->id, 'label' => 'Detal', 'min' => 1, 'max' => null, 'kind' => 'priced']];
+
+    $response = $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['tiers']);
+
+    expect($response->json('errors.tiers.0'))->toContain('2 precios')->toContain('1 producto')
+        ->and($scheme->fresh()->tiers)->toHaveCount(2)
+        ->and($scheme->fresh()->tiers->first()->max_quantity)->toBe(6)
+        ->and(CombinationPrice::query()->count())->toBe(2)
+        ->and(schemeAuditRows())->toHaveCount(0);
+});
+
+it('DEC-COT-23 removes the tier and its prices on confirmation and lists the previous prices in the audit', function () {
+    $scheme = storedTieredScheme();
+    [$detal, $especial] = $scheme->tiers->all();
+    $kept = schemePriceIn($detal, '110-1', '40.00');
+    schemePriceIn($especial, '110-2', '32.50');
+
+    $payload = schemeFormState($scheme, ['confirm_price_removal' => true]);
+    $payload['tiers'] = [['id' => $detal->id, 'label' => 'Detal', 'min' => 1, 'max' => null, 'kind' => 'priced']];
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)->assertRedirect();
+
+    expect($scheme->fresh()->tiers->pluck('id')->all())->toBe([$detal->id])
+        ->and(CombinationPrice::query()->pluck('id')->all())->toBe([$kept->id]);
+
+    $audit = schemeAuditRows()->sole();
+
+    expect($audit->old_values['deleted_prices'])->toEqual([
+        ['code' => '110-2', 'size_group' => null, 'tier' => 'Especial', 'price' => '32.50'],
+    ])
+        ->and($audit->old_values['deleted_prices'][0]['price'])->toBeMoneyString()
+        ->and($audit->new_values)->toHaveKey('tiers');
+});
+
+it('DEC-COT-23 removes a tier without prices without asking for confirmation', function () {
+    $scheme = storedTieredScheme();
+    $detal = $scheme->tiers->first();
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'] = [['id' => $detal->id, 'label' => 'Detal', 'min' => 1, 'max' => null, 'kind' => 'priced']];
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)->assertRedirect();
+
+    expect($scheme->fresh()->tiers)->toHaveCount(1)
+        ->and(schemeAuditRows()->sole()->old_values)->not->toHaveKey('deleted_prices');
+});
+
+it('DEC-COT-57 treats turning a tier with prices into a negotiation tier as removing it', function () {
+    $scheme = storedTieredScheme();
+    [$detal, $especial] = $scheme->tiers->all();
+    $price = schemePriceIn($especial, '110-2', '32.00');
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'][1]['kind'] = 'negotiation';
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['tiers']);
+
+    expect($especial->fresh()->kind)->toBe(PriceTierKind::Priced)
+        ->and($price->fresh())->not->toBeNull();
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", [...$payload, 'confirm_price_removal' => true])->assertRedirect();
+
+    expect($especial->fresh()->kind)->toBe(PriceTierKind::Negotiation)
+        ->and(CombinationPrice::query()->count())->toBe(0)
+        ->and(schemeAuditRows()->sole()->old_values['deleted_prices'])->toEqual([
+            ['code' => '110-2', 'size_group' => null, 'tier' => 'Especial', 'price' => '32.00'],
+        ])
+        ->and($detal->fresh()->kind)->toBe(PriceTierKind::Priced);
+});
+
+it('COT-001 rejects an update that names a tier of another scheme', function () {
+    $scheme = storedTieredScheme();
+    $other = storedTieredScheme('Protector y absorbentes');
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'][0]['id'] = $other->tiers->first()->id;
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['tiers.0.id']);
+
+    expect($other->fresh()->tiers->first()->label)->toBe('Detal')
+        ->and(schemeAuditRows())->toHaveCount(0);
+});
+
+it('COT-001 rejects invalid tiers on update with the same errors as on create', function () {
+    $scheme = storedTieredScheme();
+
+    $payload = schemeFormState($scheme);
+    $payload['tiers'][1]['min'] = 9;
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['tiers.1.min']);
+
+    expect($scheme->fresh()->tiers->last()->min_quantity)->toBe(7);
+});
+
+it('COT-001 lets a fixed scheme change its name but never its tiers', function () {
+    $scheme = PriceScheme::factory()->fixed()->create(['name' => 'Precio fijo']);
+
+    $this->actingAs(schemeManager())->putJson("/pricing/schemes/{$scheme->id}", ['name' => 'Servicios', 'type' => 'fixed'])->assertRedirect();
+
+    expect($scheme->fresh()->name)->toBe('Servicios')
+        ->and($scheme->fresh()->tiers)->toHaveCount(1);
+
+    $this->actingAs(schemeManager())
+        ->putJson("/pricing/schemes/{$scheme->id}", ['name' => 'Servicios', 'type' => 'fixed', 'tiers' => schemeTestTiers()])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['tiers']);
+
+    expect($scheme->fresh()->tiers)->toHaveCount(1);
+});
+
+it('E-03 refuses to deactivate a scheme assigned to an active product and names the product', function () {
+    $scheme = PriceScheme::factory()->create(['name' => 'Uniformes']);
+    $inactive = Product::factory()->for(ProductCategory::factory(), 'category')->create(['name' => 'Camisa vieja', 'status' => CatalogStatus::Inactive, 'price_scheme_id' => $scheme->id]);
+    Product::factory()->for(ProductCategory::factory(), 'category')->create(['name' => 'Camisa corporativa', 'price_scheme_id' => $scheme->id]);
+
+    $response = $this->actingAs(schemeManager())->postJson("/pricing/schemes/{$scheme->id}/deactivate")->assertUnprocessable();
+
+    expect($response->json('message'))->toContain('Camisa corporativa')->not->toContain($inactive->name)
+        ->and($scheme->fresh()->status)->toBe(CatalogStatus::Active)
+        ->and(schemeAuditRows())->toHaveCount(0);
+});
+
+it('E-03 deactivates a scheme whose products are all inactive and reactivates it, auditing both', function () {
+    $scheme = PriceScheme::factory()->create();
+    Product::factory()->for(ProductCategory::factory(), 'category')->create(['status' => CatalogStatus::Inactive, 'price_scheme_id' => $scheme->id]);
+    $actor = schemeManager();
+
+    $this->actingAs($actor)->postJson("/pricing/schemes/{$scheme->id}/deactivate")->assertRedirect();
+
+    expect($scheme->fresh()->status)->toBe(CatalogStatus::Inactive);
+
+    $this->actingAs($actor)->postJson("/pricing/schemes/{$scheme->id}/activate")->assertRedirect();
+
+    expect($scheme->fresh()->status)->toBe(CatalogStatus::Active);
+
+    [$deactivated, $activated] = schemeAuditRows()->all();
+
+    expect(schemeAuditRows())->toHaveCount(2)
+        ->and($deactivated->action)->toBe(AuditAction::PriceSchemeDeactivated->value)
+        ->and($deactivated->actor_id)->toBe($actor->id)
+        ->and($deactivated->entity_id)->toBe($scheme->id)
+        ->and($deactivated->old_values)->toBe(['status' => 'active'])
+        ->and($deactivated->new_values)->toBe(['status' => 'inactive'])
+        ->and($activated->action)->toBe(AuditAction::PriceSchemeActivated->value)
+        ->and($activated->old_values)->toBe(['status' => 'inactive'])
+        ->and($activated->new_values)->toBe(['status' => 'active']);
+});
+
+it('E-03 repeating the state of a scheme writes no change and no audit', function (string $action, CatalogStatus $state) {
+    $scheme = PriceScheme::factory()->create(['status' => $state]);
+    $updatedAt = $scheme->fresh()->updated_at;
+
+    $this->travel(5)->minutes();
+    $this->actingAs(schemeManager())->postJson("/pricing/schemes/{$scheme->id}/{$action}")->assertRedirect();
+
+    expect($scheme->fresh()->status)->toBe($state)
+        ->and($scheme->fresh()->updated_at->equalTo($updatedAt))->toBeTrue()
+        ->and(schemeAuditRows())->toHaveCount(0);
+})->with([
+    'activate an active scheme' => ['activate', CatalogStatus::Active],
+    'deactivate an inactive scheme' => ['deactivate', CatalogStatus::Inactive],
+]);
+
+it('COT-022 denies every scheme write without pricing.manage, changes nothing and audits the denial', function (string $method, string $uri) {
+    $scheme = storedTieredScheme('Uniformes');
     $actor = userWithPermissions(PermissionName::PricingView);
+    $uri = str_replace('{scheme}', (string) $scheme->id, $uri);
 
-    $this->actingAs($actor)->postJson('/pricing/schemes', ['name' => 'Uniformes', 'type' => 'fixed'])->assertForbidden();
+    $this->actingAs($actor)->json($method, $uri, schemeFormState($scheme, ['name' => 'Otro nombre']))->assertForbidden();
 
-    expect(PriceScheme::query()->count())->toBe(0)
+    expect($scheme->fresh()->name)->toBe('Uniformes')
+        ->and(PriceScheme::query()->count())->toBe(1)
         ->and(schemeAuditRows())->toHaveCount(0);
 
     $audit = AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole();
 
     expect($audit->actor_id)->toBe($actor->id);
-});
+})->with([
+    'create' => ['POST', '/pricing/schemes'],
+    'update' => ['PUT', '/pricing/schemes/{scheme}'],
+    'activate' => ['POST', '/pricing/schemes/{scheme}/activate'],
+    'deactivate' => ['POST', '/pricing/schemes/{scheme}/deactivate'],
+]);
 
-it('COT-022 does not let product permissions stand in for pricing.manage when creating schemes', function () {
+it('COT-022 does not let product permissions stand in for pricing.manage when writing schemes', function () {
     $actor = userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsUpdate);
 
     $this->actingAs($actor)->postJson('/pricing/schemes', ['name' => 'Uniformes', 'type' => 'fixed'])->assertForbidden();
