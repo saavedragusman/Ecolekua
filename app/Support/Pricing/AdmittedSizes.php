@@ -4,6 +4,7 @@ namespace App\Support\Pricing;
 
 use App\Enums\AttributeRole;
 use App\Enums\AttributeSpecialUse;
+use App\Models\Combination;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -77,5 +78,33 @@ final class AdmittedSizes
         }
 
         return $admitted;
+    }
+
+    /**
+     * Sizes the combination admits now that no longer fit the restrictions about to be saved
+     * (`attributeId => valueIds`, as `CombinationRules::validate` returns them). A combination with no
+     * restriction on the size attribute admits every size of the product, so nothing leaves it.
+     *
+     * @param  array<int, list<int>>  $restrictions
+     * @return list<int>
+     */
+    public static function narrowedBy(Combination $combination, array $restrictions): array
+    {
+        $current = self::forCombinations([$combination->id])[$combination->id] ?? null;
+
+        if ($current === null) {
+            return [];
+        }
+
+        $sizeAttributeId = DB::table('product_attributes as pa')
+            ->join('catalog_attributes as ca', 'ca.id', '=', 'pa.catalog_attribute_id')
+            ->where('pa.product_id', $combination->product_id)
+            ->where('pa.role', AttributeRole::Order->value)
+            ->where('ca.special_use', AttributeSpecialUse::Size->value)
+            ->value('pa.catalog_attribute_id');
+
+        $restricted = $restrictions[(int) $sizeAttributeId] ?? [];
+
+        return $restricted === [] ? [] : array_values(array_diff(array_keys($current), $restricted));
     }
 }

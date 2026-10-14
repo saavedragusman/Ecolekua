@@ -20,13 +20,18 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 
-// COT-004 (E-08, E-70, DEC-COT-53, DEC-COT-58): the size groups of a combination, saved in
-// two steps (preview, then PUT with the confirmation token).
+// COT-004 (E-08, E-70, DEC-COT-48, DEC-COT-53, DEC-COT-58): the size groups of a combination, saved in
+// two steps (preview, then PUT with the confirmation token) and cleaned up when a size leaves (003).
 // The pricing screens ship later, so the preview answers JSON and the PUT redirects back.
 
 function sgManager(): User
 {
     return userWithPermissions(PermissionName::PricingView, PermissionName::PricingManage);
+}
+
+function sgEditor(): User
+{
+    return userWithPermissions(PermissionName::ProductsView, PermissionName::ProductsUpdate);
 }
 
 /**
@@ -511,6 +516,135 @@ it('COT-004 names a group by its derived label in the deleted prices of a scheme
     $audit = AuditLog::query()->where('action', AuditAction::ProductSchemeAssigned->value)->sole();
 
     expect($audit->old_values['deleted_prices'])->toEqual([['code' => '184', 'size_group' => '28–36', 'tier' => 'Detal', 'price' => '40.00']]);
+});
+
+// --- DEC-COT-48: a size leaves the product or the combination (003) --------------------------------
+
+/**
+ * The structure payload of the fixture's product with these sizes admitted.
+ *
+ * @param  list<string>  $names
+ * @return array{attributes: list<array<string, mixed>>}
+ */
+function sgStructure(array $fx, array $names): array
+{
+    return ['attributes' => [['attribute_id' => $fx['size']->id, 'role' => 'order', 'allowed_value_ids' => sgIds($fx, $names)]]];
+}
+
+it('DEC-COT-48 takes a size removed from the product out of its group, keeping the group and its prices, and audits the removal', function () {
+    $fx = sgFixture();
+    [$low, $high] = sgStore($fx, [SG_LOW, SG_HIGH]);
+    sgPrice($fx, 'Detal', '40.00', $low);
+    sgPrice($fx, 'Detal', '44.00', $high);
+
+    test()->actingAs(sgEditor())
+        ->putJson("/products/{$fx['product']->id}/attributes", sgStructure($fx, [...SG_LOW, '38', '40', '42']))
+        ->assertRedirect();
+
+    $audit = sgAudit()->sole();
+
+    expect(sgGroupNames($high->fresh()->load('sizes')))->toBe(['38', '40', '42'])
+        ->and(CombinationPrice::query()->count())->toBe(2)
+        ->and($audit->entity_id)->toBe($fx['combination']->id)
+        ->and($audit->context)->toMatchArray(['reason' => 'size_removed'])
+        ->and($audit->old_values)->toEqual(['partition' => [SG_LOW, SG_HIGH], 'removed_sizes' => ['44'], 'deleted_prices' => []])
+        ->and($audit->new_values)->toEqual(['partition' => [SG_LOW, ['38', '40', '42']]])
+        ->and(AuditLog::query()->where('action', AuditAction::ProductAttributesUpdated->value)->count())->toBe(1);
+});
+
+it('DEC-COT-48 deletes a group left empty with its prices and audits the previous values', function () {
+    $fx = sgFixture();
+    [$main, $last] = sgStore($fx, [[...SG_LOW, '38', '40', '42'], ['44']]);
+    $kept = sgPrice($fx, 'Detal', '40.00', $main);
+    sgPrice($fx, 'Detal', '44.00', $last);
+    sgPrice($fx, 'Intermedio', '41.00', $last);
+
+    test()->actingAs(sgEditor())
+        ->putJson("/products/{$fx['product']->id}/attributes", sgStructure($fx, [...SG_LOW, '38', '40', '42']))
+        ->assertRedirect();
+
+    $audit = sgAudit()->sole();
+
+    expect(SizeGroup::query()->pluck('id')->all())->toBe([$main->id])
+        ->and(CombinationPrice::query()->pluck('id')->all())->toBe([$kept->id])
+        ->and($audit->old_values['removed_sizes'])->toBe(['44'])
+        ->and($audit->old_values['deleted_prices'])->toEqual([
+            ['code' => '184', 'size_group' => '44', 'tier' => 'Detal', 'price' => '44.00'],
+            ['code' => '184', 'size_group' => '44', 'tier' => 'Intermedio', 'price' => '41.00'],
+        ])
+        ->and($audit->new_values)->toEqual(['partition' => [[...SG_LOW, '38', '40', '42']]]);
+});
+
+it('DEC-COT-48 cleans every combination of the product that held the removed size, one audit each', function () {
+    $fx = sgFixture();
+    $second = Combination::factory()->for($fx['product'])->create();
+    CatalogCode::factory()->create(['combination_id' => $second->id, 'code' => '184-2']);
+    $restricted = Combination::factory()->for($fx['product'])->create();
+    CatalogCode::factory()->create(['combination_id' => $restricted->id, 'code' => '184-3']);
+
+    foreach (SG_LOW as $name) {
+        $restricted->values()->attach($fx['sizes'][$name], ['catalog_attribute_id' => $fx['size']->id]);
+    }
+
+    sgStore($fx, [SG_LOW, SG_HIGH]);
+    sgStore($fx, [SG_LOW, SG_HIGH], $second);
+    sgStore($fx, [SG_LOW], $restricted);
+
+    test()->actingAs(sgEditor())
+        ->putJson("/products/{$fx['product']->id}/attributes", sgStructure($fx, [...SG_LOW, '38', '40', '42']))
+        ->assertRedirect();
+
+    expect(sgAudit()->pluck('entity_id')->all())->toBe([$fx['combination']->id, $second->id])
+        ->and($restricted->sizeGroups()->sole()->sizes)->toHaveCount(5);
+});
+
+it('DEC-COT-48 takes the sizes out of the groups when a combination restriction is narrowed, deleting the groups left empty', function () {
+    $fx = sgFixture();
+    [$low, $high] = sgStore($fx, [SG_LOW, SG_HIGH]);
+    $kept = sgPrice($fx, 'Detal', '40.00', $low);
+    sgPrice($fx, 'Detal', '44.00', $high);
+
+    test()->actingAs(sgEditor())
+        ->putJson("/products/{$fx['product']->id}/combinations/{$fx['combination']->id}", [
+            'code' => '184',
+            'axes' => [],
+            'restrictions' => [$fx['size']->id => sgIds($fx, SG_LOW)],
+        ])
+        ->assertRedirect();
+
+    $audit = sgAudit()->sole();
+
+    expect(SizeGroup::query()->pluck('id')->all())->toBe([$low->id])
+        ->and(CombinationPrice::query()->pluck('id')->all())->toBe([$kept->id])
+        ->and($audit->entity_id)->toBe($fx['combination']->id)
+        ->and($audit->context)->toMatchArray(['reason' => 'size_removed'])
+        ->and($audit->old_values['removed_sizes'])->toBe(SG_HIGH)
+        ->and($audit->old_values['deleted_prices'])->toEqual([['code' => '184', 'size_group' => '38–44', 'tier' => 'Detal', 'price' => '44.00']])
+        ->and($audit->new_values)->toEqual(['partition' => [SG_LOW]])
+        ->and(AuditLog::query()->where('action', AuditAction::CombinationUpdated->value)->count())->toBe(1);
+});
+
+it('DEC-COT-48 leaves the groups alone when an edit removes no size', function () {
+    $fx = sgFixture();
+
+    foreach (SG_LOW as $name) {
+        $fx['combination']->values()->attach($fx['sizes'][$name], ['catalog_attribute_id' => $fx['size']->id]);
+    }
+
+    [$low] = sgStore($fx, [SG_LOW]);
+    sgPrice($fx, 'Detal', '40.00', $low);
+    $before = sgState();
+
+    // Widening the restriction admits more sizes (they wait for a group, COT-004) and removes none.
+    test()->actingAs(sgEditor())
+        ->putJson("/products/{$fx['product']->id}/combinations/{$fx['combination']->id}", ['code' => '184', 'axes' => [], 'restrictions' => []])
+        ->assertRedirect();
+    test()->actingAs(sgEditor())
+        ->putJson("/products/{$fx['product']->id}/attributes", sgStructure($fx, [...SG_LOW, ...SG_HIGH]))
+        ->assertRedirect();
+
+    expect(sgState())->toEqual($before)
+        ->and(sgAudit())->toHaveCount(0);
 });
 
 // --- Authorization and routes --------------------------------------------------------------------
