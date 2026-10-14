@@ -322,7 +322,22 @@ Created: `app/Actions/Pricing/{PreviewSizeGroups,SyncSizeGroups}.php`, `app/Http
 The unsplit work was 1,427 authored lines (below); it was split as proposed. PR 9a (this commit) holds about 1,073 (67 changed in 5 modified files; 1,006 in 6 new files); PR 9b holds the rest. Details of the unsplit measurement: authored changed lines (excluding `tasks.md`, `apply-progress.md`): **1,427** (101 changed in 7 modified files: 72 additions, 29 deletions; 1,326 in 8 new files: production 649 = `SizeGroupMaintenance` 157, `SizeGroupState` 141, `SyncSizeGroups` 118, `AdmittedSizes` 110, `SizeGroupsRequest` 51, `PreviewSizeGroups` 38, `SizeGroupController` 34; tests 677). The estimate was ~550; the endpoint/state classes and the 30-test file are the bulk. Over the 1,100 rule, so nothing was committed. Proposed split (by construction 9a does not need 9b; not executed separately):
 - **PR 9a** (~1,080): everything except DEC-COT-48: `PreviewSizeGroups`, `SyncSizeGroups`, `SizeGroupState`, `AdmittedSizes::forCombinations`, request, controller, routes, lang, the `SizeGroupLabel` replacement (`AffectedPrices`, `SyncCombinationPrices`, `CombinationPriceTest` edit) and the SizeGroupTest sections E-08, E-70, DEC-COT-58, authorization and routes (tasks 5b.3, 5b.4 and 5b.6). Commit: `feat(004): definir grupos de talla con confirmación de eliminación de precios [COT-004, E-08, E-70, DEC-COT-53, DEC-COT-58]`.
 - **PR 9b** (~350): `SizeGroupMaintenance`, `AdmittedSizes::narrowedBy`, the two 003 hooks and the 5 DEC-COT-48 tests with `sgEditor` and `sgStructure` (task 5b.5). Commit: `feat(004): sacar la talla de su grupo de talla al quitarla del producto o de la combinación [COT-004, DEC-COT-48]`.
-PR 9a is committed on `feat/004-pricing-and-quotations-5b2-size-group-endpoints`; PR 9b branches from it as `feat/004-pricing-and-quotations-5b2b-size-group-maintenance`.
+PR 9a is committed (`588d48c`) on `feat/004-pricing-and-quotations-5b2-size-group-endpoints`; PR 9b branches from it as `feat/004-pricing-and-quotations-5b2b-size-group-maintenance`.
+
+## Phase 5b2b (PR 9b, `feat/004-pricing-and-quotations-5b2b-size-group-maintenance`, base PR 9a): task 5b.5 done; gate green
+
+Restores the DEC-COT-48 content withheld from PR 9a, identical to the full Phase 5b2 work: `SizeGroupMaintenance` (new), `AdmittedSizes::narrowedBy`, the two 003 hooks (`SyncProductAttributes`, `UpdateCombination`, with their constructor parameter) and the 5 DEC-COT-48 tests with `sgEditor` and `sgStructure` in `SizeGroupTest.php`. TDD evidence and design choice 8 are in the Phase 5b2 section above (RED: 4 of the 5 DEC-COT-48 tests failed before the hooks; the fifth is a regression guard).
+
+### Gate (PR 9b, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.39s)
+- `sail artisan test`: passed, 2002 tests (2000 passed, 2 skipped, 10758 assertions)
+
+### Size
+About 358 authored changed lines (excluding `tasks.md`, `apply-progress.md`): 195 additions and 6 deletions in 4 modified files, 157 in `SizeGroupMaintenance`.
 
 ### Remaining
-PR 9b (task 5b.5, DEC-COT-48). Then Phase 6 (PR 10).
+Phase 6 (PR 10).
