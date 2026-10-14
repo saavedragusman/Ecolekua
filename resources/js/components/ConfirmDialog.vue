@@ -71,9 +71,11 @@ function onDialogClick(event: MouseEvent): void {
     }
 }
 
+// Emit first, then close: pages whose `v-model:open` setter clears their target
+// on close need that target while handling `confirm`.
 function confirm(): void {
-    open.value = false;
     emit('confirm');
+    open.value = false;
 }
 
 watch(open, sync);

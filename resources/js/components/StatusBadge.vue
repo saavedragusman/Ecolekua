@@ -59,7 +59,7 @@ const text = computed(() => {
 
 <template>
     <span
-        class="inline-flex items-center gap-space-xs rounded-full px-space-sm py-1 font-label-md text-label-md whitespace-nowrap"
+        class="inline-flex w-fit items-center gap-space-xs self-start justify-self-start rounded-full px-space-md py-1 font-label-md text-label-md whitespace-nowrap"
         :class="CATEGORIES[resolvedCategory]"
     >
         <AppIcon v-if="icon" :name="icon" />

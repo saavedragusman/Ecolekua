@@ -1,13 +1,18 @@
 import { home } from '@/routes';
 import { index as auditIndex } from '@/routes/audit';
+import { index as attributesIndex } from '@/routes/catalog/attributes';
+import { index as categoriesIndex } from '@/routes/catalog/categories';
+import { index as locationsIndex } from '@/routes/catalog/detail-locations';
+import { index as combosIndex } from '@/routes/combos';
 import { index as customersIndex } from '@/routes/customers';
+import { index as productsIndex } from '@/routes/products';
 import { index as rolesIndex } from '@/routes/roles';
 import { index as usersIndex } from '@/routes/users';
 
 // Display order of the navigation groups. Groups without a visible entry are
 // omitted. The type already admits Comercial, Producción and Inventario; entries
 // are declared for a group only once its specs and routes exist (AGENTS.md §0;
-// design Decision 20). Comercial has Clientes (spec 002).
+// design Decision 20). Comercial has Clientes (spec 002) and Catálogo (spec 003).
 export const NAV_GROUPS = [
     'Comercial',
     'Producción',
@@ -31,6 +36,8 @@ export type NavEntry = {
     priority: number;
     // Exact path match (landing page); prefix match otherwise.
     exact?: boolean;
+    // Other paths that keep the entry highlighted (prefix match), for sections reached from it.
+    alsoActiveOn?: string[];
 };
 
 // Single source of truth for the sidebar, the bottom bar and the "Más" sheet.
@@ -57,6 +64,36 @@ export const NAV_ENTRIES: NavEntry[] = [
         permission: 'customers.view',
         group: 'Comercial',
         priority: 10,
+    },
+    {
+        key: 'products',
+        label: 'Productos',
+        icon: 'inventory_2',
+        href: productsIndex.url(),
+        permission: 'products.view',
+        group: 'Comercial',
+        priority: 20,
+    },
+    {
+        key: 'combos',
+        label: 'Combos',
+        icon: 'deployed_code',
+        href: combosIndex.url(),
+        permission: 'products.view',
+        group: 'Comercial',
+        priority: 25,
+    },
+    {
+        // Entry point of the catalog (spec 003): lands on categories; the other sections are
+        // reached from the page and keep the entry highlighted through `alsoActiveOn`.
+        key: 'catalog',
+        label: 'Catálogo',
+        icon: 'category',
+        href: categoriesIndex.url(),
+        permission: 'products.catalog',
+        group: 'Comercial',
+        priority: 30,
+        alsoActiveOn: [attributesIndex.url(), locationsIndex.url()],
     },
     {
         key: 'users',

@@ -513,7 +513,9 @@ Forma: `rounded-lg` en el ERP (como el tablero de diseño) y `rounded-full` en e
 
 ### 7.2 `IconButton.vue`
 
-`size-11 inline-flex items-center justify-center rounded-full`, con las variantes `primary` (`bg-primary text-on-primary`), `secondary` (`bg-secondary text-on-secondary`), `tertiary` (`bg-tertiary text-on-tertiary`), `danger` (`bg-error text-on-error`) y `tool` (`bg-tertiary-container text-on-primary rounded-lg`). `aria-label` es obligatorio.
+`size-11 inline-flex items-center justify-center rounded-full`, con las variantes `primary` (`bg-primary text-on-primary`), `secondary` (`bg-secondary text-on-secondary`), `tertiary` (`bg-tertiary text-on-tertiary`), `danger` (`bg-error text-on-error`) y `reorder`. `aria-label` es obligatorio.
+
+**Variante `reorder`** (flechas de subir y bajar de los listados ordenables del catálogo). Es un control discreto: el área táctil sigue siendo de 44px (`size-11`, transparente y con el foco visible de §8.1), pero lo que se ve es un círculo de 32px (`size-8 rounded-full bg-surface-container-high text-on-surface-variant`, `group-hover:bg-surface-container-highest`) con un icono de 18px. Las flechas se muestran en todos los anchos; arrastrar y soltar queda fuera de alcance. El grupo de acciones de la fila separa los controles con `gap-x-space-md` para que en tableta no se vea apretado. Reemplaza a la antigua variante `tool` (`bg-tertiary-container`, `rounded-lg`), que ya no se usa.
 
 ### 7.3 `AppCard.vue`
 
@@ -537,7 +539,7 @@ focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20
 
 ### 7.5 `StatusBadge.vue`
 
-Base: `inline-flex items-center gap-space-xs rounded-full px-space-sm py-1 font-label-md text-label-md whitespace-nowrap`.
+Base: `inline-flex w-fit items-center gap-space-xs self-start justify-self-start rounded-full px-space-md py-1 font-label-md text-label-md whitespace-nowrap`. `w-fit`, `self-start` y `justify-self-start` evitan que la insignia se estire a todo el ancho dentro de una columna flex o de una celda de cuadrícula (p. ej., en las tarjetas móviles).
 
 Este componente define **categorías visuales**, no estados de negocio. La lista real de estados y su categoría la fija cada spec; no se inventan estados.
 
@@ -559,8 +561,10 @@ Pista: `h-2 w-full rounded-full bg-surface-container-high overflow-hidden`. Rell
 
 - `lg:` (y `md:` cuando quepa): tabla dentro de `overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm`.
   - `thead`: `bg-surface-container-low font-label-md text-label-md text-on-surface-variant text-left`.
-  - Filas: `border-t border-outline-variant`. Celdas: `px-space-md py-space-sm font-body-sm text-body-sm`.
-- `< md`: pila de `AppCard`, una por registro, con la información clave arriba y el badge de estado visible.
+  - Filas: `border-t border-outline-variant`. Celdas y encabezados: `px-space-lg py-space-sm` (celdas con `font-body-sm text-body-sm`).
+  - Prop `fit`: desde `md:` la tabla toma el ancho de su contenido (`md:w-fit md:max-w-full`) en lugar del ancho completo. Se usa en los listados cortos del catálogo (categorías, atributos, valores y ubicaciones de detalle); los listados con muchas columnas, como el de productos, mantienen el ancho completo.
+- `< md`: pila de `AppCard`, una por registro, con margen lateral ampliado (`px-space-lg`). Cada campo ocupa una fila con la etiqueta y el valor en la misma línea: cuadrícula `grid-cols-[auto_1fr]` (con `grid-cols-subgrid` por fila, de modo que la columna de etiquetas tiene el ancho de la etiqueta más larga), `gap-x-space-md gap-y-space-md`. La etiqueta usa `font-label-md text-label-lg text-on-surface-variant`; el valor, `font-body-md text-body-md text-on-surface` (16px), alineado a la izquierda y con `min-w-0 break-words` para que los valores largos se ajusten dentro de su columna. La columna `actions` ocupa el ancho completo de la tarjeta (etiqueta arriba, botones a todo el ancho).
+- En el ERP, el botón de fila para abrir un registro se llama «Detalle» y conserva un nombre accesible completo (`aria-label="Ver detalle de <nombre>"`).
 - En el ERP **no** se ocultan las barras de desplazamiento.
 
 ### 7.8 `BottomNav.vue` (ERP, `< lg`)
@@ -610,6 +614,23 @@ Selector de vistas para filtrar un listado (por ejemplo Activos / Inactivos / To
 - La vista seleccionada y los conteos los calcula el backend; el componente solo los muestra (por ejemplo "Activos (12)").
 - Contenedor: `flex w-full gap-space-xs rounded-lg bg-surface-container-high p-space-xs`; en `md:` se ajusta al contenido (`md:w-fit`). Ítem: `min-h-11 flex-1 rounded-lg px-space-md font-label-lg text-label-lg`; en `md:` `flex-none`. Seleccionado: `bg-primary text-on-primary`; reposo: `text-on-surface-variant hover:bg-surface-container-highest`.
 - En `< md` ocupa todo el ancho como control segmentado, con objetivos de al menos 44px. Foco visible según §8.1. Solo tokens del sistema, sin `dark:` ni hexadecimales.
+
+### 7.12 `ColorPicker.vue` (tono de referencia de un color del catálogo)
+
+Selector de un tono `#RRGGBB` (spec 003, PRD-002, E-36). Solo se usa donde el tono es un dato del catálogo.
+
+- Compuesto por un `<input type="color">` nativo superpuesto, invisible, sobre una muestra (`size-11`, `rounded-lg`, borde `border-outline`) y un campo de texto hexadecimal (`min-h-11`, mismo estilo que §7.4) con etiqueta visible y mensaje de error enlazado con `aria-describedby`.
+- La muestra es el único lugar donde el tono se aplica como estilo en línea (`:style="{ backgroundColor }"`): el tono es un dato del catálogo, no un valor de estilo, y no contradice la regla de «sin hexadecimales en el código de estilos». Si el texto no es un `#RRGGBB` válido, la muestra queda con `bg-surface-container-low`.
+- Emite `#RRGGBB` en mayúsculas al elegir con el selector; el campo de texto emite lo que se escribe. La validación (formato, obligatoriedad según el atributo) es del backend, que devuelve el error por campo.
+- El foco del selector nativo se muestra en la muestra (`focus-within:ring-2 focus-within:ring-primary`). `aria-label` del selector: «Elegir color: <etiqueta>». Sin `dark:`.
+
+### 7.13 `AppCheckboxGroup.vue` (lista de casillas con filtro opcional)
+
+Lista etiquetada de casillas que comparten un modelo de arreglo (valores permitidos, colores ofrecidos, ubicaciones, etc.).
+
+- `<fieldset>` con `<legend>` (`font-label-md text-label-md text-on-surface-variant`) y una casilla `AppCheckbox` por opción (objetivo de al menos 44px). Error y ayuda debajo, enlazados con `aria-describedby`.
+- Filtro opcional (`filterable`): un `AppInput` de búsqueda («Filtrar: <etiqueta>») que solo oculta opciones; una opción marcada y oculta sigue en el modelo. La coincidencia ignora tildes y mayúsculas.
+- Sin opciones muestra `emptyText`; con filtro sin coincidencias muestra «Ninguna opción coincide con el filtro.». Una opción puede ir deshabilitada.
 
 ---
 
@@ -675,3 +696,5 @@ Hasta que una decisión pase a **Confirmada**, los agentes aplican la recomendac
 - [ ] Foco visible navegando con teclado.
 - [ ] Las acciones destructivas usan `ConfirmDialog` (§7.10): Esc cancela, el foco inicial está en "Cancelar" y vuelve al disparador.
 - [ ] Ningún texto en `text-secondary-container` sobre fondo claro.
+- [ ] `ColorPicker` (§7.12): la muestra refleja el tono escrito o elegido, el selector nativo abre desde la muestra (≥44px), un tono inválido enviado se muestra como error del backend y el tono solo se aplica como estilo en línea de la muestra.
+- [ ] `AppCheckboxGroup` (§7.13): el filtro oculta opciones sin quitar las marcadas, las casillas son ≥44px, el mensaje de lista vacía y de filtro sin coincidencias se muestran y la leyenda es visible.

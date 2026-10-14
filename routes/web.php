@@ -4,10 +4,23 @@ use App\Http\Controllers\Audit\AuditLogController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\Catalog\AttributeController;
+use App\Http\Controllers\Catalog\AttributeValueController;
+use App\Http\Controllers\Catalog\CatalogAssetController;
+use App\Http\Controllers\Catalog\CategoryController;
+use App\Http\Controllers\Catalog\DetailLocationController;
+use App\Http\Controllers\Catalog\FabricOfferedColorController;
 use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Products\CombinationController;
+use App\Http\Controllers\Products\ComboController;
+use App\Http\Controllers\Products\ProductAssetController;
+use App\Http\Controllers\Products\ProductController;
+use App\Http\Controllers\Products\ProductStatusController;
+use App\Http\Controllers\Products\ProductStockMinimumController;
+use App\Http\Controllers\Products\ProductStructureController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
 use App\Http\Controllers\Users\UserController;
@@ -53,6 +66,94 @@ Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->
 Route::post('/customers/{customer}/activate', [CustomerStatusController::class, 'activate'])->name('customers.activate');
 Route::post('/customers/{customer}/deactivate', [CustomerStatusController::class, 'deactivate'])->name('customers.deactivate');
 Route::put('/customers/{customer}/advisor', [CustomerAdvisorController::class, 'update'])->name('customers.advisor.update');
+
+// Catalog (spec 003, PRD-001). Authorization lives in CatalogPolicy; categories are never deleted.
+Route::get('/catalog/categories', [CategoryController::class, 'index'])->name('catalog.categories.index');
+Route::post('/catalog/categories', [CategoryController::class, 'store'])->name('catalog.categories.store');
+Route::put('/catalog/categories/{category}', [CategoryController::class, 'update'])->name('catalog.categories.update');
+Route::post('/catalog/categories/{category}/move', [CategoryController::class, 'move'])->name('catalog.categories.move');
+Route::post('/catalog/categories/{category}/activate', [CategoryController::class, 'activate'])->name('catalog.categories.activate');
+Route::post('/catalog/categories/{category}/deactivate', [CategoryController::class, 'deactivate'])->name('catalog.categories.deactivate');
+
+// Catalog attributes and their values (PRD-002). Values are created under their attribute and
+// addressed by their own id afterwards; neither is ever deleted.
+Route::get('/catalog/attributes', [AttributeController::class, 'index'])->name('catalog.attributes.index');
+Route::get('/catalog/attributes/{attribute}', [AttributeController::class, 'show'])->name('catalog.attributes.show');
+Route::post('/catalog/attributes', [AttributeController::class, 'store'])->name('catalog.attributes.store');
+Route::put('/catalog/attributes/{attribute}', [AttributeController::class, 'update'])->name('catalog.attributes.update');
+Route::post('/catalog/attributes/{attribute}/move', [AttributeController::class, 'move'])->name('catalog.attributes.move');
+Route::post('/catalog/attributes/{attribute}/activate', [AttributeController::class, 'activate'])->name('catalog.attributes.activate');
+Route::post('/catalog/attributes/{attribute}/deactivate', [AttributeController::class, 'deactivate'])->name('catalog.attributes.deactivate');
+Route::post('/catalog/attributes/{attribute}/values', [AttributeValueController::class, 'store'])->name('catalog.attributes.values.store');
+Route::put('/catalog/values/{value}', [AttributeValueController::class, 'update'])->name('catalog.values.update');
+Route::post('/catalog/values/{value}/move', [AttributeValueController::class, 'move'])->name('catalog.values.move');
+Route::post('/catalog/values/{value}/activate', [AttributeValueController::class, 'activate'])->name('catalog.values.activate');
+Route::post('/catalog/values/{value}/deactivate', [AttributeValueController::class, 'deactivate'])->name('catalog.values.deactivate');
+Route::put('/catalog/values/{value}/offered-colors', [FabricOfferedColorController::class, 'update'])->name('catalog.values.offered-colors.update');
+// Images (PRD-020, Decision 18): upload and removal are `manage`; serving is `viewAsset`.
+Route::post('/catalog/values/{value}/image', [CatalogAssetController::class, 'storeValue'])->name('catalog.values.image.store');
+Route::delete('/catalog/values/{value}/image', [CatalogAssetController::class, 'destroyValue'])->name('catalog.values.image.destroy');
+Route::get('/catalog/values/{value}/image/{variant}', [CatalogAssetController::class, 'showValue'])->name('catalog.values.image.show');
+
+// Catalog detail locations (PRD-007). The `{location}` parameter binds `DetailLocation`; locations
+// have no order in the spec (no move route) and are never deleted.
+Route::get('/catalog/detail-locations', [DetailLocationController::class, 'index'])->name('catalog.detail-locations.index');
+Route::post('/catalog/detail-locations', [DetailLocationController::class, 'store'])->name('catalog.detail-locations.store');
+Route::put('/catalog/detail-locations/{location}', [DetailLocationController::class, 'update'])->name('catalog.detail-locations.update');
+Route::post('/catalog/detail-locations/{location}/activate', [DetailLocationController::class, 'activate'])->name('catalog.detail-locations.activate');
+Route::post('/catalog/detail-locations/{location}/deactivate', [DetailLocationController::class, 'deactivate'])->name('catalog.detail-locations.deactivate');
+Route::post('/catalog/detail-locations/{location}/image', [CatalogAssetController::class, 'storeLocation'])->name('catalog.detail-locations.image.store');
+Route::delete('/catalog/detail-locations/{location}/image', [CatalogAssetController::class, 'destroyLocation'])->name('catalog.detail-locations.image.destroy');
+Route::get('/catalog/detail-locations/{location}/image/{variant}', [CatalogAssetController::class, 'showLocation'])->name('catalog.detail-locations.image.show');
+
+// Products (spec 003, PRD-003, PRD-015). Authorization lives in ProductPolicy. `/products/create`
+// is declared before `/products/{product}` so it is not read as a product id.
+Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
+Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
+Route::get('/products/{product}/structure', [ProductStructureController::class, 'edit'])->name('products.structure');
+Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+Route::post('/products/{product}/activate', [ProductStatusController::class, 'activate'])->name('products.activate');
+Route::post('/products/{product}/deactivate', [ProductStatusController::class, 'deactivate'])->name('products.deactivate');
+Route::put('/products/{product}/attributes', [ProductStructureController::class, 'update'])->name('products.attributes.update');
+Route::put('/products/{product}/stock-minimums', [ProductStockMinimumController::class, 'update'])->name('products.stock-minimums.update');
+// Main image (PRD-020, Decision 18): upload and removal are `update`; serving is `view`.
+Route::post('/products/{product}/image', [ProductAssetController::class, 'store'])->name('products.image.store');
+Route::delete('/products/{product}/image', [ProductAssetController::class, 'destroy'])->name('products.image.destroy');
+Route::get('/products/{product}/image/{variant}', [ProductAssetController::class, 'show'])->name('products.image.show');
+
+// Combinations of a product (PRD-005). Scoped bindings: a combination of another product is a 404.
+// `combinations/create` is declared before the routes with a `{combination}` segment.
+Route::scopeBindings()->group(function () {
+    Route::get('/products/{product}/combinations/create', [CombinationController::class, 'create'])->name('products.combinations.create');
+    Route::get('/products/{product}/combinations/{combination}/edit', [CombinationController::class, 'edit'])->name('products.combinations.edit');
+    Route::post('/products/{product}/combinations', [CombinationController::class, 'store'])->name('products.combinations.store');
+    Route::put('/products/{product}/combinations/{combination}', [CombinationController::class, 'update'])->name('products.combinations.update');
+    Route::post('/products/{product}/combinations/{combination}/activate', [CombinationController::class, 'activate'])->name('products.combinations.activate');
+    Route::post('/products/{product}/combinations/{combination}/deactivate', [CombinationController::class, 'deactivate'])->name('products.combinations.deactivate');
+    Route::delete('/products/{product}/combinations/{combination}', [CombinationController::class, 'destroy'])->name('products.combinations.destroy');
+
+    // SVG templates (PRD-020, Decision 18): upload and removal are `update`; serving is `view`. A
+    // template of another product is a 404.
+    Route::post('/products/{product}/templates', [ProductAssetController::class, 'storeTemplate'])->name('products.templates.store');
+    Route::delete('/products/{product}/templates/{template}', [ProductAssetController::class, 'destroyTemplate'])->name('products.templates.destroy');
+    Route::get('/products/{product}/templates/{template}', [ProductAssetController::class, 'showTemplate'])->name('products.templates.show');
+});
+
+// Combos (spec 003, PRD-010). Authorization lives in ComboPolicy. `combos/create` is declared before
+// `combos/{combo}` so it is not taken for an id.
+Route::get('/combos', [ComboController::class, 'index'])->name('combos.index');
+Route::get('/combos/create', [ComboController::class, 'create'])->name('combos.create');
+Route::get('/combos/{combo}', [ComboController::class, 'show'])->name('combos.show');
+Route::get('/combos/{combo}/edit', [ComboController::class, 'edit'])->name('combos.edit');
+Route::post('/combos', [ComboController::class, 'store'])->name('combos.store');
+Route::put('/combos/{combo}', [ComboController::class, 'update'])->name('combos.update');
+Route::delete('/combos/{combo}', [ComboController::class, 'destroy'])->name('combos.destroy');
+Route::post('/combos/{combo}/activate', [ComboController::class, 'activate'])->name('combos.activate');
+Route::post('/combos/{combo}/deactivate', [ComboController::class, 'deactivate'])->name('combos.deactivate');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
