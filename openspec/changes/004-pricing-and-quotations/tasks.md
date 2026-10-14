@@ -278,9 +278,9 @@ Branch `...-6a-combo-item-prices` then `...-6b-combo-component-identity`. Covers
 
 Branch `feat/004-pricing-and-quotations-7-commercial-parameters` (PR 12, ~700 lines, `size:exception`), base: PR 11. Covers COT-006, E-11, Decision 13.
 
-- [ ] 7.1 RED — Create `tests/Feature/Pricing/CommercialParametersTest.php`: `E-11` percentage 50.00 → 40, validity 7 → 10 updates and audits `pricing.parameters_updated` with changed fields only (strings); percentage < 0, > 100, more than 2 decimals, validity < 1, > 365, non-integer → 422 on `advance_percentage`/`validity_days`; unchanged payload writes no audit; without `pricing.manage` → 403 (view-only user too). Expected: fail. [E-11]
-- [ ] 7.2 GREEN — Create `app/Actions/Pricing/UpdateCommercialParameters.php`, `app/Http/Requests/Pricing/UpdateCommercialParametersRequest.php`, `app/Http/Controllers/Pricing/CommercialParametersController.php`, route `PUT /pricing/settings/parameters`; `CommercialParameters::current()` on the model. Run: GREEN.
-- [ ] 7.3 Slice-close gate (the gate). Commit (requires user authorization): `feat(004): editar los parámetros comerciales [COT-006, E-11]`.
+- [x] 7.1 RED — Create `tests/Feature/Pricing/CommercialParametersTest.php`: `E-11` percentage 50.00 → 40, validity 7 → 10 updates and audits `pricing.parameters_updated` with changed fields only (strings); percentage < 0, > 100, more than 2 decimals, validity < 1, > 365, non-integer → 422 on `advance_percentage`/`validity_days`; unchanged payload writes no audit; without `pricing.manage` → 403 (view-only user too). Expected: fail. [E-11]
+- [x] 7.2 GREEN — Create `app/Actions/Pricing/UpdateCommercialParameters.php`, `app/Http/Requests/Pricing/UpdateCommercialParametersRequest.php`, `app/Http/Controllers/Pricing/CommercialParametersController.php`, route `PUT /pricing/settings/parameters`; `CommercialParameters::current()` on the model. Run: GREEN.
+- [x] 7.3 Slice-close gate (the gate). Commit (requires user authorization): `feat(004): editar los parámetros comerciales [COT-006, E-11]`.
 
 ## Phase 8: Exchange rate (design slice 8)
 

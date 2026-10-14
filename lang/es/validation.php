@@ -79,6 +79,8 @@ return [
     'size_groups_prices_changed' => 'Los precios cambiaron; revise de nuevo los grupos.',
     'price_invalid' => 'El precio debe ser un monto mayor que cero con a lo sumo 2 decimales.',
     'price_cell_duplicate' => 'Esta celda aparece más de una vez en la solicitud.',
+    'advance_percentage_invalid' => 'El porcentaje de anticipo debe estar entre 0 y 100, con a lo sumo 2 decimales.',
+    'validity_days_invalid' => 'La vigencia debe ser un número entero de días entre 1 y 365.',
     'combo_component_foreign' => 'El componente no pertenece a este combo; actualice la página e intente de nuevo.',
     'combo_price_component_foreign' => 'El componente no pertenece a este combo.',
     'combo_price_component_duplicate' => 'Este componente aparece más de una vez en la solicitud.',

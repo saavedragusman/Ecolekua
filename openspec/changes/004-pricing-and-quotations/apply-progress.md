@@ -394,5 +394,32 @@ Deviations from the task text: the 003 "component ids kept" case lives in `Combo
 ### Suggested commit
 `feat(004): conservar los componentes y sus precios al editar un combo [COT-005, DEC-COT-44]`
 
+Committed as `32aed64`.
+
+## Phase 7 (PR 12, `feat/004-pricing-and-quotations-7-commercial-parameters`, base PR 11): tasks 7.1 to 7.3 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 7.1 | `tests/Feature/Pricing/CommercialParametersTest.php` | Feature (HTTP) | new file | 22 failed + 3 errors: route absent (404), `CommercialParameters::current()` undefined, `getByName` null | 25/25 passed (after comparing the audit JSON with `toEqual`: MySQL reorders JSON keys) | initial 50 % / 7; E-11 40 % / 10 days; one changed field audited alone; bounds 0, 100, 1, 365 and `37,5`; no-op writes nothing; 6 invalid percentages, 5 invalid validities, both fields together, missing fields, percentage as number; 403 audited and with product permissions only | — |
+| 7.2 | — | — | — | — | `UpdateCommercialParameters`, `UpdateCommercialParametersRequest`, `CommercialParametersController`, route `PUT /pricing/settings/parameters`, `CommercialParameters::current()` and `ROW_ID`, 2 lang lines | — | — |
+
+Design choices: the request checks only the shape (percentage as a string, validity an integer); the ranges live in the Action so `120` and `0` are reported together (E-11 "AND"). The audit keeps the percentage as a canonical string and the validity as an integer.
+
+### Gate (PR 12, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors (after removing a redundant `=== null` check phpstan flagged)
+- `sail pnpm check`: passed
+- `sail pnpm types:check`: passed
+- `sail pnpm build`: passed
+- `sail artisan test`: passed, 2064 tests (2062 passed, 2 skipped, 11039 assertions); the phpstan fix came after it, and the focused file was rerun green (25/25)
+
+### Size
+338 authored changed lines (all additions) excluding `tasks.md`, `apply-progress.md`: 171 production, 167 tests. The ~700 forecast did not materialize.
+
+### Suggested commit
+`feat(004): editar los parámetros comerciales [COT-006, E-11]`
+
 ### Remaining
-Phase 7 (PR 12): commercial parameters.
+Phase 8 (PR 13): exchange rate.
