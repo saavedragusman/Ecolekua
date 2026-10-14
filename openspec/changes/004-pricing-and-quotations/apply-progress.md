@@ -421,5 +421,37 @@ Design choices: the request checks only the shape (percentage as a string, valid
 ### Suggested commit
 `feat(004): editar los parámetros comerciales [COT-006, E-11]`
 
+Committed as `1d31d13`.
+
+## Phase 8a (PR 13, `feat/004-pricing-and-quotations-8a-exchange-rate-manual`, base PR 12): manual half of 8.4/8.5 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 8.4 (manual) | `tests/Feature/Pricing/ExchangeRateTest.php`, `tests/Feature/Pricing/PricingPolicyTest.php` (adds `ExchangeRate`) | Feature (HTTP + Action + schema) | policy test green before | 27 errors (classes absent) + 1 failure (no policy for `ExchangeRate`) | 31/31 passed | schema: unique effective date, superseded rows coexist, CHECK > 0, 4 exact decimals; E-64 manual with author/audit/in force, Caracas date vs UTC, supersedes the API row (write order and `superseded_by_id`), second manual supersedes the first, race rerun once, 7 invalid values, 403 audited and with other permissions; current rate: today's, else latest effective with its date, null when none; history newest first with superseded rows and author | — |
+| 8.5 (manual) | — | — | — | — | migration `2026_10_14_000002_create_exchange_rates_table.php` (generated `effective_date` unique, CHECK), `ExchangeRate` (`scopeHistory`, `isEffective`), `ExchangeRateFactory`, `RecordManualExchangeRate`, `CurrentExchangeRate`, `RateSnapshot`, `OperatingTime::today()`, request, controller, route `POST /pricing/exchange-rates`, policy registration, 1 lang line | — | — |
+
+Deviations and notes:
+- `RateSnapshot` (planned for 8.3) and `OperatingTime::today()` are created here because `CurrentExchangeRate` and the manual entry need them.
+- `scopeHistory` eager-loads `recordedBy:id,first_name,last_name`: users have no `name` column (the design said `id,name`); the presenter will use `fullName()`.
+- `CurrentExchangeRate` ignores effective rows dated after today (defensive; only today can be written).
+- Race test limitation: the API insert is simulated inside the same connection (an `ExchangeRate::creating` hook), so the rollback also removes it; the test proves the single rerun and that the manual rate ends effective, not that the rerun supersedes a committed API row. A true two-connection race is not reproducible inside the test transaction.
+- The local DB was not migrated or rolled back (the testing DB runs the migration); left for the user.
+
+### Gate (PR 13, 2026-10-14)
+- `sail pint --test`: passed (pint fixed import order in `AppServiceProvider`)
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed
+- `sail pnpm types:check`: passed
+- `sail pnpm build`: passed
+- `sail artisan test`: passed, 2088 tests (2086 passed, 2 skipped, 11149 assertions)
+
+### Size
+636 authored changed lines (632 additions, 4 deletions) excluding `tasks.md`, `apply-progress.md`.
+
+### Suggested commit
+`feat(004): registrar la tasa de cambio manual y consultar la vigente [COT-030, E-64]`
+
 ### Remaining
-Phase 8 (PR 13): exchange rate.
+Phase 8b (PR 14): 8.1-8.3, API fetch, schedule, failure event, scheduler service (8.6), 8.7.

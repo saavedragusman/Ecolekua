@@ -32,6 +32,14 @@ final class OperatingTime
         return CarbonImmutable::createFromFormat('!Y-m-d', $date, self::timezone())->addDay()->utc();
     }
 
+    /**
+     * The current calendar day in the operating timezone, at local 00:00.
+     */
+    public static function today(): CarbonImmutable
+    {
+        return CarbonImmutable::now(self::timezone())->startOfDay();
+    }
+
     private static function timezone(): string
     {
         return config('app.operating_timezone');

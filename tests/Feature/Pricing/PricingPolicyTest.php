@@ -4,6 +4,7 @@ use App\Enums\PermissionName;
 use App\Models\CombinationPrice;
 use App\Models\ComboItemPrice;
 use App\Models\CommercialParameters;
+use App\Models\ExchangeRate;
 use App\Models\Permission;
 use App\Models\PriceScheme;
 use App\Models\User;
@@ -27,6 +28,8 @@ function pricingSubjects(): array
         'price class' => CombinationPrice::class,
         'item price class' => ComboItemPrice::class,
         'parameters class' => CommercialParameters::class,
+        'exchange rate' => ExchangeRate::factory()->create(),
+        'exchange rate class' => ExchangeRate::class,
     ];
 }
 
@@ -43,8 +46,8 @@ function pricingAllExcept(PermissionName ...$excluded): array
         ->all();
 }
 
-it('COT-022 registers PricingPolicy for the four pricing models of this phase', function () {
-    foreach ([PriceScheme::class, CombinationPrice::class, ComboItemPrice::class, CommercialParameters::class] as $model) {
+it('COT-022 registers PricingPolicy for the pricing models created so far', function () {
+    foreach ([PriceScheme::class, CombinationPrice::class, ComboItemPrice::class, CommercialParameters::class, ExchangeRate::class] as $model) {
         expect(Gate::getPolicyFor($model))->toBeInstanceOf(PricingPolicy::class);
     }
 });

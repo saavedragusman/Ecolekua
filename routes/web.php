@@ -16,6 +16,7 @@ use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Pricing\ComboPriceController;
 use App\Http\Controllers\Pricing\CommercialParametersController;
+use App\Http\Controllers\Pricing\ExchangeRateController;
 use App\Http\Controllers\Pricing\PriceSchemeController;
 use App\Http\Controllers\Pricing\ProductPriceController;
 use App\Http\Controllers\Pricing\ProductSchemeController;
@@ -180,6 +181,9 @@ Route::put('/pricing/combos/{combo}/prices', [ComboPriceController::class, 'upda
 
 // Commercial parameters (COT-006): advance percentage and validity of the quotations issued afterwards.
 Route::put('/pricing/settings/parameters', [CommercialParametersController::class, 'update'])->name('pricing.settings.parameters.update');
+
+// Manual exchange rate of today (COT-030, E-64): supersedes the effective rate of the day.
+Route::post('/pricing/exchange-rates', [ExchangeRateController::class, 'store'])->name('pricing.exchange-rates.store');
 
 // Size groups of a combination (COT-004, E-70): the preview is read-only and returns the confirmation
 // token the PUT needs when the change deletes prices.
