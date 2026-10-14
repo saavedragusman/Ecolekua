@@ -14,6 +14,10 @@ use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Pricing\PriceSchemeController;
+use App\Http\Controllers\Pricing\ProductPriceController;
+use App\Http\Controllers\Pricing\ProductSchemeController;
+use App\Http\Controllers\Pricing\SizeGroupController;
 use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ComboController;
 use App\Http\Controllers\Products\ProductAssetController;
@@ -154,6 +158,25 @@ Route::put('/combos/{combo}', [ComboController::class, 'update'])->name('combos.
 Route::delete('/combos/{combo}', [ComboController::class, 'destroy'])->name('combos.destroy');
 Route::post('/combos/{combo}/activate', [ComboController::class, 'activate'])->name('combos.activate');
 Route::post('/combos/{combo}/deactivate', [ComboController::class, 'deactivate'])->name('combos.deactivate');
+
+// Price schemes (spec 004, COT-001). Authorization lives in PricingPolicy (`pricing.manage`); the scheme
+// pages arrive with the pricing UI, so only the writes exist for now.
+Route::post('/pricing/schemes', [PriceSchemeController::class, 'store'])->name('pricing.schemes.store');
+Route::put('/pricing/schemes/{scheme}', [PriceSchemeController::class, 'update'])->whereNumber('scheme')->name('pricing.schemes.update');
+Route::post('/pricing/schemes/{scheme}/activate', [PriceSchemeController::class, 'activate'])->whereNumber('scheme')->name('pricing.schemes.activate');
+Route::post('/pricing/schemes/{scheme}/deactivate', [PriceSchemeController::class, 'deactivate'])->whereNumber('scheme')->name('pricing.schemes.deactivate');
+
+// Scheme assignment (COT-002). The static bulk segment is declared before the parameterized route.
+Route::put('/pricing/products/scheme', [ProductSchemeController::class, 'bulk'])->name('pricing.products.scheme.bulk');
+Route::put('/pricing/products/{product}/scheme', [ProductSchemeController::class, 'update'])->whereNumber('product')->name('pricing.products.scheme.update');
+
+// Price table of a product (COT-003): one save for every combination, tier and size group.
+Route::put('/pricing/products/{product}/prices', [ProductPriceController::class, 'update'])->whereNumber('product')->name('pricing.products.prices.update');
+
+// Size groups of a combination (COT-004, E-70): the preview is read-only and returns the confirmation
+// token the PUT needs when the change deletes prices.
+Route::post('/pricing/combinations/{combination}/size-groups/preview', [SizeGroupController::class, 'preview'])->whereNumber('combination')->name('pricing.size-groups.preview');
+Route::put('/pricing/combinations/{combination}/size-groups', [SizeGroupController::class, 'update'])->whereNumber('combination')->name('pricing.size-groups.update');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

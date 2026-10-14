@@ -3,6 +3,7 @@
 namespace App\Actions\Products;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Pricing\SizeGroupMaintenance;
 use App\Enums\AttributePresentation;
 use App\Enums\AttributeRole;
 use App\Enums\AttributeSpecialUse;
@@ -11,6 +12,7 @@ use App\Enums\CatalogStatus;
 use App\Models\AttributeValue;
 use App\Models\CatalogAttribute;
 use App\Models\CatalogCode;
+use App\Models\Combination;
 use App\Models\Product;
 use App\Models\ProductAttribute;
 use App\Models\User;
@@ -38,12 +40,16 @@ use Illuminate\Validation\ValidationException;
  *    can be removed (DEC-PRD-37, E-24, E-57);
  * 6. layer guard: a newly admitted value whose layer a template lacks is rejected (E-40);
  * 7. the own minimum stock of a removed size is deleted (DEC-PRD-52, E-71), after the empty hook
- *    `ensureNoStockForRemovedSizes()` that spec 008 fills;
+ *    `ensureNoStockForRemovedSizes()` that spec 008 fills; the size also leaves its size groups
+ *    (COT-004, DEC-COT-48);
  * 8. audit with the full previous and new structure; the deleted minimums go in `old_values`.
  */
 class SyncProductAttributes
 {
-    public function __construct(private readonly RecordAuditEvent $audit) {}
+    public function __construct(
+        private readonly RecordAuditEvent $audit,
+        private readonly SizeGroupMaintenance $sizeGroups,
+    ) {}
 
     /**
      * @param  list<array{attribute_id: int|string, role: string, allowed_value_ids?: list<int|string>|null}>  $entries  validated input, in display order
@@ -81,6 +87,17 @@ class SyncProductAttributes
             // Step 7 (DEC-PRD-52, E-71): the own minimums keyed by a removed size go with it. Values
             // used by a restriction were rejected above, so only unrestricted sizes reach this point.
             $deletedOverrides = StockMinimum::deleteOverrides($product, $removedValueIds);
+
+            // COT-004, DEC-COT-48: a removed size also leaves its size group (a group left empty is
+            // deleted with its prices). It runs before `persist()`, while the combinations still admit
+            // the size the groups were defined against.
+            $this->sizeGroups->removeSizes(
+                array_values(Combination::query()->where('product_id', $product->id)->pluck('id')->map(intval(...))->all()),
+                $removedValueIds,
+                $actor,
+                $origin,
+                $auditContext,
+            );
 
             $this->persist($product, $declared, $current);
 
