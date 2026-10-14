@@ -17,6 +17,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Pricing\PriceSchemeController;
 use App\Http\Controllers\Pricing\ProductPriceController;
 use App\Http\Controllers\Pricing\ProductSchemeController;
+use App\Http\Controllers\Pricing\SizeGroupController;
 use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ComboController;
 use App\Http\Controllers\Products\ProductAssetController;
@@ -171,6 +172,11 @@ Route::put('/pricing/products/{product}/scheme', [ProductSchemeController::class
 
 // Price table of a product (COT-003): one save for every combination, tier and size group.
 Route::put('/pricing/products/{product}/prices', [ProductPriceController::class, 'update'])->whereNumber('product')->name('pricing.products.prices.update');
+
+// Size groups of a combination (COT-004, E-70): the preview is read-only and returns the confirmation
+// token the PUT needs when the change deletes prices.
+Route::post('/pricing/combinations/{combination}/size-groups/preview', [SizeGroupController::class, 'preview'])->whereNumber('combination')->name('pricing.size-groups.preview');
+Route::put('/pricing/combinations/{combination}/size-groups', [SizeGroupController::class, 'update'])->whereNumber('combination')->name('pricing.size-groups.update');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
