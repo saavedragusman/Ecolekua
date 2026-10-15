@@ -8,12 +8,12 @@
 
 ## 1. Fuente
 
-| Documento | Ruta | Commit en que se leyó |
-|---|---|---|
-| Spec de producto (comportamiento) | `docs/specs/004-pricing-and-quotations.md` | `ed014ef` (2026-10-14) |
-| Diseño técnico (congelado, solo lectura) | `openspec/changes/004-pricing-and-quotations/design.md` | `ed014ef` (2026-10-14) |
-| Tareas de origen (históricas) | `openspec/changes/004-pricing-and-quotations/tasks.md` | `1147e85` |
-| Progreso de fases 0–8 (histórico, no se migra) | `openspec/changes/004-pricing-and-quotations/apply-progress.md` | `1147e85` |
+| Documento                                      | Ruta                                                            | Commit en que se leyó  |
+| ---------------------------------------------- | --------------------------------------------------------------- | ---------------------- |
+| Spec de producto (comportamiento)              | `docs/specs/004-pricing-and-quotations.md`                      | `ed014ef` (2026-10-14) |
+| Diseño técnico (congelado, solo lectura)       | `openspec/changes/004-pricing-and-quotations/design.md`         | `ed014ef` (2026-10-14) |
+| Tareas de origen (históricas)                  | `openspec/changes/004-pricing-and-quotations/tasks.md`          | `1147e85`              |
+| Progreso de fases 0–8 (histórico, no se migra) | `openspec/changes/004-pricing-and-quotations/apply-progress.md` | `1147e85`              |
 
 Todo `openspec/changes/004-pricing-and-quotations/` es de solo lectura. Si cambia algo del diseño, se registra en la sección "Cambios al diseño", nunca en openspec.
 
@@ -33,12 +33,12 @@ Pendiente de este documento: fases 9–28 (escenarios E-09, E-10, E-12..E-25, E-
 
 Todas confirmadas. No hay `[DEC-PENDIENTE]` abiertos (puerta 1 de AGENTS.md §4.3).
 
-| Grupo | Estado | Dónde está registrado |
-|---|---|---|
-| DEC-COT-01..DEC-COT-59 | Confirmada | `docs/specs/004` §9 |
-| DEC-COT-60: la tasa de cambio tiene 2 decimales en todas partes (API redondea HALF_UP a 2; la carga manual rechaza más de 2 con 422) | Confirmada (2026-10-14) | `docs/specs/004` §9; commit `ed014ef` |
-| DT-01..DT-06 | Confirmada | `design.md` (congelado) |
-| Estrategia de entrega (cadena de PRs, `size:exception`) | Confirmada (2026-10-13) | `tasks.md` de openspec, "Review Workload Forecast" |
+| Grupo                                                                                                                                | Estado                  | Dónde está registrado                              |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | -------------------------------------------------- |
+| DEC-COT-01..DEC-COT-59                                                                                                               | Confirmada              | `docs/specs/004` §9                                |
+| DEC-COT-60: la tasa de cambio tiene 2 decimales en todas partes (API redondea HALF_UP a 2; la carga manual rechaza más de 2 con 422) | Confirmada (2026-10-14) | `docs/specs/004` §9; commit `ed014ef`              |
+| DT-01..DT-06                                                                                                                         | Confirmada              | `design.md` (congelado)                            |
+| Estrategia de entrega (cadena de PRs, `size:exception`)                                                                              | Confirmada (2026-10-13) | `tasks.md` de openspec, "Review Workload Forecast" |
 
 Si una tarea descubre un comportamiento que ni la spec ni el diseño definen, se detiene esa parte y se levanta un `[DEC-PENDIENTE]` (AGENTS.md §5–§6).
 
@@ -50,8 +50,8 @@ Si una tarea descubre un comportamiento que ni la spec ni el diseño definen, se
 
 Cada cambio lleva su motivo y su DEC o DT. Ninguno se escribe en openspec.
 
-| ID | Cambio | Motivo | DEC / DT | Origen |
-|---|---|---|---|---|
+| ID    | Cambio                                                                              | Motivo                                                                                                                                                                          | DEC / DT   | Origen                                                                               |
+| ----- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------ |
 | CD-01 | `combination_prices.size_group_key` es una columna generada `VIRTUAL`, no `STORED`. | MySQL 8.4 rechaza `ON DELETE CASCADE` sobre la columna base de una columna generada `STORED` (error 1215). El índice único de celda y la colisión de `NULL` se comportan igual. | Decision 4 | Fase 2, tarea 2.8 (`9a221fb`); estaba pendiente de anotarse en `design.md` al cierre |
 
 Las desviaciones menores de las fases 0–8 (elección de archivos de test, nombres de helpers) quedan en `apply-progress.md` como historia y no cambian el diseño.
@@ -72,57 +72,57 @@ Las desviaciones menores de las fases 0–8 (elección de archivos de test, nomb
 
 ### Fases 0–8 (cerradas con SDD)
 
-| Fase | Contenido | Commit(s) |
-|---|---|---|
-| 0 | Spec fuente, business rules y artefactos SDD | `c6b2602`, `ac64817` (0.4: abrir la PR tracker solo después del merge de 003, sigue pendiente y sin acción) |
-| 1 | Permisos, auditoría, matriz y coherencia [COT-022, COT-023, E-47, DEC-COT-25, DEC-COT-52] | `300a2fd` |
-| 2 | `brick/math`, `Money`, enums, esquema de precios y `PricingPolicy` [DT-01, COT-022] | `fb7abb0`, `9a221fb` |
-| 3 | Esquemas y tramos [COT-001, E-01, E-02, E-03, DEC-COT-23, DEC-COT-51, DEC-COT-57] | `74882d5`, `e8db78b` (forecast recalculado: `40d6dfe`) |
-| 4 | Asignación de esquema, uno y masivo [COT-002, E-04, E-27] | `27f884d` |
-| 5a | Precios por combinación [COT-003, E-05, E-06, E-07, DEC-COT-32] | `d69a4b0` |
-| 5b | Grupos de talla, combinaciones sin precio, confirmación y limpieza [COT-004, COT-025, E-08, E-26, E-70, DEC-COT-48, DEC-COT-53, DEC-COT-58] | `180ec79`, `ad864b8`, `588d48c`, `f10d3c7` |
-| 6 | Precios de ítems de combo e identidad de componentes [COT-005, DEC-COT-06, DEC-COT-44] | `e7df039`, `32aed64` |
-| 7 | Parámetros comerciales [COT-006, E-11] | `1d31d13` |
-| 8 | Tasa de cambio manual, API y programación; endurecimiento y 2 decimales [COT-030, E-63, E-64, DT-01, DT-05, DEC-COT-60] | `b1065fe`, `18ba13b`, `190a9f9`, `ed014ef`, `1147e85` (la 8.6 queda cumplida con el servicio `scheduler` bajo el profile de `compose.yaml`) |
+| Fase | Contenido                                                                                                                                   | Commit(s)                                                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Spec fuente, business rules y artefactos SDD                                                                                                | `c6b2602`, `ac64817` (0.4: abrir la PR tracker solo después del merge de 003, sigue pendiente y sin acción)                                 |
+| 1    | Permisos, auditoría, matriz y coherencia [COT-022, COT-023, E-47, DEC-COT-25, DEC-COT-52]                                                   | `300a2fd`                                                                                                                                   |
+| 2    | `brick/math`, `Money`, enums, esquema de precios y `PricingPolicy` [DT-01, COT-022]                                                         | `fb7abb0`, `9a221fb`                                                                                                                        |
+| 3    | Esquemas y tramos [COT-001, E-01, E-02, E-03, DEC-COT-23, DEC-COT-51, DEC-COT-57]                                                           | `74882d5`, `e8db78b` (forecast recalculado: `40d6dfe`)                                                                                      |
+| 4    | Asignación de esquema, uno y masivo [COT-002, E-04, E-27]                                                                                   | `27f884d`                                                                                                                                   |
+| 5a   | Precios por combinación [COT-003, E-05, E-06, E-07, DEC-COT-32]                                                                             | `d69a4b0`                                                                                                                                   |
+| 5b   | Grupos de talla, combinaciones sin precio, confirmación y limpieza [COT-004, COT-025, E-08, E-26, E-70, DEC-COT-48, DEC-COT-53, DEC-COT-58] | `180ec79`, `ad864b8`, `588d48c`, `f10d3c7`                                                                                                  |
+| 6    | Precios de ítems de combo e identidad de componentes [COT-005, DEC-COT-06, DEC-COT-44]                                                      | `e7df039`, `32aed64`                                                                                                                        |
+| 7    | Parámetros comerciales [COT-006, E-11]                                                                                                      | `1d31d13`                                                                                                                                   |
+| 8    | Tasa de cambio manual, API y programación; endurecimiento y 2 decimales [COT-030, E-63, E-64, DT-01, DT-05, DEC-COT-60]                     | `b1065fe`, `18ba13b`, `190a9f9`, `ed014ef`, `1147e85` (la 8.6 queda cumplida con el servicio `scheduler` bajo el profile de `compose.yaml`) |
 
 ### Seguimiento de fases 9–28
 
-| Fase | Rama (`feat/004-pricing-and-quotations-…`) | IDs | Ruta | Estado | Commit |
-|---|---|---|---|---|---|
-| 9a | `9a-calculation-counting-advance` | COT-008, COT-010, E-30 (unit) | inline | pendiente | — |
-| 9b | `9b-calculation-packs-basis` | DEC-COT-47, DEC-COT-54, DEC-COT-55, DEC-COT-59, E-71 (unit), E-72 (unit) | inline | pendiente | — |
-| 10a | `10a-calculation-core-engine` | COT-009, COT-011, COT-025, DT-02, E-09, E-10, E-14..E-18, E-23..E-28, E-49, E-69 | inline | pendiente | — |
-| 10b | `10b-calculate-endpoints` | COT-009, COT-010, COT-022, E-20, E-29, E-30, E-31, E-64, E-65, E-71 | inline | pendiente | — |
-| 11a-schema | `11a-quotation-schema` | COT-013, COT-014 | inline | pendiente | — |
-| 11a-create | `11a-quotation-create` | COT-013, E-32, E-33, E-68, DEC-COT-45 | inline | pendiente | — |
-| 11b | `11b-quotation-draft-update` | COT-013, COT-014, E-34, E-35, E-73, DEC-COT-29, DEC-COT-56 | inline | pendiente | — |
-| 12a | `12a-negotiated-price` | COT-012, E-19, E-20, E-21, E-22 | inline | pendiente | — |
-| 12b | `12b-agreed-advance-basis` | COT-010, E-62, E-72, DEC-COT-55 | inline | pendiente | — |
-| 13a | `13a-issue-freeze` | COT-016, DT-03, E-33, E-36, E-37, E-65 | inline | pendiente | — |
-| 13b | `13b-issue-deliveries-events` | COT-016, DEC-COT-49 | inline | pendiente | — |
-| 14a | `14a-quotation-expiry` | COT-017, E-41 | inline | pendiente | — |
-| 14b | `14b-duplicate-cancel-discard` | COT-015, COT-018, COT-019, E-38, E-42, E-43, E-44 | inline | pendiente | — |
-| 15 | `15-history-guards` | COT-024, CLI-010, PRD-012, PRD-014, E-39, E-40, E-48 | inline | pendiente | — |
-| 16a | `16a-quotation-list` | COT-020, E-45, E-68 | inline | pendiente | — |
-| 16b | `16b-quotation-detail-customer-history` | COT-020, CLI-013, E-46 | inline | pendiente | — |
-| 17a | `17a-print-view` | COT-021, E-50 | inline | pendiente | — |
-| 17b | `17b-email-resend` | COT-031, E-66, E-67, E-68 | inline | pendiente | — |
-| 18a | `18a-csv-reader-writer` | COT-026, DT-04 | inline | pendiente | — |
-| 18b | `18b-price-export` | COT-026, E-51, E-60, DEC-COT-31 | inline | pendiente | — |
-| 19a | `19a-import-validate` | COT-027, E-54, E-55, E-56, E-57 | inline | pendiente | — |
-| 19b | `19b-import-upload` | COT-027, E-52, E-59 | inline | pendiente | — |
-| 20a | `20a-import-apply` | COT-028, E-53, E-58, E-60 | inline | pendiente | — |
-| 20b | `20b-import-discard-expiry-history` | COT-029, E-61 | inline | pendiente | — |
-| 21a | `21a-initial-load-validate` | COT-007, E-13 | inline | pendiente | — |
-| 21b | `21b-initial-load-apply` | COT-007, E-12 | inline | pendiente | — |
-| 22 | `22-ui-pricing-1` | COT-001, COT-006, COT-030 | inline | pendiente | — |
-| 23a | `23a-ui-product-prices` | COT-002, COT-003, COT-025, DEC-COT-52 | inline | pendiente | — |
-| 23b | `23b-ui-size-groups-combos` | COT-004, COT-005, E-70, DEC-COT-44 | inline | pendiente | — |
-| 24 | `24-ui-editor-1` | COT-013 | inline | pendiente | — |
-| 25 | `25-ui-editor-2` | COT-014, COT-011, COT-009 | inline | pendiente | — |
-| 26 | `26-ui-editor-3` | COT-012, COT-015, COT-016, COT-018, COT-019, COT-020, COT-031 | inline | pendiente | — |
-| 27 | `27-ui-imports` | COT-026..COT-029, E-61 | inline | pendiente | — |
-| 28 | `28-closeout` | COT-023, DoD | inline | pendiente | — |
+| Fase       | Rama (`feat/004-pricing-and-quotations-…`) | IDs                                                                              | Ruta   | Estado    | Commit |
+| ---------- | ------------------------------------------ | -------------------------------------------------------------------------------- | ------ | --------- | ------ |
+| 9a         | `9a-calculation-counting-advance`          | COT-008, COT-010, E-30 (unit)                                                    | inline | pendiente | —      |
+| 9b         | `9b-calculation-packs-basis`               | DEC-COT-47, DEC-COT-54, DEC-COT-55, DEC-COT-59, E-71 (unit), E-72 (unit)         | inline | pendiente | —      |
+| 10a        | `10a-calculation-core-engine`              | COT-009, COT-011, COT-025, DT-02, E-09, E-10, E-14..E-18, E-23..E-28, E-49, E-69 | inline | pendiente | —      |
+| 10b        | `10b-calculate-endpoints`                  | COT-009, COT-010, COT-022, E-20, E-29, E-30, E-31, E-64, E-65, E-71              | inline | pendiente | —      |
+| 11a-schema | `11a-quotation-schema`                     | COT-013, COT-014                                                                 | inline | pendiente | —      |
+| 11a-create | `11a-quotation-create`                     | COT-013, E-32, E-33, E-68, DEC-COT-45                                            | inline | pendiente | —      |
+| 11b        | `11b-quotation-draft-update`               | COT-013, COT-014, E-34, E-35, E-73, DEC-COT-29, DEC-COT-56                       | inline | pendiente | —      |
+| 12a        | `12a-negotiated-price`                     | COT-012, E-19, E-20, E-21, E-22                                                  | inline | pendiente | —      |
+| 12b        | `12b-agreed-advance-basis`                 | COT-010, E-62, E-72, DEC-COT-55                                                  | inline | pendiente | —      |
+| 13a        | `13a-issue-freeze`                         | COT-016, DT-03, E-33, E-36, E-37, E-65                                           | inline | pendiente | —      |
+| 13b        | `13b-issue-deliveries-events`              | COT-016, DEC-COT-49                                                              | inline | pendiente | —      |
+| 14a        | `14a-quotation-expiry`                     | COT-017, E-41                                                                    | inline | pendiente | —      |
+| 14b        | `14b-duplicate-cancel-discard`             | COT-015, COT-018, COT-019, E-38, E-42, E-43, E-44                                | inline | pendiente | —      |
+| 15         | `15-history-guards`                        | COT-024, CLI-010, PRD-012, PRD-014, E-39, E-40, E-48                             | inline | pendiente | —      |
+| 16a        | `16a-quotation-list`                       | COT-020, E-45, E-68                                                              | inline | pendiente | —      |
+| 16b        | `16b-quotation-detail-customer-history`    | COT-020, CLI-013, E-46                                                           | inline | pendiente | —      |
+| 17a        | `17a-print-view`                           | COT-021, E-50                                                                    | inline | pendiente | —      |
+| 17b        | `17b-email-resend`                         | COT-031, E-66, E-67, E-68                                                        | inline | pendiente | —      |
+| 18a        | `18a-csv-reader-writer`                    | COT-026, DT-04                                                                   | inline | pendiente | —      |
+| 18b        | `18b-price-export`                         | COT-026, E-51, E-60, DEC-COT-31                                                  | inline | pendiente | —      |
+| 19a        | `19a-import-validate`                      | COT-027, E-54, E-55, E-56, E-57                                                  | inline | pendiente | —      |
+| 19b        | `19b-import-upload`                        | COT-027, E-52, E-59                                                              | inline | pendiente | —      |
+| 20a        | `20a-import-apply`                         | COT-028, E-53, E-58, E-60                                                        | inline | pendiente | —      |
+| 20b        | `20b-import-discard-expiry-history`        | COT-029, E-61                                                                    | inline | pendiente | —      |
+| 21a        | `21a-initial-load-validate`                | COT-007, E-13                                                                    | inline | pendiente | —      |
+| 21b        | `21b-initial-load-apply`                   | COT-007, E-12                                                                    | inline | pendiente | —      |
+| 22         | `22-ui-pricing-1`                          | COT-001, COT-006, COT-030                                                        | inline | pendiente | —      |
+| 23a        | `23a-ui-product-prices`                    | COT-002, COT-003, COT-025, DEC-COT-52                                            | inline | pendiente | —      |
+| 23b        | `23b-ui-size-groups-combos`                | COT-004, COT-005, E-70, DEC-COT-44                                               | inline | pendiente | —      |
+| 24         | `24-ui-editor-1`                           | COT-013                                                                          | inline | pendiente | —      |
+| 25         | `25-ui-editor-2`                           | COT-014, COT-011, COT-009                                                        | inline | pendiente | —      |
+| 26         | `26-ui-editor-3`                           | COT-012, COT-015, COT-016, COT-018, COT-019, COT-020, COT-031                    | inline | pendiente | —      |
+| 27         | `27-ui-imports`                            | COT-026..COT-029, E-61                                                           | inline | pendiente | —      |
+| 28         | `28-closeout`                              | COT-023, DoD                                                                     | inline | pendiente | —      |
 
 Cada rama parte de la rama de la fase anterior; la 9a parte de `fix/004-exchange-rate-hardening`.
 
@@ -130,10 +130,10 @@ Cada rama parte de la rama de la fase anterior; la 9a parte de `fix/004-exchange
 
 9a = tasks 9.1–9.4; 9b = tasks 9.5–9.8. Covers COT-008, COT-009 (steps), COT-010, COT-011 (counting), COT-012 (basis), DEC-COT-47, DEC-COT-54, DEC-COT-59, E-30 (unit), E-71 (unit), E-62 (advance unit), E-72 (basis unit). No Eloquent, no HTTP.
 
-- [ ] 9.1 RED — Create `tests/Unit/Quotations/PieceCounterTest.php`: counts valid rows of non-service goods in tiered schemes by business line; fixed-price lines, combo lines and customizations excluded (DEC-COT-07, DEC-COT-13); services counted apart by product id (DEC-COT-14); rows with errors excluded (N-2). `TierSelectorTest.php`: every tier limit (1, 6, 7, 12, 13, 49, 50, open-ended), a fixed scheme's single tier. Expected: fail. [COT-008]
-- [ ] 9.2 GREEN — Create `app/Support/Quotations/Calculation/LineFacts.php`, `TierFacts.php`, `PieceCounter.php`, `TierSelector.php`. Run: GREEN.
-- [ ] 9.3 RED — Create `tests/Unit/Quotations/AdvanceCalculatorTest.php`: `E-30` modes (on-demand and service lines at percent, stock/combo lines at 100 %, agreed part) round once HALF_UP on the sum; parts of the breakdown add up to the required advance; `proposedAgreed` rounds; `BsConverterTest.php`: E-36 values (36,00 × 875,65 = 31.523,40, rounded per amount; DEC-COT-60), null when no rate. Expected: fail. [COT-010, E-30]
-- [ ] 9.4 GREEN — Create `app/Support/Quotations/Calculation/AdvanceCalculator.php`, `AdvanceBreakdown.php`, `BsConverter.php` (uses `RateSnapshot`). Run: GREEN. Gate + commit 9a: `feat(004): clases puras de cálculo de cotización (conteo, tramos, anticipo y Bs) [COT-008, COT-010, E-30]`.
+- [x] 9.1 RED — Create `tests/Unit/Quotations/PieceCounterTest.php`: counts valid rows of non-service goods in tiered schemes by business line; fixed-price lines, combo lines and customizations excluded (DEC-COT-07, DEC-COT-13); services counted apart by product id (DEC-COT-14); rows with errors excluded (N-2). `TierSelectorTest.php`: every tier limit (1, 6, 7, 12, 13, 49, 50, open-ended), a fixed scheme's single tier. Expected: fail. [COT-008]
+- [x] 9.2 GREEN — Create `app/Support/Quotations/Calculation/LineFacts.php`, `TierFacts.php`, `PieceCounter.php`, `TierSelector.php`. Run: GREEN.
+- [x] 9.3 RED — Create `tests/Unit/Quotations/AdvanceCalculatorTest.php`: `E-30` modes (on-demand and service lines at percent, stock/combo lines at 100 %, agreed part) round once HALF_UP on the sum; parts of the breakdown add up to the required advance; `proposedAgreed` rounds; `BsConverterTest.php`: E-36 values (36,00 × 875,65 = 31.523,40, rounded per amount; DEC-COT-60), null when no rate. Expected: fail. [COT-010, E-30]
+- [x] 9.4 GREEN — Create `app/Support/Quotations/Calculation/AdvanceCalculator.php`, `AdvanceBreakdown.php`, `BsConverter.php` (uses `RateSnapshot`). Run: GREEN. Gate + commit 9a: `feat(004): clases puras de cálculo de cotización (conteo, tramos, anticipo y Bs) [COT-008, COT-010, E-30]`.
 - [ ] 9.5 RED — Create `tests/Unit/Quotations/PackAdvisorTest.php`: `E-71` rule unit (a line passed with more than one distinct unit price is never advised; two groups with the same price count as one, DEC-COT-59), greatest saving wins, tie → more units (DEC-COT-47), pack price must be below the unit price, line quantity ≥ pack quantity, `packs_fit = intdiv`, estimated saving string. `NegotiationBasisTest.php`: `E-72` basis of combination and sorted distinct group ids (nulls dropped), `matches` ignores quantities and sizes within a group. Expected: fail. [DEC-COT-47, DEC-COT-54, DEC-COT-55, DEC-COT-59]
 - [ ] 9.6 GREEN — Create `app/Support/Quotations/Calculation/PackAdvisor.php`, `PackLineFacts.php`, `PackNotice.php`, `NegotiationBasis.php`. Run: GREEN.
 - [ ] 9.7 REFACTOR — Confirm `MoneyHasNoFloatTest` still passes; types check.
@@ -357,45 +357,45 @@ La evidencia RED/GREEN y los resultados de la puerta de las fases 0–8 están e
 
 ### Cobertura de escenarios (E-xx → tarea)
 
-| Escenario | Tarea(s) | Escenario | Tarea(s) |
-|---|---|---|---|
-| E-01 | 3.3 ✔ | E-38 | 14.1 |
-| E-02 | 3.1, 3.3 ✔ | E-39 | 15.1 |
-| E-03 | 3.3 ✔ | E-40 | 15.1 |
-| E-04 | 4.1 ✔ | E-41 | 14.1 |
-| E-05 | 5a.1 ✔ | E-42 | 14.1 |
-| E-06 | 5a.1 ✔ | E-43 | 14.1 |
-| E-07 | 5a.1 ✔ | E-44 | 14.1 |
-| E-08 | 5b.3 ✔ | E-45 | 16.1 |
-| E-09 | 10a.3 | E-46 | 16.1 |
-| E-10 | 10a.3 | E-47 | 1.7 ✔ |
-| E-11 | 7.1 ✔ | E-48 | 15.1 |
-| E-12 | 21.1 | E-49 | 10a.3 |
-| E-13 | 21.1 | E-50 | 17.1 |
-| E-14 | 10a.3 | E-51 | 18.1 |
-| E-15 | 10a.3 | E-52 | 19.1 |
-| E-16 | 10a.3 | E-53 | 20.1 |
-| E-17 | 10a.3 | E-54 | 19.1 |
-| E-18 | 10a.3 | E-55 | 19.1 |
-| E-19 | 12.1 | E-56 | 19.1 |
-| E-20 | 10b.4, 12.1 | E-57 | 19.1 |
-| E-21 | 12.1 | E-58 | 20.1 |
-| E-22 | 12.1 | E-59 | 19.1 |
-| E-23 | 10a.3 | E-60 | 18.1, 20.1 |
-| E-24 | 10a.3 | E-61 | 20.1 |
-| E-25 | 10a.3 | E-62 | 9.3, 12.1 |
-| E-26 | 5a.3 ✔, 10a.3 | E-63 | 8.4 ✔ |
-| E-27 | 10a.3 | E-64 | 8.4 ✔, 10b.2 (calc) |
-| E-28 | 10a.3 | E-65 | 10b.2 (calc), 13.1 (issue) |
-| E-29 | 10b.2 | E-66 | 17.1 |
-| E-30 | 9.3, 10b.2 | E-67 | 17.1 |
-| E-31 | 10b.2 | E-68 | 11a.3, 16.1, 17.1 |
-| E-32 | 11a.3 | E-69 | 10a.3 |
-| E-33 | 11a.3, 13.1 | E-70 | 5b.3 ✔, 23b.2 (dialog) |
-| E-34 | 11b.1 | E-71 | 9.5 (unit), 10b.2 |
-| E-35 | 11b.1 | E-72 | 9.5 (basis), 12.1 |
-| E-36 | 13.1 | E-73 | 11b.1 |
-| E-37 | 13.1 | | |
+| Escenario | Tarea(s)      | Escenario | Tarea(s)                   |
+| --------- | ------------- | --------- | -------------------------- |
+| E-01      | 3.3 ✔         | E-38      | 14.1                       |
+| E-02      | 3.1, 3.3 ✔    | E-39      | 15.1                       |
+| E-03      | 3.3 ✔         | E-40      | 15.1                       |
+| E-04      | 4.1 ✔         | E-41      | 14.1                       |
+| E-05      | 5a.1 ✔        | E-42      | 14.1                       |
+| E-06      | 5a.1 ✔        | E-43      | 14.1                       |
+| E-07      | 5a.1 ✔        | E-44      | 14.1                       |
+| E-08      | 5b.3 ✔        | E-45      | 16.1                       |
+| E-09      | 10a.3         | E-46      | 16.1                       |
+| E-10      | 10a.3         | E-47      | 1.7 ✔                      |
+| E-11      | 7.1 ✔         | E-48      | 15.1                       |
+| E-12      | 21.1          | E-49      | 10a.3                      |
+| E-13      | 21.1          | E-50      | 17.1                       |
+| E-14      | 10a.3         | E-51      | 18.1                       |
+| E-15      | 10a.3         | E-52      | 19.1                       |
+| E-16      | 10a.3         | E-53      | 20.1                       |
+| E-17      | 10a.3         | E-54      | 19.1                       |
+| E-18      | 10a.3         | E-55      | 19.1                       |
+| E-19      | 12.1          | E-56      | 19.1                       |
+| E-20      | 10b.4, 12.1   | E-57      | 19.1                       |
+| E-21      | 12.1          | E-58      | 20.1                       |
+| E-22      | 12.1          | E-59      | 19.1                       |
+| E-23      | 10a.3         | E-60      | 18.1, 20.1                 |
+| E-24      | 10a.3         | E-61      | 20.1                       |
+| E-25      | 10a.3         | E-62      | 9.3, 12.1                  |
+| E-26      | 5a.3 ✔, 10a.3 | E-63      | 8.4 ✔                      |
+| E-27      | 10a.3         | E-64      | 8.4 ✔, 10b.2 (calc)        |
+| E-28      | 10a.3         | E-65      | 10b.2 (calc), 13.1 (issue) |
+| E-29      | 10b.2         | E-66      | 17.1                       |
+| E-30      | 9.3, 10b.2    | E-67      | 17.1                       |
+| E-31      | 10b.2         | E-68      | 11a.3, 16.1, 17.1          |
+| E-32      | 11a.3         | E-69      | 10a.3                      |
+| E-33      | 11a.3, 13.1   | E-70      | 5b.3 ✔, 23b.2 (dialog)     |
+| E-34      | 11b.1         | E-71      | 9.5 (unit), 10b.2          |
+| E-35      | 11b.1         | E-72      | 9.5 (basis), 12.1          |
+| E-36      | 13.1          | E-73      | 11b.1                      |
+| E-37      | 13.1          |           |                            |
 
 ✔ = test en verde en una fase cerrada. Resultado: 73 de 73 escenarios asignados a una tarea.
 
@@ -403,7 +403,14 @@ La evidencia RED/GREEN y los resultados de la puerta de las fases 0–8 están e
 
 Por cada fase cerrada: RED observado, GREEN, resultado de la puerta, nivel de `gentle-ai review assess` y resultado de la revisión.
 
-_(vacío)_
+#### 9a (tareas 9.1–9.4)
+
+| Tarea   | Test                                                                                                                                         | RED observado                                                                                                          | GREEN                                             |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 9.1/9.2 | `tests/Unit/Quotations/PieceCounterTest.php` (7), `TierSelectorTest.php` (13 con datasets)                                                   | 20 errores: `Class "App\Support\Quotations\Calculation\PieceCounter"`/`LineFacts`/`TierSelector`/`TierFacts` not found | 20/20                                             |
+| 9.3/9.4 | `tests/Unit/Quotations/AdvanceCalculatorTest.php` (6: E-29, E-30 ×2, E-62 ×2, COT-010), `BsConverterTest.php` (5: E-36 ×3, DEC-COT-60, E-65) | 11 errores: `AdvanceCalculator`/`BsConverter` not found; los 20 de 9.1 siguen verdes                                   | 31/31; `MoneyHasNoFloatTest` verde (44/44 juntos) |
+
+Notas de diseño técnico (no cambian `design.md`): `LineFacts` lleva `kind`, `productId`, `businessLine`, `isService`, `schemeType` (null = sin esquema) y `rows {quantity, valid}`. No lleva personalizaciones, así que DEC-COT-13 se cumple por construcción; el caso de punta a punta es E-24 en la 10a.3. `TierFacts::contains()` resuelve el tramo único del esquema fijo (1..∞) sin ningún caso especial. `AdvanceBreakdown.agreed` es null cuando no hay líneas negociadas.
 
 ## 7. Siguiente paso
 
