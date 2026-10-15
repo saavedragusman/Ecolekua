@@ -11,7 +11,8 @@ use Brick\Math\BigDecimal;
  * The candidates are single-component active combos already admitted for the line (DEC-PRD-42). A pack
  * applies when the line's quantity reaches the pack quantity and the pack's item price is below the line's
  * unit price. Only one notice is returned: the greatest estimated saving, and on a tie the pack with more
- * units (DEC-COT-47). A line with more than one distinct unit price never gets a notice (DEC-COT-54).
+ * units (DEC-COT-47), and when the units also tie the lower combo code in alphabetical order (DEC-COT-61),
+ * so the notice never depends on the order the candidates were loaded in. A line with more than one distinct unit price never gets a notice (DEC-COT-54).
  */
 final class PackAdvisor
 {
@@ -52,6 +53,14 @@ final class PackAdvisor
     {
         $comparison = $candidate->estimatedSaving->compareTo($current->estimatedSaving);
 
-        return $comparison > 0 || ($comparison === 0 && $candidate->packQuantity > $current->packQuantity);
+        if ($comparison !== 0) {
+            return $comparison > 0;
+        }
+
+        if ($candidate->packQuantity !== $current->packQuantity) {
+            return $candidate->packQuantity > $current->packQuantity;
+        }
+
+        return strcmp($candidate->comboCode, $current->comboCode) < 0;
     }
 }

@@ -75,6 +75,15 @@ it('DEC-COT-47 si el ahorro empata elige el pack de más unidades', function () 
         ->and($notice?->estimatedSaving->toString())->toBe('120.00');
 });
 
+it('DEC-COT-61 si también empatan en unidades elige el código de combo menor, sin importar el orden de carga', function (array $codes) {
+    $packs = array_map(fn (string $code) => candidatePack($code, 6, '30.00'), $codes);
+
+    expect(PackAdvisor::best(packLine(12, ['40.00']), $packs)?->comboCode)->toBe('PA6');
+})->with([
+    'menor primero' => [['PA6', 'PB6']],
+    'menor después' => [['PB6', 'PA6']],
+]);
+
 it('E-71 una línea con más de un precio unitario distinto nunca recibe aviso', function () {
     $notice = PackAdvisor::best(packLine(12, ['40.00', '42.00']), [candidatePack('P6', 6, '15.00')]);
 

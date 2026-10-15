@@ -23,7 +23,7 @@ Spec 004 completa, sin nada fuera de ella:
 
 - Requisitos: COT-001..COT-031.
 - Escenarios: E-01..E-73.
-- Decisiones de negocio: DEC-COT-01..DEC-COT-60.
+- Decisiones de negocio: DEC-COT-01..DEC-COT-61.
 - Decisiones técnicas: DT-01..DT-06.
 - Requisitos de otras specs tocados por 004: CLI-010, CLI-013, PRD-011, PRD-012, PRD-014, DEC-PRD-21, DEC-PRD-94, FND-017, FND-022.
 
@@ -37,6 +37,7 @@ Todas confirmadas. No hay `[DEC-PENDIENTE]` abiertos (puerta 1 de AGENTS.md §4.
 | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- | -------------------------------------------------- |
 | DEC-COT-01..DEC-COT-59                                                                                                               | Confirmada              | `docs/specs/004` §9                                |
 | DEC-COT-60: la tasa de cambio tiene 2 decimales en todas partes (API redondea HALF_UP a 2; la carga manual rechaza más de 2 con 422) | Confirmada (2026-10-14) | `docs/specs/004` §9; commit `ed014ef`              |
+| DEC-COT-61: si dos packs empatan en ahorro y en unidades (DEC-COT-47), gana el código de combo menor en orden alfabético             | Confirmada (2026-10-15) | `docs/specs/004` §9 y COT-009 paso 11              |
 | DT-01..DT-06                                                                                                                         | Confirmada              | `design.md` (congelado)                            |
 | Estrategia de entrega (cadena de PRs, `size:exception`)                                                                              | Confirmada (2026-10-13) | `tasks.md` de openspec, "Review Workload Forecast" |
 
@@ -87,42 +88,42 @@ Las desviaciones menores de las fases 0–8 (elección de archivos de test, nomb
 
 ### Seguimiento de fases 9–28
 
-| Fase       | Rama (`feat/004-pricing-and-quotations-…`) | IDs                                                                              | Ruta   | Estado    | Commit    |
-| ---------- | ------------------------------------------ | -------------------------------------------------------------------------------- | ------ | --------- | --------- |
-| 9a         | `9a-calculation-counting-advance`          | COT-008, COT-010, E-30 (unit)                                                    | inline | hecha     | `3fe8dc8` |
-| 9b         | `9b-calculation-packs-basis`               | DEC-COT-47, DEC-COT-54, DEC-COT-55, DEC-COT-59, E-71 (unit), E-72 (unit)         | inline | pendiente | —         |
-| 10a        | `10a-calculation-core-engine`              | COT-009, COT-011, COT-025, DT-02, E-09, E-10, E-14..E-18, E-23..E-28, E-49, E-69 | inline | pendiente | —         |
-| 10b        | `10b-calculate-endpoints`                  | COT-009, COT-010, COT-022, E-20, E-29, E-30, E-31, E-64, E-65, E-71              | inline | pendiente | —         |
-| 11a-schema | `11a-quotation-schema`                     | COT-013, COT-014                                                                 | inline | pendiente | —         |
-| 11a-create | `11a-quotation-create`                     | COT-013, E-32, E-33, E-68, DEC-COT-45                                            | inline | pendiente | —         |
-| 11b        | `11b-quotation-draft-update`               | COT-013, COT-014, E-34, E-35, E-73, DEC-COT-29, DEC-COT-56                       | inline | pendiente | —         |
-| 12a        | `12a-negotiated-price`                     | COT-012, E-19, E-20, E-21, E-22                                                  | inline | pendiente | —         |
-| 12b        | `12b-agreed-advance-basis`                 | COT-010, E-62, E-72, DEC-COT-55                                                  | inline | pendiente | —         |
-| 13a        | `13a-issue-freeze`                         | COT-016, DT-03, E-33, E-36, E-37, E-65                                           | inline | pendiente | —         |
-| 13b        | `13b-issue-deliveries-events`              | COT-016, DEC-COT-49                                                              | inline | pendiente | —         |
-| 14a        | `14a-quotation-expiry`                     | COT-017, E-41                                                                    | inline | pendiente | —         |
-| 14b        | `14b-duplicate-cancel-discard`             | COT-015, COT-018, COT-019, E-38, E-42, E-43, E-44                                | inline | pendiente | —         |
-| 15         | `15-history-guards`                        | COT-024, CLI-010, PRD-012, PRD-014, E-39, E-40, E-48                             | inline | pendiente | —         |
-| 16a        | `16a-quotation-list`                       | COT-020, E-45, E-68                                                              | inline | pendiente | —         |
-| 16b        | `16b-quotation-detail-customer-history`    | COT-020, CLI-013, E-46                                                           | inline | pendiente | —         |
-| 17a        | `17a-print-view`                           | COT-021, E-50                                                                    | inline | pendiente | —         |
-| 17b        | `17b-email-resend`                         | COT-031, E-66, E-67, E-68                                                        | inline | pendiente | —         |
-| 18a        | `18a-csv-reader-writer`                    | COT-026, DT-04                                                                   | inline | pendiente | —         |
-| 18b        | `18b-price-export`                         | COT-026, E-51, E-60, DEC-COT-31                                                  | inline | pendiente | —         |
-| 19a        | `19a-import-validate`                      | COT-027, E-54, E-55, E-56, E-57                                                  | inline | pendiente | —         |
-| 19b        | `19b-import-upload`                        | COT-027, E-52, E-59                                                              | inline | pendiente | —         |
-| 20a        | `20a-import-apply`                         | COT-028, E-53, E-58, E-60                                                        | inline | pendiente | —         |
-| 20b        | `20b-import-discard-expiry-history`        | COT-029, E-61                                                                    | inline | pendiente | —         |
-| 21a        | `21a-initial-load-validate`                | COT-007, E-13                                                                    | inline | pendiente | —         |
-| 21b        | `21b-initial-load-apply`                   | COT-007, E-12                                                                    | inline | pendiente | —         |
-| 22         | `22-ui-pricing-1`                          | COT-001, COT-006, COT-030                                                        | inline | pendiente | —         |
-| 23a        | `23a-ui-product-prices`                    | COT-002, COT-003, COT-025, DEC-COT-52                                            | inline | pendiente | —         |
-| 23b        | `23b-ui-size-groups-combos`                | COT-004, COT-005, E-70, DEC-COT-44                                               | inline | pendiente | —         |
-| 24         | `24-ui-editor-1`                           | COT-013                                                                          | inline | pendiente | —         |
-| 25         | `25-ui-editor-2`                           | COT-014, COT-011, COT-009                                                        | inline | pendiente | —         |
-| 26         | `26-ui-editor-3`                           | COT-012, COT-015, COT-016, COT-018, COT-019, COT-020, COT-031                    | inline | pendiente | —         |
-| 27         | `27-ui-imports`                            | COT-026..COT-029, E-61                                                           | inline | pendiente | —         |
-| 28         | `28-closeout`                              | COT-023, DoD                                                                     | inline | pendiente | —         |
+| Fase       | Rama (`feat/004-pricing-and-quotations-…`) | IDs                                                                              | Ruta   | Estado    | Commit                                       |
+| ---------- | ------------------------------------------ | -------------------------------------------------------------------------------- | ------ | --------- | -------------------------------------------- |
+| 9a         | `9a-calculation-counting-advance`          | COT-008, COT-010, E-30 (unit)                                                    | inline | hecha     | `3fe8dc8`                                    |
+| 9b         | `9b-calculation-packs-basis`               | DEC-COT-47, DEC-COT-54, DEC-COT-55, DEC-COT-59, E-71 (unit), E-72 (unit)         | inline | hecha     | `2c841c0` (assess: `medium`, `under_budget`) |
+| 10a        | `10a-calculation-core-engine`              | COT-009, COT-011, COT-025, DT-02, E-09, E-10, E-14..E-18, E-23..E-28, E-49, E-69 | inline | pendiente | —                                            |
+| 10b        | `10b-calculate-endpoints`                  | COT-009, COT-010, COT-022, E-20, E-29, E-30, E-31, E-64, E-65, E-71              | inline | pendiente | —                                            |
+| 11a-schema | `11a-quotation-schema`                     | COT-013, COT-014                                                                 | inline | pendiente | —                                            |
+| 11a-create | `11a-quotation-create`                     | COT-013, E-32, E-33, E-68, DEC-COT-45                                            | inline | pendiente | —                                            |
+| 11b        | `11b-quotation-draft-update`               | COT-013, COT-014, E-34, E-35, E-73, DEC-COT-29, DEC-COT-56                       | inline | pendiente | —                                            |
+| 12a        | `12a-negotiated-price`                     | COT-012, E-19, E-20, E-21, E-22                                                  | inline | pendiente | —                                            |
+| 12b        | `12b-agreed-advance-basis`                 | COT-010, E-62, E-72, DEC-COT-55                                                  | inline | pendiente | —                                            |
+| 13a        | `13a-issue-freeze`                         | COT-016, DT-03, E-33, E-36, E-37, E-65                                           | inline | pendiente | —                                            |
+| 13b        | `13b-issue-deliveries-events`              | COT-016, DEC-COT-49                                                              | inline | pendiente | —                                            |
+| 14a        | `14a-quotation-expiry`                     | COT-017, E-41                                                                    | inline | pendiente | —                                            |
+| 14b        | `14b-duplicate-cancel-discard`             | COT-015, COT-018, COT-019, E-38, E-42, E-43, E-44                                | inline | pendiente | —                                            |
+| 15         | `15-history-guards`                        | COT-024, CLI-010, PRD-012, PRD-014, E-39, E-40, E-48                             | inline | pendiente | —                                            |
+| 16a        | `16a-quotation-list`                       | COT-020, E-45, E-68                                                              | inline | pendiente | —                                            |
+| 16b        | `16b-quotation-detail-customer-history`    | COT-020, CLI-013, E-46                                                           | inline | pendiente | —                                            |
+| 17a        | `17a-print-view`                           | COT-021, E-50                                                                    | inline | pendiente | —                                            |
+| 17b        | `17b-email-resend`                         | COT-031, E-66, E-67, E-68                                                        | inline | pendiente | —                                            |
+| 18a        | `18a-csv-reader-writer`                    | COT-026, DT-04                                                                   | inline | pendiente | —                                            |
+| 18b        | `18b-price-export`                         | COT-026, E-51, E-60, DEC-COT-31                                                  | inline | pendiente | —                                            |
+| 19a        | `19a-import-validate`                      | COT-027, E-54, E-55, E-56, E-57                                                  | inline | pendiente | —                                            |
+| 19b        | `19b-import-upload`                        | COT-027, E-52, E-59                                                              | inline | pendiente | —                                            |
+| 20a        | `20a-import-apply`                         | COT-028, E-53, E-58, E-60                                                        | inline | pendiente | —                                            |
+| 20b        | `20b-import-discard-expiry-history`        | COT-029, E-61                                                                    | inline | pendiente | —                                            |
+| 21a        | `21a-initial-load-validate`                | COT-007, E-13                                                                    | inline | pendiente | —                                            |
+| 21b        | `21b-initial-load-apply`                   | COT-007, E-12                                                                    | inline | pendiente | —                                            |
+| 22         | `22-ui-pricing-1`                          | COT-001, COT-006, COT-030                                                        | inline | pendiente | —                                            |
+| 23a        | `23a-ui-product-prices`                    | COT-002, COT-003, COT-025, DEC-COT-52                                            | inline | pendiente | —                                            |
+| 23b        | `23b-ui-size-groups-combos`                | COT-004, COT-005, E-70, DEC-COT-44                                               | inline | pendiente | —                                            |
+| 24         | `24-ui-editor-1`                           | COT-013                                                                          | inline | pendiente | —                                            |
+| 25         | `25-ui-editor-2`                           | COT-014, COT-011, COT-009                                                        | inline | pendiente | —                                            |
+| 26         | `26-ui-editor-3`                           | COT-012, COT-015, COT-016, COT-018, COT-019, COT-020, COT-031                    | inline | pendiente | —                                            |
+| 27         | `27-ui-imports`                            | COT-026..COT-029, E-61                                                           | inline | pendiente | —                                            |
+| 28         | `28-closeout`                              | COT-023, DoD                                                                     | inline | pendiente | —                                            |
 
 Cada rama parte de la rama de la fase anterior; la 9a parte de `fix/004-exchange-rate-hardening`.
 
@@ -343,7 +344,7 @@ Covers spec §12, Definition of Done (AGENTS.md §12), COT-023 coverage, Decisio
 
 - [ ] 28.1 RED — Create `tests/Feature/Architecture/MoneyJsonHasNoFloatTest.php`: run a representative flow (prices, size-group change with deletion, combo price, manual rate, negotiated price, agreed advance, issue, discard, import apply), decode every 004 JSON column (`quotations.advance_breakdown`, `pieces_by_line`, snapshots, `price_imports.summary`, `price_import_changes.warnings`) and every `audit_logs` row whose action is a 004 case, walk the arrays recursively asserting `! is_float($value)`. Create `tests/Feature/Pricing/AuditCoverageTest.php` asserting each of the 26 new `AuditAction` cases is written by at least one tested flow. Expected: fail where a money value is serialized as a number or a case is unused.
 - [ ] 28.2 GREEN — Fix any `Money::toStorage()` omission found and any unused or mislabeled audit case. Run both tests: GREEN.
-- [ ] 28.3 Coverage audit — For each scenario E-01..E-73 and DEC-COT-01..DEC-COT-60, confirm a test whose name starts with its ID exists (`sail pest --group=cot --filter='E-<n> '`); record gaps and add missing tests. Update the coverage table in §6 with the observed test names.
+- [ ] 28.3 Coverage audit — For each scenario E-01..E-73 and DEC-COT-01..DEC-COT-61, confirm a test whose name starts with its ID exists (`sail pest --group=cot --filter='E-<n> '`); record gaps and add missing tests. Update the coverage table in §6 with the observed test names.
 - [ ] 28.4 Docs — Edit `AGENTS.md` only with the user's approval (queue/scheduler note if missing; 004 conventions), `docs/ui/design-system.md` (row selection and document theme if not complete), and the spec's decision/status sections only if the user asks. Record production notes (queue supervisor, `schedule:run` cron, SMTP provider, first manual rate, go-live price-load steps from design Migration / Rollout).
 - [ ] 28.5 A11y and responsive pass — design-system §11 checklist at 375/768/1280 px for every 004 page and the print view; Mailpit check of the quotation email.
 - [ ] 28.6 DoD — Tick the AGENTS.md §12 list: all scenarios green, `sail artisan test`, `sail pint --test`, `sail pnpm build`, this document complete; independent verifier over the whole feature document; then AGENTS.md §4.3 gate 3 (human confirmation).
@@ -421,15 +422,16 @@ Puerta 9a: pint, `composer types:check`, `pnpm types:check`, `pnpm build` y `art
 | 9.5/9.6 | `tests/Unit/Quotations/PackAdvisorTest.php` (10: E-69 ×2, DEC-COT-08 ×4, DEC-COT-47 ×2, E-71, DEC-COT-59), `NegotiationBasisTest.php` (5: E-72) | 15 errores: `PackAdvisor`/`NegotiationBasis` not found; los 31 de la 9a siguen verdes | 46/46                           |
 | 9.7     | `MoneyHasNoFloatTest`, `composer types:check`                                                                                                   | —                                                                                     | 59/59 juntos; PHPStan 0 errores |
 
-Notas de diseño técnico: `PackAdvisor::best()` también protege DEC-COT-54 por sí mismo (`PackLineFacts::singleUnitPrice()` devuelve null si hay más de un precio distinto; los precios se comparan por valor, así que `40.00` y `40.0` son el mismo, DEC-COT-59). El desempate de DEC-COT-47 ("el de más unidades") usa la cantidad del pack. Si después de eso el empate sigue, gana el primero en el orden de entrada. Los packs candidatos llegan como `array{code, name, quantity, item_price}`.
+Notas de diseño técnico: `PackAdvisor::best()` también protege DEC-COT-54 por sí mismo (`PackLineFacts::singleUnitPrice()` devuelve null si hay más de un precio distinto; los precios se comparan por valor, así que `40.00` y `40.0` son el mismo, DEC-COT-59). El desempate de DEC-COT-47 ("el de más unidades") usa la cantidad del pack. Si también empatan en unidades, gana el código de combo menor en orden alfabético (DEC-COT-61, test `DEC-COT-61 …` con los dos órdenes de carga; RED observado: con el orden invertido ganaba `PB6`). Los packs candidatos llegan como `array{code, name, quantity, item_price}`.
 
 ## 7. Siguiente paso
 
-1. Puerta 2 (AGENTS.md §4.3): el humano aprueba este documento (tareas 9–28).
-2. Con la aprobación: commit de este documento, rama `feat/004-pricing-and-quotations-9a-calculation-counting-advance` desde `fix/004-exchange-rate-hardening` y tarea 9.1 (RED).
+Fase 10a: rama `feat/004-pricing-and-quotations-10a-calculation-core-engine` desde la 9b, tarea 10a.1 (RED del loader memoizado).
 
 ## Log
 
 - **L1 (2026-10-15, usuario):** "Hola continuemos la la 004 con ODD y gentle-ia"
 - **L2 (2026-10-15, usuario):** "ya Ajusté el agents.md podes hacer los commits y seguir con la opcion B" con estas condiciones: "1. openspec/changes/004-… queda congelado: solo lectura, no se edita más. Es la fuente del diseño técnico de 004. 2. odd/tasks/004-pricing-and-quotations.md contiene: - Fuente: docs/specs/004 + openspec/changes/004/design.md (congelado). - Alcance y estado de decisiones. - Fases 0–8 cerradas: una línea por fase con su commit, sin copiar apply-progress. - Tareas 9–28 migradas desde tasks.md, citando IDs. - Sección "Cambios al diseño": si algo del diseño cambia, se anota aquí con su motivo y DEC, nunca en openspec. 3. Es una excepción solo para 004. Desde 005 el documento ODD lleva el diseño completo."
 - **L3 (2026-10-15, migración):** las tareas 9–28 se copiaron de `tasks.md` sin cambiar requisitos. Adaptaciones de proceso, no de comportamiento: "Commit (requires user authorization)" pasa a "Commit" (AGENTS.md §4.4); la 9.4 cierra la 9a con su propio commit (el plan de la cadena ya separaba 9a y 9b); la 28.3 apunta a DEC-COT-60 y a §6 de este documento; la 28.6 reemplaza `/sdd-verify` y `/sdd-archive` por un verificador independiente y la puerta 3; la 28.4 ya no edita AGENTS.md sin aprobación. CD-01 registra el desvío pendiente de la tarea 2.8.
+- **L4 (2026-10-15, usuario):** puerta 2 aprobada: "corregido agents.md, puedes hacer el commit ya arranca la 9.1".
+- **L5 (2026-10-15, usuario):** a la pregunta `[DEC-PENDIENTE] 004/DEC-COT-47` (empate en ahorro y en unidades) respondió "b": el código de combo menor en orden alfabético. Se registró como DEC-COT-61 en la spec y se implementó en la 9b.

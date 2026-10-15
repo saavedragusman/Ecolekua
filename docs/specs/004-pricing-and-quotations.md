@@ -309,7 +309,7 @@ El backend ofrece una única operación, **sin efectos**, que recibe una lista d
 8. Subtotal de la línea = Σ (precio unitario × cantidad de cada fila). Total = Σ subtotales de las líneas con precio.
 9. Anticipo requerido según COT-010, redondeado a 2 decimales.
 10. Equivalente en Bs del total y del anticipo con la tasa vigente (COT-030), redondeado a 2 decimales. Si no hay ninguna tasa guardada, se informa "sin tasa" y no se calcula.
-11. **Aviso de packs** (DEC-COT-08): para cada línea de producto, si existe un combo activo de un solo componente (pack) cuyo componente admite la combinación y la selección de la línea (DEC-PRD-42), la cantidad de la línea alcanza al menos la cantidad del pack y el precio por ítem del pack es menor que el precio unitario aplicado a la línea, el cálculo devuelve un **aviso informativo** con el pack, cuántos packs caben y el ahorro estimado. Si aplican varios packs, se devuelve un solo aviso: el del pack con mayor ahorro estimado y, si empatan, el de más unidades (DEC-COT-47). Una línea con más de un precio unitario (grupos de talla) no tiene aviso de packs (DEC-COT-54); se cuentan los valores distintos, así que dos grupos con el mismo precio cuentan como uno (DEC-COT-59). La línea no cambia; la asesora decide si la reemplaza.
+11. **Aviso de packs** (DEC-COT-08): para cada línea de producto, si existe un combo activo de un solo componente (pack) cuyo componente admite la combinación y la selección de la línea (DEC-PRD-42), la cantidad de la línea alcanza al menos la cantidad del pack y el precio por ítem del pack es menor que el precio unitario aplicado a la línea, el cálculo devuelve un **aviso informativo** con el pack, cuántos packs caben y el ahorro estimado. Si aplican varios packs, se devuelve un solo aviso: el del pack con mayor ahorro estimado y, si empatan, el de más unidades (DEC-COT-47); si también empatan en unidades, el de código de combo menor en orden alfabético (DEC-COT-61). Una línea con más de un precio unitario (grupos de talla) no tiene aviso de packs (DEC-COT-54); se cuentan los valores distintos, así que dos grupos con el mismo precio cuentan como uno (DEC-COT-59). La línea no cambia; la asesora decide si la reemplaza.
 
 **Salida**:
 
@@ -1106,7 +1106,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14, durante la implementación.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 el 2026-10-15, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1170,6 +1170,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-58 | Asignar o mover tallas entre grupos con precios | Mover una talla de un grupo a otro es reorganizar (DEC-COT-53: confirmación y borrado de los precios de los grupos afectados); solo asignar una talla que no estaba en ningún grupo conserva los precios del grupo | **Confirmada** (2026-10-13) |
 | DEC-COT-59 | "Más de un precio unitario" en DEC-COT-54 | Se cuentan valores distintos: dos grupos con el mismo precio son un único precio | **Confirmada** (2026-10-13) |
 | DEC-COT-60 | Decimales de la tasa de cambio | A) 2 decimales en todo: la API se redondea HALF_UP a 2 y la carga manual rechaza más de 2 · B) guardar 4 y usar 2 · C) como A pero la carga manual redondea | **Confirmada**: **A** (2026-10-14). Sustituye los 4 decimales de COT-030 y DT-01; E-36, E-63 y E-64 se ajustan |
+| DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
 
 ### Decisiones técnicas
 
