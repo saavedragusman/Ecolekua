@@ -79,6 +79,12 @@ return [
     'size_groups_prices_changed' => 'Los precios cambiaron; revise de nuevo los grupos.',
     'price_invalid' => 'El precio debe ser un monto mayor que cero con a lo sumo 2 decimales.',
     'price_cell_duplicate' => 'Esta celda aparece más de una vez en la solicitud.',
+
+    // Quotation calculation (spec 004, COT-009, COT-012, COT-025).
+    'calculation_unpriced' => 'sin precio',
+    'calculation_advisor_goods' => ':min piezas de :line o más',
+    'calculation_advisor_service' => ':min unidades de :service o más',
+    'calculation_advisor_custom_color' => 'color personalizado',
     'advance_percentage_invalid' => 'El porcentaje de anticipo debe estar entre 0 y 100, con a lo sumo 2 decimales.',
     'validity_days_invalid' => 'La vigencia debe ser un número entero de días entre 1 y 365.',
     'exchange_rate_invalid' => 'La tasa debe ser un monto mayor que cero, con a lo sumo 12 enteros y 2 decimales.',

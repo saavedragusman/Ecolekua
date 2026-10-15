@@ -286,6 +286,7 @@ El tramo se determina por el **total de piezas de cada línea de negocio** en la
 
 - Cuentan las cantidades de las líneas de **productos que no son servicios** con esquema **por tramos**, sumadas por línea de negocio (uniformes por un lado, pañales por otro), aunque sean productos distintos y usen esquemas distintos.
 - No cuentan las líneas de productos con esquema de precio fijo.
+- No cuentan las líneas de productos sin esquema o con un esquema inactivo, que no se pueden cotizar (COT-025, DEC-COT-62).
 - No cuentan las personalizaciones añadidas a una prenda (DEC-COT-13).
 - No cuentan las unidades de los combos (DEC-COT-07).
 - **Servicios vendidos solos** (DEC-COT-14): no suman a su línea de negocio. El tramo de un servicio se elige con la cantidad total de **ese mismo servicio** en la cotización (p. ej., 20 bordados pequeños `157` → tramo 13–49 de su esquema).
@@ -1106,7 +1107,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 el 2026-10-15, durante la implementación.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 y DEC-COT-62 el 2026-10-15, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1171,6 +1172,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-59 | "Más de un precio unitario" en DEC-COT-54 | Se cuentan valores distintos: dos grupos con el mismo precio son un único precio | **Confirmada** (2026-10-13) |
 | DEC-COT-60 | Decimales de la tasa de cambio | A) 2 decimales en todo: la API se redondea HALF_UP a 2 y la carga manual rechaza más de 2 · B) guardar 4 y usar 2 · C) como A pero la carga manual redondea | **Confirmada**: **A** (2026-10-14). Sustituye los 4 decimales de COT-030 y DT-01; E-36, E-63 y E-64 se ajustan |
 | DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
+| DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
 
 ### Decisiones técnicas
 
