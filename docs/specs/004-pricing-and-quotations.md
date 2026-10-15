@@ -1091,6 +1091,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **THEN** sigue a cargo de esa asesora, sin reasignación automática, y se marca "asesora no disponible"
 - **AND** en un borrador la asesora se cambia editándolo
 - **AND** en una cotización emitida, un usuario con `customers.assign` cambia solo la asesora, por una activa con `customers.portfolio`, y el cambio queda auditado; sin `customers.assign` el backend responde 403 y la cotización no cambia
+- **AND** el documento de la cotización emitida (la asesora que muestra la vista imprimible y el correo) pasa a mostrar la asesora nueva; los precios, la tasa y el resto del documento no cambian
 
 ---
 
@@ -1190,7 +1191,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
 | DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
 | DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible". Escenario E-74 |
-| DEC-COT-64 | Asesora responsable que se desactiva o pierde `customers.portfolio` después | Sin reasignación automática (como DEC-CLI-29); se marca "asesora no disponible"; en borrador se cambia editando; en emitida, un usuario con `customers.assign` cambia solo la asesora, auditado (excepción a DEC-COT-18) | **Confirmada** (2026-10-15). Escenario E-75 |
+| DEC-COT-64 | Asesora responsable que se desactiva o pierde `customers.portfolio` después | Sin reasignación automática (como DEC-CLI-29); se marca "asesora no disponible"; en borrador se cambia editando; en emitida, un usuario con `customers.assign` cambia solo la asesora, auditado (excepción a DEC-COT-18), y el documento emitido pasa a mostrar la asesora nueva | **Confirmada** (2026-10-15). Escenario E-75 |
 
 ### Decisiones técnicas
 
