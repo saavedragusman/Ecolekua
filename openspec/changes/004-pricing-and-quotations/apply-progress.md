@@ -488,5 +488,18 @@ Production: `RateParser`, `FetchExchangeRate`, `FetchExchangeRateCommand` (`exch
 ### Suggested commit
 `feat(004): consultar la tasa de cambio diaria desde la API y programarla [COT-030, E-63, E-64]`
 
+Committed as `18ba13b`.
+
+## Independent verification of 6b, 8a, 8b (2026-10-14) and fix `fix/004-exchange-rate-hardening` (base PR 14)
+
+Verifier verdict on `32aed64`, `b1065fe`, `18ba13b`: no blockers; 1107 focused tests green (1106 passed, 1 skipped). User confirmed the Decision 12 rule for ids swapped between products (both components are new, both prices drop). Fixed in this branch (advisories 4, 6, 7, 8):
+- `ExchangeRate::MAX_VALUE` (`9999999999.9999`, the DECIMAL(14,4) limit): a larger manual rate → 422 on `value`; a larger API `promedio` → `invalid_rate` (logged, event) instead of an uncaught `QueryException`.
+- `RateParser`: a `"promedio"` inside another key or value is ignored, and a repeated top-level key takes the last occurrence, as `json_decode` does.
+- `compose.yaml`: `scheduler` behind the `scheduler` profile, so `sail up -d` leaves it off (verified); start it with `sail up -d scheduler`.
+
+RED: 6 failures + 1 error (trap key, repeated key, 3 over-limit cases, manual 11 digits, API value too large). GREEN: 86/86 in `RateParserTest`, `ExchangeRateTest` and `tests/Feature/Architecture`. Gate: pint, phpstan, `pnpm check`, `types:check`, build passed; `sail artisan test` 2133 tests (2131 passed, 2 skipped, 11253 assertions).
+
+Suggested commit: `fix(004): acotar la tasa de cambio y endurecer la lectura de la API [COT-030, DT-01]`
+
 ### Remaining
 8.6 leftovers (`.env.example`, `AGENTS.md` line); then Phase 9 (PR 15): pure calculation classes.

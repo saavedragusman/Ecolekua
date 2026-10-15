@@ -2,6 +2,7 @@
 
 namespace App\Support\Pricing;
 
+use App\Models\ExchangeRate;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\MathException;
 use Brick\Math\RoundingMode;
@@ -18,7 +19,8 @@ final class RateParser
     private const NUMBER_TOKEN = '/"promedio"\s*:\s*(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/';
 
     /**
-     * The rate, or null when the body is not a JSON object with a positive number `promedio`.
+     * The rate, or null when the body is not a JSON object with a positive number `promedio` that the
+     * rate history can store.
      */
     public static function promedio(string $rawJsonBody): ?BigDecimal
     {
@@ -38,28 +40,34 @@ final class RateParser
             return null;
         }
 
-        // Nested objects may carry a `promedio` too: the value is the token of the top-level key.
-        foreach ($matches[1] as $index => [$token]) {
-            if (self::depthAt($rawJsonBody, $matches[0][$index][1]) !== 1) {
-                continue;
-            }
+        // Nested objects, or other keys and values, may contain `"promedio"` too: the value is the token of
+        // the top-level key and, when that key repeats, of its last occurrence (the one the decoder keeps).
+        $token = null;
 
-            try {
-                $value = BigDecimal::of($token)->toScale(self::SCALE, RoundingMode::HalfUp);
-            } catch (MathException) {
-                return null;
+        foreach ($matches[1] as $index => [$candidate]) {
+            if (self::isTopLevelKey($rawJsonBody, $matches[0][$index][1])) {
+                $token = $candidate;
             }
-
-            return $value->isPositive() ? $value : null;
         }
 
-        return null;
+        if ($token === null) {
+            return null;
+        }
+
+        try {
+            $value = BigDecimal::of($token)->toScale(self::SCALE, RoundingMode::HalfUp);
+        } catch (MathException) {
+            return null;
+        }
+
+        return $value->isPositive() && ! $value->isGreaterThan(ExchangeRate::MAX_VALUE) ? $value : null;
     }
 
     /**
-     * How many objects or arrays are open at a byte offset of the body, ignoring brackets inside strings.
+     * Whether a byte offset of the body starts a key of the top-level object: exactly one object open and
+     * not inside a string.
      */
-    private static function depthAt(string $body, int $offset): int
+    private static function isTopLevelKey(string $body, int $offset): bool
     {
         $depth = 0;
         $inString = false;
@@ -82,6 +90,6 @@ final class RateParser
             }
         }
 
-        return $depth;
+        return $depth === 1 && ! $inString;
     }
 }

@@ -24,7 +24,11 @@ services:
         depends_on:
             - mysql
             - mailpit
+    # Runs the scheduled tasks (spec 004: the daily exchange rate fetch calls the real API). Behind a
+    # profile so `sail up -d` leaves it off; start it on purpose with `sail up -d scheduler`.
     scheduler:
+        profiles:
+            - scheduler
         image: 'sail-8.5/app'
         extra_hosts:
             - 'host.docker.internal:host-gateway'

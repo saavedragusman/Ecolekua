@@ -38,6 +38,9 @@ class ExchangeRate extends Model
 
     public const UPDATED_AT = null;
 
+    /** The largest rate `value` DECIMAL(14,4) stores; a larger one is not a usable rate. */
+    public const MAX_VALUE = '9999999999.9999';
+
     /**
      * @return array<string, string>
      */

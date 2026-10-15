@@ -42,6 +42,23 @@ it('DT-01 gives null for a missing, zero, negative or non-numeric promedio and f
     'empty body' => [''],
 ]);
 
+it('DT-01 ignores a "promedio" that is only text inside another key', function () {
+    expect(RateParser::promedio('{"\"promedio":5,"promedio":875.6505}')->toString())->toBe('875.6505');
+});
+
+it('DT-01 takes the last of a repeated promedio key, as the JSON decoder does', function () {
+    expect(RateParser::promedio('{"promedio":1,"promedio":875.6505}')->toString())->toBe('875.6505');
+});
+
+it('DT-01 gives null for a promedio that does not fit the stored rate (more than 10 integer digits)', function (string $token, ?string $expected) {
+    expect(RateParser::promedio('{"promedio":'.$token.'}')?->toString())->toBe($expected);
+})->with([
+    'largest storable' => ['9999999999.9999', '9999999999.9999'],
+    'rounds over the limit' => ['9999999999.99995', null],
+    'eleven digits' => ['12345678901', null],
+    'huge' => ['12345678901234.5', null],
+]);
+
 it('DT-01 reads the top-level promedio, not one nested in another object', function () {
     expect(RateParser::promedio('{"fuente":{"promedio": 1.5},"promedio": 875.6505}')->toString())->toBe('875.6505');
 });

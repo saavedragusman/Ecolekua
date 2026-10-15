@@ -184,7 +184,14 @@ it('E-64 rejects a value of zero, negative, with more than four decimals or not 
     'text' => ['ochocientos'],
     'empty' => [''],
     'number instead of string' => [875.65],
+    'more than ten integer digits' => ['12345678901'],
 ]);
+
+it('E-64 accepts the largest rate the history can store', function () {
+    recordRate('9999999999.9999')->assertRedirect();
+
+    expect(ExchangeRate::query()->sole()->value->toScale(4)->toString())->toBe('9999999999.9999');
+});
 
 it('E-64 answers 403, audited, to a user with pricing.view but without pricing.manage and records nothing', function () {
     $actor = userWithPermissions(PermissionName::PricingView);
@@ -303,6 +310,7 @@ it('E-64 saves nothing, logs the failure and announces it when the API fails', f
     'missing promedio' => [fn () => Http::response('{"compra": 870.1}', 200), 'invalid_rate'],
     'zero promedio' => [fn () => Http::response('{"promedio": 0}', 200), 'invalid_rate'],
     'negative promedio' => [fn () => Http::response('{"promedio": -1}', 200), 'invalid_rate'],
+    'promedio too large to store' => [fn () => Http::response('{"promedio": 12345678901234.5}', 200), 'invalid_rate'],
 ]);
 
 it('E-64 tries the API three times in a run, waiting 2 s and 10 s, before giving up', function () {

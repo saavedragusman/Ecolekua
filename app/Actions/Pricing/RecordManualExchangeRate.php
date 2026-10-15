@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Records the rate of today by hand (COT-030, E-64, design Decision 11): greater than zero with at most
- * 4 decimals. It becomes the rate in force of today and supersedes the effective one (API or manual),
+ * 4 decimals, and no larger than the history can store (`ExchangeRate::MAX_VALUE`). It becomes the rate in force of today and supersedes the effective one (API or manual),
  * which stays in the history; a later API run does not replace it.
  *
  * `effective_date` is unique and derived from `superseded_at`, so the writes follow this order inside
@@ -90,7 +90,7 @@ class RecordManualExchangeRate
             $amount = null;
         }
 
-        if ($amount === null || ! $amount->isPositive()) {
+        if ($amount === null || ! $amount->isPositive() || $amount->isGreaterThan(ExchangeRate::MAX_VALUE)) {
             throw ValidationException::withMessages(['value' => Lang::string('validation.exchange_rate_invalid')]);
         }
 
