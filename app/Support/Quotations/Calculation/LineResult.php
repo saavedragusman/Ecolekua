@@ -13,7 +13,8 @@ use Brick\Math\BigDecimal;
  *
  * The subtotal is null when the line has an error or no automatic price. A line that requires an advisor
  * shows the tier price as a reference (custom color, E-23) but does not add to the total until a negotiated
- * price exists (COT-012).
+ * price exists (COT-012). `paidInFull` marks the stock and combo lines, whose advance is the whole subtotal
+ * (COT-010); the pack notice is informative and never changes the line (DEC-COT-08).
  */
 final readonly class LineResult
 {
@@ -37,6 +38,8 @@ final readonly class LineResult
         public bool $requiresAdvisor,
         public ?string $reason,
         public array $errors,
+        public bool $paidInFull = false,
+        public ?PackNotice $packNotice = null,
     ) {}
 
     /** Whether the subtotal adds to the quotation total: an automatic price, no error, no advisor pending. */
@@ -61,6 +64,12 @@ final readonly class LineResult
             'included_customizations' => $this->includedCustomizations,
             'requires_advisor' => $this->requiresAdvisor,
             'reason' => $this->reason,
+            'pack_notice' => $this->packNotice === null ? null : [
+                'combo_code' => $this->packNotice->comboCode,
+                'combo_name' => $this->packNotice->comboName,
+                'packs_fit' => $this->packNotice->packsFit,
+                'estimated_saving' => CalculationResult::money($this->packNotice->estimatedSaving),
+            ],
             'errors' => $this->errors,
         ];
     }

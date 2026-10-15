@@ -2,6 +2,7 @@
 
 namespace App\Actions\Quotations;
 
+use App\Actions\Pricing\CurrentExchangeRate;
 use App\Actions\Products\ResolveSelection;
 use App\Enums\AttributeRole;
 use App\Enums\AttributeSpecialUse;
@@ -12,15 +13,24 @@ use App\Enums\PriceOrigin;
 use App\Enums\PriceSchemeType;
 use App\Enums\PriceTierKind;
 use App\Enums\SupplyMode;
+use App\Models\CommercialParameters;
 use App\Models\PriceScheme;
 use App\Models\PriceTier;
 use App\Support\Products\Selection\CatalogSnapshotLoader;
+use App\Support\Products\Selection\ComboSnapshot;
 use App\Support\Products\Selection\ResolvedCombo;
 use App\Support\Products\Selection\ResolvedSelection;
+use App\Support\Products\Selection\ValueSnapshot;
+use App\Support\Quotations\Calculation\AdvanceBreakdown;
+use App\Support\Quotations\Calculation\AdvanceCalculator;
 use App\Support\Quotations\Calculation\CalculationInput;
 use App\Support\Quotations\Calculation\CalculationResult;
 use App\Support\Quotations\Calculation\LineFacts;
 use App\Support\Quotations\Calculation\LineResult;
+use App\Support\Quotations\Calculation\PackAdmission;
+use App\Support\Quotations\Calculation\PackAdvisor;
+use App\Support\Quotations\Calculation\PackCatalog;
+use App\Support\Quotations\Calculation\PackLineFacts;
 use App\Support\Quotations\Calculation\PieceCounter;
 use App\Support\Quotations\Calculation\PriceBook;
 use App\Support\Quotations\Calculation\RowResult;
@@ -42,7 +52,10 @@ use Illuminate\Validation\ValidationException;
  */
 final class CalculateQuotation
 {
-    public function __construct(private readonly CatalogSnapshotLoader $loader) {}
+    public function __construct(
+        private readonly CatalogSnapshotLoader $loader,
+        private readonly CurrentExchangeRate $currentRate,
+    ) {}
 
     public function handle(CalculationInput $input): CalculationResult
     {
@@ -64,6 +77,7 @@ final class CalculateQuotation
         $facts = $this->productFacts($productIds);
 
         $rows = [];
+        $choices = [];
         $combos = [];
         $errors = [];
 
@@ -71,21 +85,149 @@ final class CalculateQuotation
             if ($line['kind'] === LineKind::Combo) {
                 [$combos[$i], $errors[$i]] = $this->resolveCombo($resolver, $line, $i);
             } else {
-                [$rows[$i], $errors[$i]] = $this->resolveRows($resolver, $loader, $line, $i);
+                [$rows[$i], $errors[$i], $choices[$i]] = $this->resolveRows($resolver, $loader, $line, $i);
             }
         }
 
-        $book = PriceBook::load($this->combinationIds($rows), $comboIds);
+        $packs = PackCatalog::load($productIds, $loader);
+        $book = PriceBook::load($this->combinationIds($rows), [...$comboIds, ...array_map(fn (ComboSnapshot $pack): int => $pack->id, $packs)]);
         $count = PieceCounter::count($this->lineFacts($input, $facts, $errors));
+        $palette = $this->paletteFor($choices, $loader);
         $lines = [];
 
         foreach ($input->lines as $i => $line) {
             $lines[] = $line['kind'] === LineKind::Combo
                 ? $this->priceCombo($line, $combos[$i] ?? null, $errors[$i], $book, $i)
-                : $this->priceProduct($line, $rows[$i] ?? [], $errors[$i], $facts[(int) $line['product_id']] ?? null, $count, $book, $i);
+                : $this->withPackNotice(
+                    $this->priceProduct($line, $rows[$i] ?? [], $errors[$i], $facts[(int) $line['product_id']] ?? null, $count, $book, $i),
+                    (int) $line['product_id'],
+                    $choices[$i] ?? [],
+                    $rows[$i] ?? [],
+                    $packs,
+                    $book,
+                    $palette,
+                );
         }
 
-        return new CalculationResult($lines, $count['lines']);
+        $percent = CommercialParameters::current()->advance_percentage;
+
+        return new CalculationResult($lines, $count['lines'], $percent, $this->advance($lines, $percent), $this->currentRate->get());
+    }
+
+    /**
+     * The required advance of the priced lines (COT-010): the advance percent of the on-demand and service
+     * lines, the whole subtotal of the stock and combo lines. The agreed part arrives with negotiated prices.
+     *
+     * @param  list<LineResult>  $lines
+     */
+    private function advance(array $lines, BigDecimal $percent): AdvanceBreakdown
+    {
+        $percentBase = BigDecimal::zero();
+        $fullBase = BigDecimal::zero();
+
+        foreach ($lines as $line) {
+            if (! $line->addsToTotal() || $line->subtotal === null) {
+                continue;
+            }
+
+            if ($line->paidInFull) {
+                $fullBase = $fullBase->plus($line->subtotal);
+            } else {
+                $percentBase = $percentBase->plus($line->subtotal);
+            }
+        }
+
+        return AdvanceCalculator::required($percent, $percentBase, $fullBase, null);
+    }
+
+    /**
+     * Adds the informative pack notice to a priced product line (COT-009 step 11): only packs of the line's
+     * product whose component admits every row, with an item price, compared with the line's single unit price.
+     *
+     * @param  list<array<string, mixed>>  $choices
+     * @param  list<ResolvedSelection|null>  $resolved
+     * @param  list<ComboSnapshot>  $packs
+     * @param  list<ValueSnapshot>  $palette
+     */
+    private function withPackNotice(LineResult $line, int $productId, array $choices, array $resolved, array $packs, PriceBook $book, array $palette): LineResult
+    {
+        if (! $line->addsToTotal() || $packs === []) {
+            return $line;
+        }
+
+        $combinationIds = [];
+
+        foreach ($resolved as $selection) {
+            if ($selection === null) {
+                return $line;
+            }
+
+            $combinationIds[] = $selection->combinationId;
+        }
+
+        $candidates = [];
+
+        foreach ($packs as $pack) {
+            $component = $pack->components[0] ?? null;
+            $itemPrice = $component === null ? null : $book->itemPrice($component->id);
+
+            if ($component === null || $itemPrice === null || $component->product->id !== $productId
+                || ! PackAdmission::admits($component, $choices, $combinationIds, $palette)) {
+                continue;
+            }
+
+            $candidates[] = ['code' => $pack->code, 'name' => $pack->name, 'quantity' => $component->quantity, 'item_price' => $itemPrice];
+        }
+
+        $quantity = 0;
+        $unitPrices = [];
+
+        foreach ($line->rows as $row) {
+            $quantity += $row->quantity;
+
+            if ($row->unitPrice !== null) {
+                $unitPrices[] = $row->unitPrice;
+            }
+        }
+
+        $notice = PackAdvisor::best(new PackLineFacts($quantity, $unitPrices), $candidates);
+
+        return $notice === null ? $line : new LineResult(
+            kind: $line->kind,
+            code: $line->code,
+            descriptiveName: $line->descriptiveName,
+            tierLabel: $line->tierLabel,
+            priceOrigin: $line->priceOrigin,
+            rows: $line->rows,
+            unitPrice: $line->unitPrice,
+            subtotal: $line->subtotal,
+            customizations: $line->customizations,
+            includedCustomizations: $line->includedCustomizations,
+            requiresAdvisor: $line->requiresAdvisor,
+            reason: $line->reason,
+            errors: $line->errors,
+            paidInFull: $line->paidInFull,
+            packNotice: $notice,
+        );
+    }
+
+    /**
+     * The color palette, read only when a row chooses details (as `ResolveSelection` does).
+     *
+     * @param  array<int, list<array<string, mixed>>>  $choices
+     * @return list<ValueSnapshot>
+     */
+    private function paletteFor(array $choices, CatalogSnapshotLoader $loader): array
+    {
+        foreach ($choices as $line) {
+            foreach ($line as $choice) {
+                if (is_array($choice['details'] ?? null) && $choice['details'] !== []) {
+                    return $loader->palette();
+                }
+            }
+        }
+
+        return [];
     }
 
     /**
@@ -93,7 +235,7 @@ final class CalculateQuotation
      * scheme is no scheme (COT-025, DEC-COT-62).
      *
      * @param  list<int>  $productIds
-     * @return array<int, array{business_line: BusinessLine, service: bool, scheme: ?PriceScheme}>
+     * @return array<int, array{business_line: BusinessLine, supply_mode: SupplyMode, service: bool, scheme: ?PriceScheme}>
      */
     private function productFacts(array $productIds): array
     {
@@ -113,10 +255,12 @@ final class CalculateQuotation
 
         foreach ($products as $product) {
             $scheme = $product->price_scheme_id === null ? null : $schemes->get((int) $product->price_scheme_id);
+            $supplyMode = SupplyMode::from((string) $product->supply_mode);
 
             $facts[(int) $product->id] = [
                 'business_line' => BusinessLine::from((string) $product->business_line),
-                'service' => $product->supply_mode === SupplyMode::Service->value,
+                'supply_mode' => $supplyMode,
+                'service' => $supplyMode === SupplyMode::Service,
                 'scheme' => $scheme instanceof PriceScheme && $scheme->status === CatalogStatus::Active ? $scheme : null,
             ];
         }
@@ -128,8 +272,10 @@ final class CalculateQuotation
      * Resolves each size row of a product line: the size is injected as the order choice of the product's size
      * attribute (COT-009 step 1, one call per row).
      *
+     * Also returns the exact input each row was resolved with, which the pack admission checks again.
+     *
      * @param  array<string, mixed>  $line
-     * @return array{0: list<?ResolvedSelection>, 1: array<string, string>}
+     * @return array{0: list<ResolvedSelection|null>, 1: array<string, string>, 2: list<array<string, mixed>>}
      */
     private function resolveRows(ResolveSelection $resolver, CatalogSnapshotLoader $loader, array $line, int $i): array
     {
@@ -150,6 +296,7 @@ final class CalculateQuotation
 
         $resolved = [];
         $errors = [];
+        $choices = [];
 
         foreach ($line['rows'] as $j => $row) {
             $choice = $base;
@@ -158,6 +305,8 @@ final class CalculateQuotation
                 $choice['order'] = (is_array($choice['order'] ?? null) ? $choice['order'] : []);
                 $choice['order'][$sizeAttributeId] = $row['size_value_id'];
             }
+
+            $choices[] = $choice;
 
             try {
                 $selection = $resolver->handle($choice);
@@ -168,7 +317,7 @@ final class CalculateQuotation
             }
         }
 
-        return [$resolved, $errors];
+        return [$resolved, $errors, $choices];
     }
 
     /**
@@ -206,7 +355,7 @@ final class CalculateQuotation
     }
 
     /**
-     * @param  array<int, array{business_line: BusinessLine, service: bool, scheme: ?PriceScheme}>  $facts
+     * @param  array<int, array{business_line: BusinessLine, supply_mode: SupplyMode, service: bool, scheme: ?PriceScheme}>  $facts
      * @param  array<int, array<string, string>>  $errors
      * @return list<LineFacts>
      */
@@ -243,7 +392,7 @@ final class CalculateQuotation
      * @param  array<string, mixed>  $line
      * @param  list<?ResolvedSelection>  $resolved
      * @param  array<string, string>  $errors
-     * @param  array{business_line: BusinessLine, service: bool, scheme: ?PriceScheme}|null  $facts
+     * @param  array{business_line: BusinessLine, supply_mode: SupplyMode, service: bool, scheme: ?PriceScheme}|null  $facts
      * @param  array{lines: array<string, int>, services: array<int, int>}  $count
      */
     private function priceProduct(array $line, array $resolved, array $errors, ?array $facts, array $count, PriceBook $book, int $i): LineResult
@@ -259,10 +408,10 @@ final class CalculateQuotation
             ? ($count['services'][(int) $line['product_id']] ?? 0)
             : ($count['lines'][$facts['business_line']->value] ?? 0));
 
-        $tier = $scheme === null ? null : TierSelector::for(
-            array_values($scheme->tiers->map(fn (PriceTier $tier): TierFacts => new TierFacts($tier->id, $tier->label, (int) $tier->min_quantity, $tier->max_quantity === null ? null : (int) $tier->max_quantity, $tier->kind))->all()),
-            $quantity,
-        );
+        $tiers = $scheme === null ? [] : array_values($scheme->tiers->map(fn (PriceTier $tier): TierFacts => new TierFacts($tier->id, $tier->label, (int) $tier->min_quantity, $tier->max_quantity === null ? null : (int) $tier->max_quantity, $tier->kind))->all());
+
+        // A fixed scheme prices with its single tier whatever the count: its lines do not count pieces (COT-008).
+        $tier = $scheme?->type === PriceSchemeType::Fixed ? ($tiers[0] ?? null) : TierSelector::for($tiers, $quantity);
 
         $negotiation = $tier?->kind === PriceTierKind::Negotiation;
         $customColor = array_filter($resolved, fn (?ResolvedSelection $selection): bool => $selection?->requiresAdvisor === true) !== [];
@@ -333,6 +482,7 @@ final class CalculateQuotation
             requiresAdvisor: $reason !== null,
             reason: $reason,
             errors: $errors,
+            paidInFull: in_array($facts['supply_mode'] ?? null, [SupplyMode::StockWithMinimum, SupplyMode::StockDepletable], true),
         );
     }
 
@@ -378,6 +528,7 @@ final class CalculateQuotation
             requiresAdvisor: false,
             reason: null,
             errors: $errors,
+            paidInFull: true,
         );
     }
 

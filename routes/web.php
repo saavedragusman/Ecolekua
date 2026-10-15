@@ -28,6 +28,7 @@ use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Products\ProductStockMinimumController;
 use App\Http\Controllers\Products\ProductStructureController;
+use App\Http\Controllers\Quotations\CalculationController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
 use App\Http\Controllers\Users\UserController;
@@ -189,6 +190,11 @@ Route::post('/pricing/exchange-rates', [ExchangeRateController::class, 'store'])
 // token the PUT needs when the change deletes prices.
 Route::post('/pricing/combinations/{combination}/size-groups/preview', [SizeGroupController::class, 'preview'])->whereNumber('combination')->name('pricing.size-groups.preview');
 Route::put('/pricing/combinations/{combination}/size-groups', [SizeGroupController::class, 'update'])->whereNumber('combination')->name('pricing.size-groups.update');
+
+// Live calculation and selection steps of the quotation editor (COT-009, PRD-019), JSON without effects.
+// Static segments: they stay declared before any `{quotation}` route.
+Route::post('/quotations/calculate', [CalculationController::class, 'calculate'])->name('quotations.calculate');
+Route::post('/quotations/selection-options', [CalculationController::class, 'selectionOptions'])->name('quotations.selection-options');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

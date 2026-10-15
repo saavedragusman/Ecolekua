@@ -2,6 +2,7 @@
 
 use App\Actions\Quotations\CalculateQuotation;
 use App\Enums\CatalogStatus;
+use App\Enums\ExchangeRateOrigin;
 use App\Enums\PriceSchemeType;
 use App\Enums\PriceTierKind;
 use App\Models\AttributeValue;
@@ -11,11 +12,15 @@ use App\Models\CombinationPrice;
 use App\Models\Combo;
 use App\Models\ComboComponent;
 use App\Models\ComboItemPrice;
+use App\Models\ExchangeRate;
 use App\Models\PriceScheme;
 use App\Models\PriceTier;
 use App\Models\Product;
 use App\Models\SizeGroup;
 use App\Support\Quotations\Calculation\CalculationInput;
+use App\Support\Time\OperatingTime;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 
 // COT-008, COT-009 steps 1-8, COT-011, COT-012 (requires advisor), COT-025, DT-02, design Decisions 14-17:
@@ -65,7 +70,7 @@ function calcCatalog(): array
     $schemes = [
         'Uniformes' => calcScheme('Uniformes', [['Detal', 1, 6], ['7–12', 7, 12], ['13–49', 13, 49], ['50 o más', 50, null, PriceTierKind::Negotiation]]),
         'Pañales' => calcScheme('Pañales', [['Detal', 1, 49], ['Mayor', 50, null]]),
-        'Absorbentes' => calcScheme('Absorbentes', [['Especial', 1, 49], ['Mayor', 50, null]]),
+        'Absorbentes' => calcScheme('Absorbentes', [['Detal', 1, 6], ['Especial', 7, 49], ['Mayor', 50, null]]),
         'Servicios' => calcScheme('Servicios', [['1–12', 1, 12], ['13–49', 13, 49], ['50 o más', 50, null]]),
         'Fijo' => PriceScheme::factory()->fixed()->create(['name' => 'Fijo']),
     ];
@@ -111,13 +116,13 @@ function calcCatalog(): array
     calcPrice($fx, '110-1', 'Uniformes', ['Detal' => '40.00', '13–49' => '32.00']);
     calcPrice($fx, '155-1', 'Uniformes', ['Detal' => '20.00', '7–12' => '18.00', '13–49' => '16.00']);
     calcPrice($fx, '11', 'Pañales', ['Detal' => '50.00', 'Mayor' => '45.00']);
-    calcPrice($fx, '16', 'Absorbentes', ['Especial' => '15.00', 'Mayor' => '12.00']);
+    calcPrice($fx, '16', 'Absorbentes', ['Detal' => '40.00', 'Especial' => '15.00', 'Mayor' => '12.00']);
     calcPrice($fx, '001G', 'Fijo', ['Precio' => '3.50']);
     calcPrice($fx, '157', 'Servicios', ['1–12' => '2.00', '13–49' => '1.50']);
 
     $groups = calcGroups($fx, '184', [['28', '30', '32', '34', '36'], ['38', '40', '42']]);
-    calcPrice($fx, '184', 'Uniformes', ['Detal' => '25.00', '13–49' => '21.00'], $groups[0]);
-    calcPrice($fx, '184', 'Uniformes', ['Detal' => '28.00', '13–49' => '24.00'], $groups[1]);
+    calcPrice($fx, '184', 'Uniformes', ['Detal' => '25.00', '7–12' => '23.00', '13–49' => '21.00'], $groups[0]);
+    calcPrice($fx, '184', 'Uniformes', ['Detal' => '28.00', '7–12' => '26.00', '13–49' => '24.00'], $groups[1]);
 
     $kit = Combo::factory()->create(['name' => 'Kit Oro antiderrame']);
     CatalogCode::factory()->forCombo($kit)->create(['code' => 'K-ORO']);
@@ -343,6 +348,17 @@ it('E-16 en un pedido mixto cada línea de negocio cuenta aparte y el precio fij
         ->and($result['lines'][2]['subtotal']['value'])->toBe('7.00');
 });
 
+it('E-16 una línea de precio fijo sola se cotiza con su único tramo aunque no cuente piezas', function () {
+    $fx = calcCatalog();
+
+    $result = calculate([calcLine($fx, 'infantil', ['' => 2])]);
+
+    expect($result['pieces_by_line']['diapers'])->toBe(0)
+        ->and($result['lines'][0]['errors'])->toBe([])
+        ->and(calcUnit($result['lines'][0]))->toBe('3.50')
+        ->and($result['total']['value'])->toBe('7.00');
+});
+
 it('E-17 la séptima unidad pasa la línea del tramo Detal al 7–12', function () {
     $fx = calcCatalog();
 
@@ -524,4 +540,200 @@ it('DT-02 el número de consultas no depende de las líneas ni de las filas de u
 
     expect($many)->toBe($one)
         ->and($manyWithSecond - $many)->toBe($oneWithSecond - $one);
+});
+
+/*
+| Phase 10b: advance, Bs, rate, reasons, packs (COT-009 steps 6-11, COT-010).
+*/
+
+/**
+ * A single-component active combo (pack) of `$quantity` units of a product at `$itemPrice` per item.
+ * `$restriction` maps attribute names to the value names the component admits.
+ *
+ * @param  array<string, list<string>>  $restriction
+ */
+function calcPack(array $fx, string $code, string $product, int $quantity, string $itemPrice, array $restriction = [], CatalogStatus $status = CatalogStatus::Active): Combo
+{
+    $pack = Combo::factory()->create(['name' => "Pack {$quantity} {$code}", 'status' => $status]);
+    CatalogCode::factory()->forCombo($pack)->create(['code' => $code]);
+    $component = ComboComponent::factory()->create(['combo_id' => $pack->id, 'product_id' => $fx['products'][$product]->id, 'quantity' => $quantity, 'sort_order' => 1]);
+    ComboItemPrice::factory()->create(['combo_component_id' => $component->id, 'unit_price' => $itemPrice]);
+
+    foreach ($restriction as $attribute => $names) {
+        foreach ($names as $name) {
+            $component->values()->attach($fx['vals'][$name]->id, ['catalog_attribute_id' => $fx['attrs'][$attribute]->id]);
+        }
+    }
+
+    return $pack;
+}
+
+it('E-29 el anticipo depende del modo de abastecimiento de cada línea', function () {
+    $fx = calcCatalog();
+
+    $result = calculate([
+        calcShirts($fx, 5),
+        calcLine($fx, 'pantalon', ['32' => 2]),
+        calcLine($fx, 'infantil', ['' => 2]),
+    ]);
+
+    expect($result['pieces_by_line']['uniforms'])->toBe(7)
+        ->and(array_map(fn (array $line) => $line['subtotal']['value'], $result['lines']))->toBe(['180.00', '46.00', '7.00'])
+        ->and($result['total']['value'])->toBe('233.00')
+        ->and($result['advance_percentage'])->toBe('50.00')
+        ->and($result['required_advance']['value'])->toBe('143.00')
+        ->and($result['breakdown']['automatic']['value'])->toBe('90.00')
+        ->and($result['breakdown']['stock']['value'])->toBe('53.00')
+        ->and($result['breakdown']['agreed'])->toBeNull();
+});
+
+it('E-29 los combos se pagan completos', function () {
+    $fx = calcCatalog();
+
+    $result = calculate([calcKit($fx, 1)]);
+
+    expect($result['required_advance']['value'])->toBe('155.00')
+        ->and($result['breakdown']['stock']['value'])->toBe('155.00');
+});
+
+it('E-30 el anticipo se redondea una vez hacia arriba en la mitad', function () {
+    $fx = calcCatalog();
+    CombinationPrice::query()->where('combination_id', $fx['combos']['155-1']->id)->update(['unit_price' => '100.01']);
+
+    $result = calculate([calcLine($fx, 'chemise', ['M' => 1])]);
+
+    expect($result['total']['value'])->toBe('100.01')
+        ->and($result['required_advance']['value'])->toBe('50.01')
+        ->and($result['required_advance']['display'])->toBe('50,01');
+});
+
+it('COT-010 las líneas sin precio o que esperan asesora no suman al anticipo', function () {
+    $fx = calcCatalog();
+
+    $result = calculate([calcShirts($fx, 30), calcLine($fx, 'chemise', ['M' => 20]), calcLine($fx, 'infantil', ['' => 2])]);
+
+    expect($result['required_advance']['value'])->toBe('7.00');
+});
+
+it('E-31 el cálculo no escribe nada ni llama a servicios externos', function () {
+    Http::fake();
+    $fx = calcCatalog();
+    calcPack($fx, 'P-16', 'absorbente', 6, '10.00');
+    $tables = ['price_schemes', 'price_tiers', 'combination_prices', 'size_groups', 'size_group_values', 'combo_item_prices', 'commercial_parameters', 'exchange_rates', 'combos', 'combinations', 'audit_logs'];
+    $count = fn () => array_map(fn (string $table) => DB::table($table)->count(), $tables);
+    $before = $count();
+
+    calculate([calcShirts($fx, 3), calcKit($fx, 1), calcLine($fx, 'absorbente', ['' => 6])]);
+
+    expect($count())->toBe($before);
+    Http::assertNothingSent();
+});
+
+it('E-64 el cálculo usa la tasa vigente con su fecha y origen y convierte total y anticipo', function () {
+    $fx = calcCatalog();
+    ExchangeRate::factory()->create(['rate_date' => OperatingTime::today()->toDateString(), 'value' => '875.65', 'origin' => ExchangeRateOrigin::Manual]);
+
+    $result = calculate([calcShirts($fx, 10)]);
+
+    expect($result['rate'])->toBe(['value' => '875.65', 'date' => OperatingTime::today()->toDateString(), 'origin' => 'manual'])
+        ->and($result['total']['value'])->toBe('360.00')
+        ->and($result['total_bs']['value'])->toBe('315234.00')
+        ->and($result['total_bs']['display'])->toBe('315.234,00')
+        ->and($result['advance_bs']['value'])->toBe('157617.00');
+});
+
+it('E-65 sin ninguna tasa guardada el cálculo informa "sin tasa" y no convierte', function () {
+    $fx = calcCatalog();
+
+    $result = calculate([calcShirts($fx, 10)]);
+
+    expect($result['rate'])->toBeNull()
+        ->and($result['total_bs'])->toBeNull()
+        ->and($result['advance_bs'])->toBeNull()
+        ->and($result['total']['value'])->toBe('360.00');
+});
+
+it('COT-009 la cotización lista los motivos distintos por los que requiere asesora', function () {
+    $fx = calcCatalog();
+    $color = $fx['attrs']['Color']->id;
+    $custom = calcLine($fx, 'camisa', ['M' => 2], ['Género' => 'Dama'], selection: [
+        'order' => [$color => 'custom'],
+        'custom_color' => ['tone' => '#123456'],
+    ]);
+
+    $result = calculate([calcShirts($fx, 30), calcLine($fx, 'chemise', ['M' => 20]), $custom]);
+
+    expect($result['reasons'])->toBe(['50 piezas de uniformes o más'])
+        ->and(calculate([$custom])['reasons'])->toBe(['color personalizado']);
+});
+
+it('E-69 avisa del pack sin cambiar la línea', function () {
+    $fx = calcCatalog();
+    calcPack($fx, 'P6-ABS', 'absorbente', 6, '15.00');
+
+    $six = calculate([calcLine($fx, 'absorbente', ['' => 6])]);
+    $five = calculate([calcLine($fx, 'absorbente', ['' => 5])]);
+
+    expect($six['lines'][0]['tier_label'])->toBe('Detal')
+        ->and($six['lines'][0]['subtotal']['value'])->toBe('240.00')
+        ->and($six['lines'][0]['pack_notice'])->toBe([
+            'combo_code' => 'P6-ABS',
+            'combo_name' => 'Pack 6 P6-ABS',
+            'packs_fit' => 1,
+            'estimated_saving' => ['value' => '150.00', 'display' => '150,00'],
+        ])
+        ->and($six['total']['value'])->toBe('240.00')
+        ->and($five['lines'][0]['pack_notice'])->toBeNull();
+});
+
+it('DEC-COT-08 un pack inactivo no genera aviso', function () {
+    $fx = calcCatalog();
+    calcPack($fx, 'P6-ABS', 'absorbente', 6, '15.00', status: CatalogStatus::Inactive);
+
+    expect(calculate([calcLine($fx, 'absorbente', ['' => 6])])['lines'][0]['pack_notice'])->toBeNull();
+});
+
+it('E-71 una línea con precios distintos por grupo de talla no recibe aviso y se calcula igual que sin packs', function () {
+    $fx = calcCatalog();
+    $line = calcLine($fx, 'pantalon', ['34' => 2, '40' => 2]);
+    $without = calculate([$line]);
+    calcPack($fx, 'P2-PAN', 'pantalon', 2, '10.00');
+
+    $with = calculate([$line]);
+
+    expect($with['lines'][0]['pack_notice'])->toBeNull()
+        ->and($with['lines'][0]['subtotal'])->toBe($without['lines'][0]['subtotal'])
+        ->and($with['total'])->toBe($without['total']);
+});
+
+it('DEC-PRD-42 el pack se admite solo si su componente admite la selección de la línea', function () {
+    $fx = calcCatalog();
+    calcPack($fx, 'P6-BLANCA', 'camisa', 6, '30.00', ['Color' => ['Blanco']]);
+
+    $restricted = calculate([calcShirts($fx, 6)])['lines'][0];
+
+    calcPack($fx, 'P6-CAMISA', 'camisa', 6, '30.00');
+    $open = calculate([calcShirts($fx, 6)])['lines'][0];
+
+    expect($restricted['pack_notice'])->toBeNull()
+        ->and($open['pack_notice']['combo_code'] ?? null)->toBe('P6-CAMISA')
+        ->and($open['pack_notice']['estimated_saving']['value'] ?? null)->toBe('60.00');
+});
+
+it('DT-02 los packs no hacen depender las consultas de las líneas ni de las filas', function () {
+    $fx = calcCatalog();
+    calcPack($fx, 'P6-CAMISA', 'camisa', 6, '30.00');
+    $sizes = ['XS' => 1, 'S' => 1, 'M' => 1, 'L' => 1, 'XL' => 1, '2XL' => 1];
+    $shirtLine = fn (array $rows) => calcLine($fx, 'camisa', $rows, ['Género' => 'Caballero'], ['Color' => 'Azul']);
+
+    $one = resQueryCount(fn () => calculate([$shirtLine(['M' => 1])]));
+    $many = resQueryCount(fn () => calculate(array_fill(0, 5, $shirtLine($sizes))));
+
+    calcPack($fx, 'P12-CAMISA', 'camisa', 12, '28.00');
+    $onePlusPack = resQueryCount(fn () => calculate([$shirtLine(['M' => 1])]));
+    $manyPlusPack = resQueryCount(fn () => calculate(array_fill(0, 5, $shirtLine($sizes))));
+
+    expect($many)->toBe($one)
+        ->and($manyPlusPack)->toBe($onePlusPack)
+        ->and($onePlusPack - $one)->toBe(1);
 });
