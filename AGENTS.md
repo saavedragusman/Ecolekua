@@ -36,13 +36,14 @@ El entorno corre en **Laravel Sail (Docker)** dentro de WSL2. Todos los comandos
 
 ```bash
 sail up -d                             # levantar contenedores (app, mysql, mailpit)
+sail up -d scheduler                   # tareas programadas (tasa de cambio diaria 07:00 Caracas); llama a la API real
 sail composer install && sail pnpm install
 sail artisan test                      # suite completa (o sail pest --filter=E-06)
 sail pint                              # formato PHP (obligatorio antes de cerrar una tarea)
 sail pnpm build                        # debe compilar sin errores
 sail artisan migrate:fresh --seed      # SOLO en entorno local
 ```
-
+El servicio `scheduler` (`schedule:work`) está detrás del profile `scheduler` de `compose.yaml`: `sail up -d` no lo levanta. Arrancalo solo cuando quieras que corran las tareas programadas, porque la consulta diaria de la tasa (`exchange-rate:fetch`) llama a la API real.
 Las pruebas usan MySQL (base `testing` creada por Sail), nunca SQLite en memoria.
 
 Gestor de paquetes JS: **pnpm** (nunca npm ni yarn; no generar `package-lock.json`). Antes de añadir una dependencia nueva, justificarla y preguntar.
@@ -52,66 +53,54 @@ Gestor de paquetes JS: **pnpm** (nunca npm ni yarn; no generar `package-lock.jso
 ---
 
 ## 3. Mapa de documentación y jerarquía
-
 | Nivel | Archivo | Autoridad sobre |
 |---|---|---|
 | 1 | `docs/constitution.md` | Principios y decisiones arquitectónicas |
 | 2 | `docs/business/business-rules.md` | Reglas de negocio conocidas de Ecolekua |
 | 3 | `docs/specs/NNN-nombre.md` | Comportamiento funcional de cada funcionalidad (spec de producto, redactada por el equipo) |
-| 4 | `openspec/changes/NNN-nombre/` | Artefactos SDD de Gentle-AI: `proposal.md`, `specs/`, `design.md`, `tasks.md` |
+| 4 | `odd/tasks/NNN-nombre.md` | Documento de feature ODD: alcance, diseño técnico, tareas y evidencia |
 | 5 | Código y pruebas | Implementación |
 
 Reglas:
-
 - Un nivel inferior **nunca** contradice a uno superior. Si detectas una contradicción, detente y repórtala.
-- `docs/specs/NNN-*.md` es la **fuente** del comportamiento. Los delta specs de `openspec/changes/…/specs/` son una **transcripción fiel** de ella: no añaden, no quitan, no reinterpretan requisitos.
+- `docs/specs/NNN-*.md` es la **fuente única** del comportamiento funcional. El documento `odd/tasks/NNN-nombre.md` es una derivación fiel: no añade, no quita, no reinterpreta requisitos.
 - Si hay discrepancia entre un archivo del repo y la memoria de Engram, **manda el archivo**.
-- Este AGENTS.md resume principios; el detalle vive en la constitution.
-
+- Este `AGENTS.md` resume principios; el detalle vive en la constitution.
+- Enmiendas en la spec original. Cuando una feature cambia comportamiento de una spec anterior, el agente propone la enmienda en esa spec (sección “Cambios posteriores”, citando el ID de la nueva) y no implementa hasta que la apruebe el humano.
 ---
 
-## 4. Flujo SDD con Gentle-AI
+## 4. Flujo de trabajo (ODD con Gentle-AI v4)
 
-### 4.1 Cuándo es obligatorio
-
+### 4.1 Clasificación (no la decide el agente)
 | Tipo de cambio | Ruta |
 |---|---|
-| Cualquier cambio que agregue o altere comportamiento funcional, datos, permisos o reglas | **SDD completo** |
-| Refactor sin cambio de comportamiento, corrección de estilos, typos, dependencias | Directo, con pruebas en verde |
-| Corrección de bug que contradice una spec ya implementada | Directo, añadiendo la prueba del escenario que fallaba |
+| Implementar o modificar una spec (`docs/specs/NNN`) | Sustancial y crítico: documento de feature + verificación |
+| Refactor sin cambio de comportamiento, estilos, typos | Directo, con pruebas en verde |
+| Bug que contradice una spec implementada | Directo, con la prueba del escenario que fallaba |
 
-### 4.2 Correspondencia de fases
+### 4.2 Documento de feature: `odd/tasks/NNN-nombre.md`
+Secciones obligatorias, en este orden:
+1. **Fuente**: ruta de la spec y commit en que se leyó.
+2. **Alcance**: IDs cubiertos (`FND-xxx`, `CLI-xxx`, `PRD-xxx`, `COT-xxx`, `E-xx`, etc.). Nada fuera de la spec.
+3. **Decisiones**: todas en estado Confirmada (ver 4.3).
+4. **Diseño técnico**: modelos, migraciones, Actions, Policies, permisos, rutas y páginas. Sustituye al antiguo `design.md`; no crear `plan.md`.
+5. **Tareas**: checklist; cada tarea cita los IDs que cubre.
+6. **Evidencia**: prueba por cada `E-xx` y resultado de los comandos de §12.
+7. **Siguiente paso**.
 
-| Fase | Comando | Artefacto | Regla para este proyecto |
-|---|---|---|---|
-| Init | `/sdd-init` | `openspec/config.yaml` | Verificar que detecta Laravel + Pest y activa Strict TDD |
-| Explore | `/sdd-new NNN-nombre` / `/sdd-explore` | notas | Leer la spec en `docs/specs/` y el código existente |
-| Propose | — | `proposal.md` | Alcance = el de la spec; nada extra |
-| Spec | — | `specs/<dominio>/spec.md` | Transcripción fiel (§4.3) |
-| Design | — | `design.md` | **Este es el "plan"**. No crear un `plan.md` aparte |
-| Tasks | — | `tasks.md` | Cada tarea referencia los IDs que cubre (FND-xxx, E-xx) |
-| Apply | `/sdd-apply` | código + pruebas | Test-first (Strict TDD) |
-| Verify | `/sdd-verify` | informe | Contra spec, design y tasks |
-| Archive | `/sdd-archive` | `openspec/specs/` | Solo tras verify aprobado y confirmación humana |
+### 4.3 Puertas (obligatorias aunque ODD no las exija)
+1. **Antes de crear el documento**: si la spec tiene decisiones sin confirmar, listarlas con el formato de §6 y detenerse.
+2. **Antes de la primera línea de código**: con Diseño y Tareas escritos, detenerse y esperar aprobación humana.
+3. **Cierre**: verificar contra la spec (cada `E-xx` con prueba en verde), registrar la evidencia y esperar confirmación humana.
 
-`/sdd-ff` (fast-forward) **no se usa** si la spec tiene decisiones pendientes.
+### 4.4 Commits
+ODD cierra cada tarea con un commit por defecto. **En este proyecto no.**
+El agente crea la rama de la feature, pero no hace commit, push ni merge.
+Al cerrar cada tarea, anota en el documento el mensaje de commit sugerido.
 
-### 4.3 Transcripción de specs a formato OpenSpec
-
-- Cada requisito `FND-xxx` → un `### Requirement: FND-xxx — <título>`.
-- Cada escenario `E-xx` → un `#### Scenario: E-xx — <título>` con GIVEN/WHEN/THEN.
-- Conservar siempre los IDs originales para trazabilidad.
-- Los prefijos de cada spec se mantienen (FND para 001; las siguientes definen el suyo).
-
-### 4.4 Puerta de entrada a Design
-
-No pasar a Design mientras la spec tenga decisiones en estado distinto de **Confirmada** (p. ej. sección "Decisiones de esta Spec"). Informa cuáles faltan y detente.
-
-### 4.5 Engram (memoria)
-
-Guardar: decisiones técnicas tomadas en design, hallazgos no obvios del código, errores recurrentes y su solución.
+### 4.5 Engram
+Igual que antes. El documento de feature tiene copia en Engram; si difieren, manda el archivo del repositorio.
 No guardar: credenciales, contenido de `.env`, datos personales de clientes o empleados, precios reales de Ecolekua.
-
 ---
 
 ## 5. Cuándo detenerse y preguntar
@@ -162,7 +151,7 @@ Cuando la respuesta llegue, se registra en la spec correspondiente (sección de 
 
 ## 8. Convenciones de código
 
-Se confirman en el `design.md` de 001; a partir de ahí son obligatorias.
+Se confirma en Diseño técnico de odd/tasks/NNN-nombre.md
 
 - **Controladores delgados**: validan con `FormRequest`, autorizan con Policy y delegan en una **Action** (`app/Actions/<Modulo>/`), donde vive la lógica de negocio y la transacción.
 - **Permisos** declarados como catálogo en un único lugar (seeder/enum) con nombres `modulo.accion` en inglés.
@@ -195,6 +184,7 @@ Existe un portal web previo (HTML + CSS, **sin lógica**) que será la cara púb
 - Las pruebas de autorización golpean el backend directamente (peticiones HTTP), no la UI.
 - Probar comportamiento y reglas, no cobertura por sí misma.
 - Prioridad: precios, descuentos, anticipos, inventario, reservas, pedidos, producción, tiempos, defectos, reprocesos, comisiones, permisos.
+- TDD estricto es obligatorio en este proyecto; no preguntar.
 
 ---
 
@@ -208,14 +198,12 @@ Existe un portal web previo (HTML + CSS, **sin lógica**) que será la cara púb
 ---
 
 ## 12. Definition of Done
-
 Un change está terminado cuando:
-
 - [ ] cumple la spec activa y todos sus escenarios tienen prueba en verde;
 - [ ] respeta business rules y constitution;
 - [ ] tiene autorización en backend y auditoría donde corresponda;
 - [ ] mantiene integridad de datos (transacciones, restricciones en BD);
 - [ ] `sail artisan test`, `sail pint --test` y `sail pnpm build` pasan;
-- [ ] `tasks.md` completo y `/sdd-verify` sin hallazgos bloqueantes;
+- [ ] `odd/tasks/NNN-nombre.md` completo con todas las tareas cerradas y la sección de Evidencia registrada;
 - [ ] documentación actualizada (spec, decisiones, este archivo si aplica);
-- [ ] archivado con `/sdd-archive` tras confirmación humana.
+- [ ] cierre confirmado por el humano.
