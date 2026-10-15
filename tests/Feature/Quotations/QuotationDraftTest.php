@@ -114,6 +114,19 @@ it('E-74 si la asesora del cliente perdió la cartera y quien crea no tiene, que
     expect(Quotation::query()->sole()->advisor_id)->toBeNull();
 });
 
+it('DEC-COT-63 si se elige una asesora a mano y la del cliente no está disponible, igual se avisa', function () {
+    $inactive = draftAdvisor();
+    $inactive->forceFill(['is_active' => false])->save();
+    $customer = Customer::factory()->assignedTo($inactive)->create();
+    $chosen = draftAdvisor();
+
+    test()->actingAs(draftCreator())->post('/quotations', ['customer_id' => $customer->id, 'advisor_id' => $chosen->id])
+        ->assertRedirect()
+        ->assertInertiaFlash('notice', 'asesora del cliente no disponible');
+
+    expect(Quotation::query()->sole()->advisor_id)->toBe($chosen->id);
+});
+
 it('DEC-COT-63 con la asesora del cliente disponible no hay aviso', function () {
     $customer = Customer::factory()->assignedTo(draftAdvisor())->create();
 

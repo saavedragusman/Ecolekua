@@ -1083,6 +1083,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **WHEN** un usuario con `quotations.create` y `customers.portfolio` crea una cotización para ese cliente
 - **THEN** la asesora responsable es quien la crea y el sistema muestra el aviso "asesora del cliente no disponible"
 - **AND** si quien la crea no tiene `customers.portfolio`, la cotización queda sin asesora responsable, con el mismo aviso
+- **AND** si quien la crea elige una asesora a mano, esa queda como responsable y el aviso igual se muestra
 
 ### E-75 — Asesora responsable que deja de estar disponible (COT-013, DEC-COT-64, DEC-CLI-29)
 
@@ -1190,7 +1191,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-60 | Decimales de la tasa de cambio | A) 2 decimales en todo: la API se redondea HALF_UP a 2 y la carga manual rechaza más de 2 · B) guardar 4 y usar 2 · C) como A pero la carga manual redondea | **Confirmada**: **A** (2026-10-14). Sustituye los 4 decimales de COT-030 y DT-01; E-36, E-63 y E-64 se ajustan |
 | DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
 | DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
-| DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible". Escenario E-74 |
+| DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible", que se muestra también cuando se elige una asesora a mano. Escenario E-74 |
 | DEC-COT-64 | Asesora responsable que se desactiva o pierde `customers.portfolio` después | Sin reasignación automática (como DEC-CLI-29); se marca "asesora no disponible"; en borrador se cambia editando; en emitida, un usuario con `customers.assign` cambia solo la asesora, auditado (excepción a DEC-COT-18), y el documento emitido pasa a mostrar la asesora nueva | **Confirmada** (2026-10-15). Escenario E-75 |
 
 ### Decisiones técnicas
