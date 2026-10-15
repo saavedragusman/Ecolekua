@@ -271,8 +271,8 @@ El equipo técnico carga una única vez los precios de la lista actual mediante 
 
 Los precios y las cotizaciones están en USD (DEC-COT-01). El sistema guarda la **tasa oficial del día** (Bs por USD) como referencia para las cotizaciones.
 
-- **Obtención automática** (DEC-COT-43): una tarea programada consulta `https://ve.dolarapi.com/v1/dolares/oficial` **todos los días a las 7:00 a. m., hora de Caracas** (`America/Caracas`). El campo `promedio` se guarda como **la tasa de ese día**, con la fecha de la consulta en Caracas; `fechaActualizacion` se guarda solo como dato de la fuente y no cambia la fecha de la tasa. Si la tasa de ese día ya existe, no se duplica. Los reintentos tras un fallo se definen en `design.md`.
-- **Respaldo** (DEC-COT-38): si la API no responde, responde con error o no trae un valor positivo, la tarea no guarda nada y queda registrado el fallo. El sistema usa la **última tasa guardada** y la muestra siempre con su fecha. Un usuario con `pricing.manage` puede registrar manualmente la tasa del día (valor > 0, hasta 4 decimales); queda con origen "manual", su autor y auditoría. Si la API trae después la tasa de ese mismo día, no reemplaza la manual.
+- **Obtención automática** (DEC-COT-43): una tarea programada consulta `https://ve.dolarapi.com/v1/dolares/oficial` **todos los días a las 7:00 a. m., hora de Caracas** (`America/Caracas`). El campo `promedio`, redondeado a 2 decimales (DEC-COT-60), se guarda como **la tasa de ese día**, con la fecha de la consulta en Caracas; `fechaActualizacion` se guarda solo como dato de la fuente y no cambia la fecha de la tasa. Si la tasa de ese día ya existe, no se duplica. Los reintentos tras un fallo se definen en `design.md`.
+- **Respaldo** (DEC-COT-38): si la API no responde, responde con error o no trae un valor positivo, la tarea no guarda nada y queda registrado el fallo. El sistema usa la **última tasa guardada** y la muestra siempre con su fecha. Un usuario con `pricing.manage` puede registrar manualmente la tasa del día (valor > 0, hasta 2 decimales, DEC-COT-60); queda con origen "manual", su autor y auditoría. Si la API trae después la tasa de ese mismo día, no reemplaza la manual.
 - La tasa vigente es la del día en curso o, si no existe, la más reciente. La pantalla de precios y el editor de cotizaciones la muestran con su fecha y origen.
 - La falta de tasa **nunca** impide calcular ni emitir una cotización (COT-016).
 - La integración está desacoplada (constitución §15): la API se consulta solo desde la tarea programada, nunca durante el cálculo ni la emisión.
@@ -570,7 +570,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - Pañal `11` (stock con mínimo): Detal 50,00 · Especial 20,00. Absorbente `16` (stock con mínimo): Detal 40,00 · Especial 15,00. "Pack 6 absorbentes": 1 componente absorbente × 6, a 15,00 por ítem.
 - Bordado pequeño `157` (servicio, esquema Uniformes): 3,00 / 2,00 / 1,50.
 - Pañal infantil `001G` (stock agotable): precio fijo 3,50.
-- Anticipo: 50 %. Vigencia: 7 días. Tasa vigente: 875,6505 Bs por USD.
+- Anticipo: 50 %. Vigencia: 7 días. Tasa vigente: 875,65 Bs por USD.
 
 ### E-01 — Crear un esquema por tramos válido (COT-001, COT-023)
 
@@ -808,10 +808,10 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 
 ### E-36 — Emitir congela precios y tasa (COT-016, COT-023)
 
-- **GIVEN** un borrador completo con 10 camisas `110` (36,00; total 360,00; anticipo 180,00) y la tasa vigente 875,6505
+- **GIVEN** un borrador completo con 10 camisas `110` (36,00; total 360,00; anticipo 180,00) y la tasa vigente 875,65
 - **WHEN** se emite y después el precio de `110` en 7–12 cambia a 38,00 y se guarda una tasa nueva
 - **THEN** la cotización emitida sigue mostrando 36,00, total 360,00 y anticipo 180,00
-- **AND** conserva la tasa 875,6505 con su fecha, total 315.234,18 Bs y anticipo 157.617,09 Bs
+- **AND** conserva la tasa 875,65 con su fecha, total 315.234,00 Bs y anticipo 157.617,00 Bs
 - **AND** vence 7 días después de la emisión, y la emisión queda auditada
 
 ### E-37 — Emitir con pendientes (COT-016)
@@ -995,7 +995,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 
 - **GIVEN** la API responde `{"promedio": 875.6505, "fechaActualizacion": "2026-10-09T00:00:00-04:00"}`
 - **WHEN** la tarea programada se ejecuta el 2026-10-12 a las 7:00 a. m. hora de Caracas
-- **THEN** se guarda la tasa 875,6505 como tasa del 2026-10-12, con origen "api" y la fecha de la fuente (2026-10-09) como dato aparte
+- **THEN** se guarda la tasa 875,65 (el `promedio` redondeado a 2 decimales, DEC-COT-60) como tasa del 2026-10-12, con origen "api" y la fecha de la fuente (2026-10-09) como dato aparte
 - **AND** ejecutar la tarea de nuevo ese día no crea otra tasa
 - **AND** la tarea está programada a las 7:00 en la zona `America/Caracas`, no en UTC
 
@@ -1005,7 +1005,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **WHEN** se ejecuta la tarea y después se calcula una cotización
 - **THEN** no se guarda ninguna tasa, el fallo queda registrado y el cálculo usa la tasa del día anterior mostrando su fecha
 - **AND** un usuario con `pricing.manage` registra manualmente la tasa del día; queda con origen "manual", su autor y auditoría, y pasa a ser la vigente
-- **AND** un usuario sin `pricing.manage` recibe 403 al intentarlo, y un valor 0 o negativo se rechaza
+- **AND** un usuario sin `pricing.manage` recibe 403 al intentarlo, y un valor 0, negativo o con más de 2 decimales se rechaza
 
 ### E-65 — Sin ninguna tasa guardada (COT-009, COT-016, COT-030)
 
@@ -1106,7 +1106,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1169,12 +1169,13 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-57 | Convertir en negociación un tramo con precios | Se trata como quitar el tramo (DEC-COT-23) | **Confirmada** (2026-10-13) |
 | DEC-COT-58 | Asignar o mover tallas entre grupos con precios | Mover una talla de un grupo a otro es reorganizar (DEC-COT-53: confirmación y borrado de los precios de los grupos afectados); solo asignar una talla que no estaba en ningún grupo conserva los precios del grupo | **Confirmada** (2026-10-13) |
 | DEC-COT-59 | "Más de un precio unitario" en DEC-COT-54 | Se cuentan valores distintos: dos grupos con el mismo precio son un único precio | **Confirmada** (2026-10-13) |
+| DEC-COT-60 | Decimales de la tasa de cambio | A) 2 decimales en todo: la API se redondea HALF_UP a 2 y la carga manual rechaza más de 2 · B) guardar 4 y usar 2 · C) como A pero la carga manual redondea | **Confirmada**: **A** (2026-10-14). Sustituye los 4 decimales de COT-030 y DT-01; E-36, E-63 y E-64 se ajustan |
 
 ### Decisiones técnicas
 
 | ID | Decisión | Estado |
 |---|---|---|
-| DT-01 | Importes en `DECIMAL` de MySQL y aritmética exacta en PHP (p. ej., `brick/math`, que Laravel ya instala), nunca `float`. Tasas con 4 decimales | Propuesta — se confirma en `design.md`. Dependencia aprobada (2026-10-13): `brick/math` se declara como dependencia directa en `composer.json`, con la versión que ya instala Laravel (AGENTS §2) |
+| DT-01 | Importes en `DECIMAL` de MySQL y aritmética exacta en PHP (p. ej., `brick/math`, que Laravel ya instala), nunca `float`. Tasas con 2 decimales (DEC-COT-60) | Propuesta — se confirma en `design.md`. Dependencia aprobada (2026-10-13): `brick/math` se declara como dependencia directa en `composer.json`, con la versión que ya instala Laravel (AGENTS §2) |
 | DT-02 | COT-009 se implementa como una Action reutilizable (`app/Actions/Quotations/CalculateQuotation`) que usa `ResolveSelection` de `003` y no escribe en la base de datos | Propuesta — se confirma en `design.md` |
 | DT-03 | La emisión y el número correlativo se asignan dentro de una transacción con bloqueo, para que dos emisiones simultáneas no repitan número | Propuesta — se confirma en `design.md` |
 | DT-04 | La lectura y validación del CSV de precios es una sola Action (`app/Actions/Pricing/ValidatePriceImport`) que usan el comando de carga inicial (COT-007) y la importación del ERP (COT-027). Lectura con las funciones nativas de PHP, sin dependencias nuevas. La comprobación de conflictos de COT-028 compara los valores anteriores guardados en la importación con los vigentes, dentro de la transacción y con bloqueo | Propuesta — se confirma en `design.md` |

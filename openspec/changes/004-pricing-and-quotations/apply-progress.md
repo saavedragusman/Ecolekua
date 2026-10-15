@@ -501,5 +501,18 @@ RED: 6 failures + 1 error (trap key, repeated key, 3 over-limit cases, manual 11
 
 Suggested commit: `fix(004): acotar la tasa de cambio y endurecer la lectura de la API [COT-030, DT-01]`
 
+Committed as `190a9f9`.
+
+## DEC-COT-60 (2026-10-14): exchange rate with 2 decimals (same branch, commit pending)
+
+User: "la tasa no debe tener mas de 2 decimales"; chose option A (2 decimals everywhere: the API `promedio` rounded HALF_UP to 2, manual entry rejects more than 2). Registered first in `docs/specs/004-pricing-and-quotations.md` (COT-030, Escenario base, E-36, E-63, E-64, §9 DEC-COT-60, DT-01) and mirrored in the delta spec, `design.md` (precision, Decision 11, schema, limits, presenter, E-36 values) and `tasks.md` (8.2 note, 9.3, 13.1, 22.1). E-36 Bs values become 315.234,00 / 157.617,00 (36,00 × 875,65 = 31.523,40 per unit).
+
+- Migration `2026_10_14_000002` edited in place to `DECIMAL(14,2)`: it is **Pending** on the local DB (`migrate:status`) and the branch is not merged, so no applied environment changes.
+- `ExchangeRate::SCALE = 2` and `MAX_VALUE = 999999999999.99` shared by `RateParser` and `RecordManualExchangeRate`; cast `AsBigDecimal:2`; factory `100.00`; command output without `toScale(4)`; lang message (12 integers, 2 decimals).
+- RED: 17 failures + 3 errors in `RateParserTest`/`ExchangeRateTest` (4-decimal values, raw column `875.6500`, `RoundingNecessary` on `toScale(2)`). GREEN: 69/69. `MoneyTest` labels "rate ... four decimals" renamed to "four decimals" (Money stays generic).
+- Gate: pint, phpstan, `pnpm check`, build passed; `sail artisan test` 2133 tests (2131 passed, 2 skipped, 11254 assertions).
+
+Suggested commit: `fix(004): guardar la tasa de cambio con 2 decimales [COT-030, DEC-COT-60]`
+
 ### Remaining
 8.6 leftovers (`.env.example`, `AGENTS.md` line); then Phase 9 (PR 15): pure calculation classes.

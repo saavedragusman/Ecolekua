@@ -18,8 +18,9 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Records the rate of today by hand (COT-030, E-64, design Decision 11): greater than zero with at most
- * 4 decimals, and no larger than the history can store (`ExchangeRate::MAX_VALUE`). It becomes the rate in force of today and supersedes the effective one (API or manual),
- * which stays in the history; a later API run does not replace it.
+ * 2 decimals (DEC-COT-60), and no larger than the history can store (`ExchangeRate::MAX_VALUE`). It
+ * becomes the rate in force of today and supersedes the effective one (API or manual), which stays in
+ * the history; a later API run does not replace it.
  *
  * `effective_date` is unique and derived from `superseded_at`, so the writes follow this order inside
  * one transaction: lock today's effective row; mark it superseded (frees the key); insert the manual
@@ -32,8 +33,6 @@ use Illuminate\Validation\ValidationException;
  */
 class RecordManualExchangeRate
 {
-    public const VALUE_SCALE = 4;
-
     public function __construct(private readonly RecordAuditEvent $audit) {}
 
     /**
@@ -60,7 +59,7 @@ class RecordManualExchangeRate
 
             $rate = ExchangeRate::query()->create([
                 'rate_date' => $today,
-                'value' => Money::toStorage($amount, self::VALUE_SCALE),
+                'value' => Money::toStorage($amount, ExchangeRate::SCALE),
                 'origin' => ExchangeRateOrigin::Manual,
                 'recorded_by' => $actor->id,
             ]);
@@ -80,12 +79,12 @@ class RecordManualExchangeRate
     }
 
     /**
-     * @throws ValidationException when the value is not an amount greater than zero with at most 4 decimals
+     * @throws ValidationException when the value is not an amount greater than zero with at most 2 decimals
      */
     private function amount(string $value): BigDecimal
     {
         try {
-            $amount = Money::parse($value, self::VALUE_SCALE);
+            $amount = Money::parse($value, ExchangeRate::SCALE);
         } catch (InvalidAmount) {
             $amount = null;
         }
@@ -104,7 +103,7 @@ class RecordManualExchangeRate
     {
         return [
             'date' => $rate->rate_date->toDateString(),
-            'value' => Money::toStorage($rate->value, self::VALUE_SCALE),
+            'value' => Money::toStorage($rate->value, ExchangeRate::SCALE),
             'origin' => $rate->origin->value,
         ];
     }

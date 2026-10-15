@@ -38,8 +38,11 @@ class ExchangeRate extends Model
 
     public const UPDATED_AT = null;
 
-    /** The largest rate `value` DECIMAL(14,4) stores; a larger one is not a usable rate. */
-    public const MAX_VALUE = '9999999999.9999';
+    /** Decimals of a rate (DEC-COT-60). */
+    public const SCALE = 2;
+
+    /** The largest rate `value` DECIMAL(14,2) stores; a larger one is not a usable rate. */
+    public const MAX_VALUE = '999999999999.99';
 
     /**
      * @return array<string, string>
@@ -48,7 +51,7 @@ class ExchangeRate extends Model
     {
         return [
             'rate_date' => 'date',
-            'value' => AsBigDecimal::class.':4',
+            'value' => AsBigDecimal::class.':2',
             'origin' => ExchangeRateOrigin::class,
             'source_updated_at' => 'datetime',
             'recorded_by' => 'integer',

@@ -58,7 +58,7 @@ function rateAuditRows(): int
 // --- Schema (append-only, one effective rate per day) ---------------------------------------------
 
 it('COT-030 keeps one effective rate per day: a second effective row for the same date is rejected', function () {
-    rateRow('2026-10-12', '875.6505');
+    rateRow('2026-10-12', '875.65');
 
     expect(fn () => DB::table('exchange_rates')->insert(['rate_date' => '2026-10-12', 'value' => '880.0000', 'origin' => 'manual', 'created_at' => now()]))
         ->toThrow(UniqueConstraintViolationException::class);
@@ -67,7 +67,7 @@ it('COT-030 keeps one effective rate per day: a second effective row for the sam
 it('COT-030 lets superseded rows of a day coexist with its effective one', function () {
     rateRow('2026-10-12', '870.0000', attributes: ['superseded_at' => now()]);
     rateRow('2026-10-12', '871.0000', attributes: ['superseded_at' => now()]);
-    rateRow('2026-10-12', '875.6505');
+    rateRow('2026-10-12', '875.65');
 
     expect(ExchangeRate::query()->count())->toBe(3)
         ->and(DB::table('exchange_rates')->whereNotNull('effective_date')->count())->toBe(1);
@@ -78,10 +78,11 @@ it('COT-030 rejects a rate of zero or less in the database', function (string $v
         ->toThrow(QueryException::class);
 })->with(['zero' => ['0'], 'negative' => ['-1']]);
 
-it('COT-030 keeps the value with four exact decimals', function () {
-    $rate = rateRow('2026-10-12', '875.6505')->fresh();
+it('DEC-COT-60 keeps the value with two exact decimals', function () {
+    $rate = rateRow('2026-10-12', '875.65')->fresh();
 
-    expect($rate->value->toScale(4)->toString())->toBe('875.6505')
+    expect($rate->value->toString())->toBe('875.65')
+        ->and(DB::table('exchange_rates')->value('value'))->toBe('875.65')
         ->and($rate->origin)->toBe(ExchangeRateOrigin::Api)
         ->and($rate->rate_date->toDateString())->toBe('2026-10-12');
 });
@@ -92,13 +93,13 @@ it('E-64 records the manual rate of today with its author and audit, as the rate
     $actor = userWithPermissions(PermissionName::PricingView, PermissionName::PricingManage);
     rateRow('2026-10-11', '870.1000');
 
-    recordRate('875,6505', $actor)->assertRedirect();
+    recordRate('875,65', $actor)->assertRedirect();
 
     $rate = ExchangeRate::query()->latest('id')->firstOrFail();
     $audit = AuditLog::query()->where('action', AuditAction::ExchangeRateRecorded->value)->sole();
 
     expect($rate->rate_date->toDateString())->toBe('2026-10-12')
-        ->and($rate->value->toScale(4)->toString())->toBe('875.6505')
+        ->and($rate->value->toScale(2)->toString())->toBe('875.65')
         ->and($rate->origin)->toBe(ExchangeRateOrigin::Manual)
         ->and($rate->recorded_by)->toBe($actor->id)
         ->and($rate->superseded_at)->toBeNull()
@@ -106,11 +107,11 @@ it('E-64 records the manual rate of today with its author and audit, as the rate
         ->and($audit->entity_type)->toBe($rate->getMorphClass())
         ->and($audit->entity_id)->toBe($rate->id)
         ->and($audit->old_values)->toBe([])
-        ->and($audit->new_values)->toEqual(['date' => '2026-10-12', 'value' => '875.6505', 'origin' => 'manual']);
+        ->and($audit->new_values)->toEqual(['date' => '2026-10-12', 'value' => '875.65', 'origin' => 'manual']);
 
     $current = app(CurrentExchangeRate::class)->get();
 
-    expect($current->value->toScale(4)->toString())->toBe('875.6505')
+    expect($current->value->toScale(2)->toString())->toBe('875.65')
         ->and($current->date->toDateString())->toBe('2026-10-12')
         ->and($current->origin)->toBe(ExchangeRateOrigin::Manual);
 });
@@ -118,13 +119,13 @@ it('E-64 records the manual rate of today with its author and audit, as the rate
 it('E-64 takes today in Caracas, not in UTC', function () {
     $this->travelTo(CarbonImmutable::parse('2026-10-12 02:00:00', 'UTC'));
 
-    recordRate('875.6505')->assertRedirect();
+    recordRate('875.65')->assertRedirect();
 
     expect(ExchangeRate::query()->sole()->rate_date->toDateString())->toBe('2026-10-11');
 });
 
 it('E-64 supersedes the API rate of today: the old row stays, marked, and points to the manual one', function () {
-    $api = rateRow('2026-10-12', '875.6505', attributes: ['source_updated_at' => '2026-10-09 04:00:00']);
+    $api = rateRow('2026-10-12', '875.65', attributes: ['source_updated_at' => '2026-10-09 04:00:00']);
 
     recordRate('880.25')->assertRedirect();
 
@@ -134,12 +135,12 @@ it('E-64 supersedes the API rate of today: the old row stays, marked, and points
 
     expect($api->superseded_at)->not->toBeNull()
         ->and($api->superseded_by_id)->toBe($manual->id)
-        ->and($api->value->toScale(4)->toString())->toBe('875.6505')
+        ->and($api->value->toScale(2)->toString())->toBe('875.65')
         ->and($manual->superseded_at)->toBeNull()
         ->and(DB::table('exchange_rates')->where('effective_date', '2026-10-12')->value('id'))->toBe($manual->id)
-        ->and($audit->old_values)->toEqual(['date' => '2026-10-12', 'value' => '875.6505', 'origin' => 'api'])
-        ->and($audit->new_values)->toEqual(['date' => '2026-10-12', 'value' => '880.2500', 'origin' => 'manual'])
-        ->and(app(CurrentExchangeRate::class)->get()->value->toScale(4)->toString())->toBe('880.2500');
+        ->and($audit->old_values)->toEqual(['date' => '2026-10-12', 'value' => '875.65', 'origin' => 'api'])
+        ->and($audit->new_values)->toEqual(['date' => '2026-10-12', 'value' => '880.25', 'origin' => 'manual'])
+        ->and(app(CurrentExchangeRate::class)->get()->value->toScale(2)->toString())->toBe('880.25');
 });
 
 it('E-64 lets a second manual entry of the same day supersede the first one', function () {
@@ -160,7 +161,7 @@ it('E-64 reruns once when the API rate of today appears while the manual one is 
     // The API command inserts today's row between the read and the insert of the manual entry.
     ExchangeRate::creating(function (ExchangeRate $rate) use (&$attempts): void {
         if ($rate->origin === ExchangeRateOrigin::Manual && ++$attempts === 1) {
-            DB::table('exchange_rates')->insert(['rate_date' => '2026-10-12', 'value' => '875.6505', 'origin' => 'api', 'created_at' => now()]);
+            DB::table('exchange_rates')->insert(['rate_date' => '2026-10-12', 'value' => '875.65', 'origin' => 'api', 'created_at' => now()]);
         }
     });
 
@@ -171,7 +172,7 @@ it('E-64 reruns once when the API rate of today appears while the manual one is 
         ->and(rateAuditRows())->toBe(1);
 });
 
-it('E-64 rejects a value of zero, negative, with more than four decimals or not a number, on its field', function (mixed $value) {
+it('E-64 rejects a value of zero, negative, with more than two decimals or not a number, on its field', function (mixed $value) {
     recordRate($value)->assertUnprocessable()->assertJsonValidationErrors(['value']);
 
     expect(ExchangeRate::query()->count())->toBe(0)
@@ -180,30 +181,30 @@ it('E-64 rejects a value of zero, negative, with more than four decimals or not 
     'zero' => ['0'],
     'zero with decimals' => ['0,0000'],
     'negative' => ['-875'],
-    'five decimals' => ['875.65049'],
+    'three decimals' => ['875.655'],
     'text' => ['ochocientos'],
     'empty' => [''],
     'number instead of string' => [875.65],
-    'more than ten integer digits' => ['12345678901'],
+    'more than twelve integer digits' => ['1234567890123'],
 ]);
 
 it('E-64 accepts the largest rate the history can store', function () {
-    recordRate('9999999999.9999')->assertRedirect();
+    recordRate('999999999999.99')->assertRedirect();
 
-    expect(ExchangeRate::query()->sole()->value->toScale(4)->toString())->toBe('9999999999.9999');
+    expect(ExchangeRate::query()->sole()->value->toScale(2)->toString())->toBe('999999999999.99');
 });
 
 it('E-64 answers 403, audited, to a user with pricing.view but without pricing.manage and records nothing', function () {
     $actor = userWithPermissions(PermissionName::PricingView);
 
-    recordRate('875.6505', $actor)->assertForbidden();
+    recordRate('875.65', $actor)->assertForbidden();
 
     expect(ExchangeRate::query()->count())->toBe(0)
         ->and(AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->sole()->actor_id)->toBe($actor->id);
 });
 
 it('E-64 answers 403 to a user holding other permissions only', function () {
-    recordRate('875.6505', userWithPermissions(PermissionName::ProductsView, PermissionName::QuotationsView))->assertForbidden();
+    recordRate('875.65', userWithPermissions(PermissionName::ProductsView, PermissionName::QuotationsView))->assertForbidden();
 
     expect(ExchangeRate::query()->count())->toBe(0);
 });
@@ -238,7 +239,7 @@ it('E-63 saves the promedio as the rate of the Caracas day of the run, with orig
     $rate = ExchangeRate::query()->sole();
 
     expect($rate->rate_date->toDateString())->toBe('2026-10-12')
-        ->and($rate->value->toScale(4)->toString())->toBe('875.6505')
+        ->and($rate->value->toScale(2)->toString())->toBe('875.65')
         ->and($rate->origin)->toBe(ExchangeRateOrigin::Api)
         ->and($rate->source_updated_at->utc()->format('Y-m-d H:i:s'))->toBe('2026-10-09 04:00:00')
         ->and($rate->recorded_by)->toBeNull()
@@ -318,7 +319,7 @@ it('E-64 tries the API three times in a run, waiting 2 s and 10 s, before giving
 
     $this->artisan('exchange-rate:fetch')->assertSuccessful();
 
-    expect(ExchangeRate::query()->sole()->value->toScale(4)->toString())->toBe('875.6505');
+    expect(ExchangeRate::query()->sole()->value->toScale(2)->toString())->toBe('875.65');
     Http::assertSentCount(3);
     Sleep::assertSlept(fn ($duration): bool => (int) $duration->totalMilliseconds === 2000, 1);
     Sleep::assertSlept(fn ($duration): bool => (int) $duration->totalMilliseconds === 10000, 1);
@@ -357,18 +358,18 @@ it('COT-030 reads the API address from the services configuration', function () 
 it('COT-030 uses the most recent effective rate when today has none, with its own date', function () {
     rateRow('2026-10-09', '860.0000');
     rateRow('2026-10-11', '870.0000', attributes: ['superseded_at' => now()]);
-    rateRow('2026-10-10', '865.5000', ExchangeRateOrigin::Manual);
+    rateRow('2026-10-10', '865.50', ExchangeRateOrigin::Manual);
 
     $current = app(CurrentExchangeRate::class)->get();
 
-    expect($current->value->toScale(4)->toString())->toBe('865.5000')
+    expect($current->value->toScale(2)->toString())->toBe('865.50')
         ->and($current->date->toDateString())->toBe('2026-10-10')
         ->and($current->origin)->toBe(ExchangeRateOrigin::Manual);
 });
 
 it('COT-030 prefers the effective rate of today over older ones', function () {
     rateRow('2026-10-11', '870.0000');
-    rateRow('2026-10-12', '875.6505');
+    rateRow('2026-10-12', '875.65');
 
     expect(app(CurrentExchangeRate::class)->get()->date->toDateString())->toBe('2026-10-12');
 });
@@ -380,7 +381,7 @@ it('COT-030 has no rate in force when none is stored', function () {
 it('COT-030 lists the history newest first, superseded rows included, with their author', function () {
     $author = userWithPermissions(PermissionName::PricingView, PermissionName::PricingManage);
     $old = rateRow('2026-10-10', '865.0000');
-    $api = rateRow('2026-10-12', '875.6505', attributes: ['superseded_at' => now()]);
+    $api = rateRow('2026-10-12', '875.65', attributes: ['superseded_at' => now()]);
     $manual = rateRow('2026-10-12', '880.0000', ExchangeRateOrigin::Manual, ['recorded_by' => $author->id]);
     $api->forceFill(['superseded_by_id' => $manual->id])->save();
 

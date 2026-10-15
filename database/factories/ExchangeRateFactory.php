@@ -21,7 +21,7 @@ class ExchangeRateFactory extends Factory
     {
         return [
             'rate_date' => now()->subDays(fake()->unique()->numberBetween(30, 100_000))->toDateString(),
-            'value' => '100.0000',
+            'value' => '100.00',
             'origin' => ExchangeRateOrigin::Api,
         ];
     }

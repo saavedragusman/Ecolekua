@@ -10,12 +10,10 @@ use Brick\Math\RoundingMode;
 /**
  * Reads the `promedio` of the exchange rate API (COT-030) without ever going through a float (DT-01,
  * design Decision 3). The body is decoded only to check its structure; the value comes from the raw JSON
- * number token, parsed with `BigDecimal` and rounded HALF_UP to 4 decimals.
+ * number token, parsed with `BigDecimal` and rounded HALF_UP to 2 decimals (DEC-COT-60).
  */
 final class RateParser
 {
-    public const SCALE = 4;
-
     private const NUMBER_TOKEN = '/"promedio"\s*:\s*(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/';
 
     /**
@@ -55,7 +53,7 @@ final class RateParser
         }
 
         try {
-            $value = BigDecimal::of($token)->toScale(self::SCALE, RoundingMode::HalfUp);
+            $value = BigDecimal::of($token)->toScale(ExchangeRate::SCALE, RoundingMode::HalfUp);
         } catch (MathException) {
             return null;
         }

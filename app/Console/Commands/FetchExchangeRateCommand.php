@@ -21,7 +21,7 @@ class FetchExchangeRateCommand extends Command
 
         $this->info($rate === null
             ? 'No rate was saved: today already has one or the fetch failed (see the log).'
-            : "Rate of {$rate->rate_date->toDateString()} saved: {$rate->value->toScale(4)}.");
+            : "Rate of {$rate->rate_date->toDateString()} saved: {$rate->value}.");
 
         return self::SUCCESS;
     }

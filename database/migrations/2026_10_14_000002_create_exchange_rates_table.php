@@ -10,8 +10,8 @@ return new class extends Migration
     /**
      * Run the migrations.
      *
-     * Exchange rates of spec 004 (COT-030, design Decision 11): Bs per USD, one row per fetch or manual
-     * entry, append-only. A manual entry supersedes the effective rate of its day by setting
+     * Exchange rates of spec 004 (COT-030, design Decision 11): Bs per USD with 2 decimals (DEC-COT-60),
+     * one row per fetch or manual entry, append-only. A manual entry supersedes the effective rate of its day by setting
      * `superseded_at`, which empties the generated `effective_date`; the unique key on that column keeps
      * exactly one effective rate per day while every superseded row stays in the history.
      */
@@ -20,7 +20,7 @@ return new class extends Migration
         Schema::create('exchange_rates', function (Blueprint $table) {
             $table->id();
             $table->date('rate_date');
-            $table->decimal('value', 14, 4);
+            $table->decimal('value', 14, 2);
             $table->string('origin', 10);
             $table->dateTime('source_updated_at')->nullable();
             $table->foreignId('recorded_by')->nullable()->constrained('users')->restrictOnDelete();
