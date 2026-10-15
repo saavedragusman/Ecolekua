@@ -85,6 +85,14 @@ return [
     'calculation_advisor_goods' => ':min piezas de :line o más',
     'calculation_advisor_service' => ':min unidades de :service o más',
     'calculation_advisor_custom_color' => 'color personalizado',
+
+    // Quotations (spec 004, COT-013).
+    'quotation_recipient_required' => 'Elija un cliente o registre los datos del prospecto.',
+    'quotation_recipient_both' => 'La cotización es para un cliente o para un prospecto, no para ambos.',
+    'quotation_customer_inactive' => 'El cliente está inactivo; actívelo o elija otro destinatario.',
+    'quotation_customer_missing' => 'El cliente no existe.',
+    'quotation_include_contact_invalid' => 'Solo se puede incluir al contacto de una empresa que tiene contacto.',
+    'quotation_advisor_ineligible' => 'La asesora debe ser una usuaria activa con cartera de clientes.',
     'advance_percentage_invalid' => 'El porcentaje de anticipo debe estar entre 0 y 100, con a lo sumo 2 decimales.',
     'validity_days_invalid' => 'La vigencia debe ser un número entero de días entre 1 y 365.',
     'exchange_rate_invalid' => 'La tasa debe ser un monto mayor que cero, con a lo sumo 12 enteros y 2 decimales.',

@@ -29,6 +29,7 @@ use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Products\ProductStockMinimumController;
 use App\Http\Controllers\Products\ProductStructureController;
 use App\Http\Controllers\Quotations\CalculationController;
+use App\Http\Controllers\Quotations\QuotationController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
 use App\Http\Controllers\Users\UserController;
@@ -195,6 +196,9 @@ Route::put('/pricing/combinations/{combination}/size-groups', [SizeGroupControll
 // Static segments: they stay declared before any `{quotation}` route.
 Route::post('/quotations/calculate', [CalculationController::class, 'calculate'])->name('quotations.calculate');
 Route::post('/quotations/selection-options', [CalculationController::class, 'selectionOptions'])->name('quotations.selection-options');
+
+// Draft quotations (COT-013). Authorization lives in QuotationPolicy (`quotations.create`).
+Route::post('/quotations', [QuotationController::class, 'store'])->name('quotations.store');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');
