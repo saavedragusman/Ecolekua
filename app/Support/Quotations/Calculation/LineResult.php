@@ -14,7 +14,8 @@ use Brick\Math\BigDecimal;
  * The subtotal is null when the line has an error or no automatic price. A line that requires an advisor
  * shows the tier price as a reference (custom color, E-23) but does not add to the total until a negotiated
  * price exists (COT-012). `paidInFull` marks the stock and combo lines, whose advance is the whole subtotal
- * (COT-010); the pack notice is informative and never changes the line (DEC-COT-08).
+ * (COT-010); the pack notice is informative and never changes the line (DEC-COT-08). The resolved combination of
+ * the line, and of each combo component, is what a saved draft stores as its history anchor (Decision 22).
  */
 final readonly class LineResult
 {
@@ -23,6 +24,7 @@ final readonly class LineResult
      * @param  list<array{id: int, name: string, quantity_per_garment: int}>  $customizations
      * @param  list<array{id: int, name: string}>  $includedCustomizations
      * @param  array<string, string>  $errors  field => message
+     * @param  array<int, int>  $componentCombinationIds  combo component id => resolved combination id
      */
     public function __construct(
         public LineKind $kind,
@@ -40,6 +42,8 @@ final readonly class LineResult
         public array $errors,
         public bool $paidInFull = false,
         public ?PackNotice $packNotice = null,
+        public ?int $combinationId = null,
+        public array $componentCombinationIds = [],
     ) {}
 
     /** Whether the subtotal adds to the quotation total: an automatic price, no error, no advisor pending. */

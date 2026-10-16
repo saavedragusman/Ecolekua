@@ -199,6 +199,8 @@ Route::post('/quotations/selection-options', [CalculationController::class, 'sel
 
 // Draft quotations (COT-013). Authorization lives in QuotationPolicy (`quotations.create`).
 Route::post('/quotations', [QuotationController::class, 'store'])->name('quotations.store');
+Route::get('/quotations/recipients', [QuotationController::class, 'recipients'])->name('quotations.recipients');
+Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->whereNumber('quotation')->name('quotations.update');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

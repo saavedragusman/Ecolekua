@@ -31,6 +31,52 @@ final class QuotationRules
     }
 
     /**
+     * The catalog rows a saved line references must exist, so a stored draft never points nowhere.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function lineReferences(): array
+    {
+        return [
+            'lines.*.id' => ['distinct'],
+            'lines.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
+            'lines.*.combo_id' => ['nullable', 'integer', 'exists:combos,id'],
+            'lines.*.rows.*.size_value_id' => ['nullable', 'integer', 'exists:attribute_values,id'],
+            'lines.*.customizations.*.service_product_id' => ['required', 'integer', 'exists:products,id'],
+        ];
+    }
+
+    /**
+     * Size rows of a product line (COT-014, E-35): at least one; each size once; either rows by size or a single
+     * row without size, never both.
+     */
+    public static function validateSizeRows(Validator $validator): void
+    {
+        $lines = $validator->getData()['lines'] ?? null;
+
+        foreach (is_array($lines) ? $lines : [] as $i => $line) {
+            if (! is_array($line) || ($line['kind'] ?? null) !== 'product' || ! is_array($line['rows'] ?? null)) {
+                continue;
+            }
+
+            $sizes = array_map(fn (mixed $row): mixed => is_array($row) ? ($row['size_value_id'] ?? null) : null, $line['rows']);
+            $withSize = array_values(array_filter($sizes, fn (mixed $size): bool => $size !== null));
+            $withoutSize = count($sizes) - count($withSize);
+
+            $message = match (true) {
+                $sizes === [] => 'quotation_rows_required',
+                $withSize !== [] && $withoutSize > 0, $withoutSize > 1 => 'quotation_rows_mixed',
+                count(array_unique($withSize)) !== count($withSize) => 'quotation_rows_size_repeated',
+                default => null,
+            };
+
+            if ($message !== null) {
+                $validator->errors()->add("lines.{$i}.rows", __("validation.{$message}"));
+            }
+        }
+    }
+
+    /**
      * Exactly one recipient: a customer or a prospect (the database CHECK backs it).
      */
     public static function validateOneRecipient(Validator $validator): void

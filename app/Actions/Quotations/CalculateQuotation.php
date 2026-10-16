@@ -208,6 +208,8 @@ final class CalculateQuotation
             errors: $line->errors,
             paidInFull: $line->paidInFull,
             packNotice: $notice,
+            combinationId: $line->combinationId,
+            componentCombinationIds: $line->componentCombinationIds,
         );
     }
 
@@ -483,6 +485,7 @@ final class CalculateQuotation
             reason: $reason,
             errors: $errors,
             paidInFull: in_array($facts['supply_mode'] ?? null, [SupplyMode::StockWithMinimum, SupplyMode::StockDepletable], true),
+            combinationId: $first?->combinationId,
         );
     }
 
@@ -529,6 +532,10 @@ final class CalculateQuotation
             reason: null,
             errors: $errors,
             paidInFull: true,
+            componentCombinationIds: $combo === null ? [] : array_column(array_map(fn (array $component): array => [
+                'id' => (int) $component['component_id'],
+                'combination' => $component['selection']->combinationId,
+            ], $combo->components), 'combination', 'id'),
         );
     }
 

@@ -1076,6 +1076,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **WHEN** se cambia el destinatario del borrador a ese cliente
 - **THEN** la asesora responsable sigue siendo la misma
 - **AND** un usuario puede cambiarla a mano por un usuario activo con `customers.portfolio`
+- **AND** no se puede dejar el borrador sin asesora: un valor vacío conserva la asesora actual (DEC-COT-65)
 
 ### E-74 — Asesora del cliente no disponible al crear (COT-013, DEC-COT-63)
 
@@ -1125,7 +1126,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-64 el 2026-10-15, durante la implementación.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-65 el 2026-10-15, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1192,6 +1193,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
 | DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
 | DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible", que se muestra también cuando se elige una asesora a mano. Escenario E-74 |
+| DEC-COT-65 | ¿Se puede quitar la asesora de un borrador? | A) No: solo se cambia por una activa con `customers.portfolio`; un valor vacío la deja como está · B) Sí, queda vacía y auditada | **Confirmada**: **A** (2026-10-15). Escenario E-73 |
 | DEC-COT-64 | Asesora responsable que se desactiva o pierde `customers.portfolio` después | Sin reasignación automática (como DEC-CLI-29); se marca "asesora no disponible"; en borrador se cambia editando; en emitida, un usuario con `customers.assign` cambia solo la asesora, auditado (excepción a DEC-COT-18), y el documento emitido pasa a mostrar la asesora nueva | **Confirmada** (2026-10-15). Escenario E-75 |
 
 ### Decisiones técnicas
