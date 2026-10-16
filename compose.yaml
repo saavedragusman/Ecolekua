@@ -24,6 +24,25 @@ services:
         depends_on:
             - mysql
             - mailpit
+    # Runs the scheduled tasks (spec 004: the daily exchange rate fetch calls the real API). Behind a
+    # profile so `sail up -d` leaves it off; start it on purpose with `sail up -d scheduler`.
+    scheduler:
+        profiles:
+            - scheduler
+        image: 'sail-8.5/app'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+            SUPERVISOR_PHP_COMMAND: '/usr/bin/php -d variables_order=EGPCS /var/www/html/artisan schedule:work'
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - sail
+        depends_on:
+            - laravel.test
+            - mysql
     mysql:
         image: 'mysql:8.4'
         command: --skip-log-bin

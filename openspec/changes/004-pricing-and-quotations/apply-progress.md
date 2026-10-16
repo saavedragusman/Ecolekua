@@ -341,3 +341,178 @@ About 358 authored changed lines (excluding `tasks.md`, `apply-progress.md`): 19
 
 ### Remaining
 Phase 6 (PR 10).
+
+## Phase 6a (PR 10, `feat/004-pricing-and-quotations-6a-combo-item-prices`, base PR 9b): price half of tasks 6.1/6.2 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 6.1 (prices) | `tests/Feature/Pricing/ComboItemPriceTest.php` | Feature (HTTP) | new file | 22 failed + 3 errors: route absent (404), `getByName` null; 2 fixture collisions fixed (unique combo/product names) | 26/26 passed, 102 assertions | create/update/delete audit snapshots, component number by combo order (not id), unchanged value `22,5 = 22.50` writes nothing, 6 invalid amounts, foreign component, duplicate, inactive combo, malformed payloads, 404, 403 audited, 403 with product permissions only | none needed |
+| 6.2 (prices) | — | — | — | — | `SyncComboItemPrices`, `SyncComboItemPricesRequest`, `ComboPriceController`, route `PUT /pricing/combos/{combo}/prices`, 2 lang lines | — | — |
+
+Design choices: the audit `component` is the 1-based number of the component in the combo order (`sort_order`, then id), the same "número de componente" the price import uses (spec §COT-028 columns); `product` is the product name (products have no code). The combo row is the lock (Decision 12).
+
+### Gate (PR 10, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed (92 files formatted, no lint errors)
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed (built in 1.37s)
+- `sail artisan test`: passed, 2028 tests (2026 passed, 2 skipped, 10862 assertions)
+
+### Size
+522 authored changed lines (excluding `tasks.md`, `apply-progress.md`): 239 production in 5 files, 283 tests.
+
+### Suggested commit
+`feat(004): registrar precios de ítems de combo [COT-005, DEC-COT-06]`
+
+Committed as `e7df039`.
+
+## Phase 6b (PR 11, `feat/004-pricing-and-quotations-6b-combo-component-identity`, base PR 10): tasks 6.1 to 6.4 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 6.1 (DEC-COT-44) | `tests/Feature/Pricing/ComboItemPriceTest.php`, `tests/Feature/Products/ComboLifecycleTest.php` | Feature (HTTP) | 003 products suite green before | 11 failed: prices lost on reorder/quantity, id-less fallback, ids of the same product; 302 instead of 422 for foreign/unknown/non-integer id and id on create; `initial.components.0.id` absent; component row recreated (117 vs 116) | 584 passed + 1 skipped (pre-existing) across `Feature/Products` and the file | reorder + quantity, replaced product, removed + new component, id-less k-th pairing, two components of one product by id, foreign/unknown id, id on create, non-integer id, edit form ids | `matches()` kept as the early exit, ignoring ids (6.3) |
+| 6.2 (DEC-COT-44) | — | — | — | — | `ComboComponents::replace` keeps identity and returns deleted prices; `ComboRules` `components.*.id` + own-combo check; `UpdateCombo` passes own ids and adds `old_values.deleted_item_prices`; `SyncComboItemPrices::snapshot` public (same audit shape); `ProductPresenter::comboForm` sends `id`; `ComboForm.vue` sends it back (null for new rows) | — | — |
+
+Deviations from the task text: the 003 "component ids kept" case lives in `ComboLifecycleTest.php` (where the combo edit tests are) instead of `ComboTest.php` (creation and list). The 003 combo form now sends `components.*.id` (Decision 12 requires it; task 6.2 did not list the presenter and Vue files). `deleted_item_prices` uses each component's number and quantity before the edit and the combo code after it.
+
+### Gate (PR 11, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed after `pnpm check:fix` formatted `ComboForm.vue`
+- `sail pnpm types:check`: passed (vue-tsc, no output)
+- `sail pnpm build`: passed
+- `sail artisan test`: passed, 2039 tests (2037 passed, 2 skipped, 10925 assertions)
+
+### Size
+408 authored changed lines (374 additions, 34 deletions) excluding `tasks.md`, `apply-progress.md`: 147 production (PHP and lang), 14 frontend, 247 tests.
+
+### Suggested commit
+`feat(004): conservar los componentes y sus precios al editar un combo [COT-005, DEC-COT-44]`
+
+Committed as `32aed64`.
+
+## Phase 7 (PR 12, `feat/004-pricing-and-quotations-7-commercial-parameters`, base PR 11): tasks 7.1 to 7.3 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 7.1 | `tests/Feature/Pricing/CommercialParametersTest.php` | Feature (HTTP) | new file | 22 failed + 3 errors: route absent (404), `CommercialParameters::current()` undefined, `getByName` null | 25/25 passed (after comparing the audit JSON with `toEqual`: MySQL reorders JSON keys) | initial 50 % / 7; E-11 40 % / 10 days; one changed field audited alone; bounds 0, 100, 1, 365 and `37,5`; no-op writes nothing; 6 invalid percentages, 5 invalid validities, both fields together, missing fields, percentage as number; 403 audited and with product permissions only | — |
+| 7.2 | — | — | — | — | `UpdateCommercialParameters`, `UpdateCommercialParametersRequest`, `CommercialParametersController`, route `PUT /pricing/settings/parameters`, `CommercialParameters::current()` and `ROW_ID`, 2 lang lines | — | — |
+
+Design choices: the request checks only the shape (percentage as a string, validity an integer); the ranges live in the Action so `120` and `0` are reported together (E-11 "AND"). The audit keeps the percentage as a canonical string and the validity as an integer.
+
+### Gate (PR 12, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors (after removing a redundant `=== null` check phpstan flagged)
+- `sail pnpm check`: passed
+- `sail pnpm types:check`: passed
+- `sail pnpm build`: passed
+- `sail artisan test`: passed, 2064 tests (2062 passed, 2 skipped, 11039 assertions); the phpstan fix came after it, and the focused file was rerun green (25/25)
+
+### Size
+338 authored changed lines (all additions) excluding `tasks.md`, `apply-progress.md`: 171 production, 167 tests. The ~700 forecast did not materialize.
+
+### Suggested commit
+`feat(004): editar los parámetros comerciales [COT-006, E-11]`
+
+Committed as `1d31d13`.
+
+## Phase 8a (PR 13, `feat/004-pricing-and-quotations-8a-exchange-rate-manual`, base PR 12): manual half of 8.4/8.5 done; gate green, commit pending
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 8.4 (manual) | `tests/Feature/Pricing/ExchangeRateTest.php`, `tests/Feature/Pricing/PricingPolicyTest.php` (adds `ExchangeRate`) | Feature (HTTP + Action + schema) | policy test green before | 27 errors (classes absent) + 1 failure (no policy for `ExchangeRate`) | 31/31 passed | schema: unique effective date, superseded rows coexist, CHECK > 0, 4 exact decimals; E-64 manual with author/audit/in force, Caracas date vs UTC, supersedes the API row (write order and `superseded_by_id`), second manual supersedes the first, race rerun once, 7 invalid values, 403 audited and with other permissions; current rate: today's, else latest effective with its date, null when none; history newest first with superseded rows and author | — |
+| 8.5 (manual) | — | — | — | — | migration `2026_10_14_000002_create_exchange_rates_table.php` (generated `effective_date` unique, CHECK), `ExchangeRate` (`scopeHistory`, `isEffective`), `ExchangeRateFactory`, `RecordManualExchangeRate`, `CurrentExchangeRate`, `RateSnapshot`, `OperatingTime::today()`, request, controller, route `POST /pricing/exchange-rates`, policy registration, 1 lang line | — | — |
+
+Deviations and notes:
+- `RateSnapshot` (planned for 8.3) and `OperatingTime::today()` are created here because `CurrentExchangeRate` and the manual entry need them.
+- `scopeHistory` eager-loads `recordedBy:id,first_name,last_name`: users have no `name` column (the design said `id,name`); the presenter will use `fullName()`.
+- `CurrentExchangeRate` ignores effective rows dated after today (defensive; only today can be written).
+- Race test limitation: the API insert is simulated inside the same connection (an `ExchangeRate::creating` hook), so the rollback also removes it; the test proves the single rerun and that the manual rate ends effective, not that the rerun supersedes a committed API row. A true two-connection race is not reproducible inside the test transaction.
+- The local DB was not migrated or rolled back (the testing DB runs the migration); left for the user.
+
+### Gate (PR 13, 2026-10-14)
+- `sail pint --test`: passed (pint fixed import order in `AppServiceProvider`)
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed
+- `sail pnpm types:check`: passed
+- `sail pnpm build`: passed
+- `sail artisan test`: passed, 2088 tests (2086 passed, 2 skipped, 11149 assertions)
+
+### Size
+636 authored changed lines (632 additions, 4 deletions) excluding `tasks.md`, `apply-progress.md`.
+
+### Suggested commit
+`feat(004): registrar la tasa de cambio manual y consultar la vigente [COT-030, E-64]`
+
+Committed as `b1065fe`.
+
+## Phase 8b (PR 14, `feat/004-pricing-and-quotations-8b-exchange-rate-fetch`, base PR 13): 8.1-8.5, 8.7, 8.8 done; 8.6 partial; gate green, commit pending
+
+### 8.1 outcome
+`vendor/laravel/sail/runtimes/8.5/supervisord.conf` runs `command=%(ENV_SUPERVISOR_PHP_COMMAND)s` and the Dockerfile only sets it as a default `ENV`, so a service in `compose.yaml` overrides it with its own `environment` entry. Confirmed by `sail up -d` starting `scheduler` with `schedule:work`.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED (observed) | GREEN | Triangulate | Refactor |
+|------|-----------|-------|-----------|----------------|-------|-------------|----------|
+| 8.2/8.3 | `tests/Unit/Pricing/RateParserTest.php` | Unit | new file | classes absent (20 errors with the fetch tests) | 22/22 | E-63 value, HALF_UP from the raw token beyond float precision, integer/short/exponent padding, 11 null cases, nested `promedio` ignored | the first version picked the token with `(float)` comparisons; `MoneyHasNoFloatTest` failed, replaced by a depth scan of the raw body |
+| 8.4/8.5 (fetch) | `tests/Feature/Pricing/ExchangeRateTest.php` | Feature (command + Action) | 8a part green | 14 "command does not exist", config null, schedule empty | 38/38 for the file | E-63 Caracas date (also when UTC is the next day), source date apart in UTC, second run sends nothing, any-origin rate of today blocks the call, missing/unreadable source date, 6 failure paths (log + event + nothing saved + previous day in force), 3 attempts with 2 s / 10 s (`Sleep::fake`), manual rate written during the call wins silently, schedule 07:00/07:30/08:00/09:00 `America/Caracas` without overlapping, config URL | — |
+
+Production: `RateParser`, `FetchExchangeRate`, `FetchExchangeRateCommand` (`exchange-rate:fetch`, always exits 0 so later runs still try), `ExchangeRateFetchFailed` (`ShouldDispatchAfterCommit`, reason only), the four schedule entries in `routes/console.php`, `config/services.php` `exchange_rate.url`, `Http::preventStrayRequests()` in `tests/TestCase.php` for the whole suite. Design detail: Laravel takes the backoff list as `retry([2000, 10000])` (3 attempts), not `retry(3, [2000, 10000])` as the design wrote.
+
+### 8.6 (infra), partial
+- `compose.yaml`: `scheduler` service (image `sail-8.5/app`, `SUPERVISOR_PHP_COMMAND` = `schedule:work`, same volume and network, depends on `laravel.test` and `mysql`). `sail up -d` started it; `sail artisan schedule:list` lists `exchange-rate:fetch` at 11:00, 11:30, 12:00 and 13:00 UTC (07:00-09:00 Caracas). The container was then **stopped** (`sail stop scheduler`) so the live API is not called without the user's say-so.
+- `.env.example` (`EXCHANGE_RATE_URL`): **not done**, the file is blocked by the permission settings; the config default already holds the URL.
+- `AGENTS.md` §2 line: **not done**, the file has uncommitted user edits; pending the user's decision.
+
+### Gate (PR 14, 2026-10-14)
+- `sail pint --test`: passed
+- `sail composer types:check`: passed, 0 errors
+- `sail pnpm check`: passed
+- `sail pnpm types:check`: passed
+- `sail pnpm build`: passed
+- `sail artisan test`: first run 1 failure (`MoneyHasNoFloatTest`: `(float)` in `RateParser`); after the fix passed, 2124 tests (2122 passed, 2 skipped, 11235 assertions)
+
+### Size
+466 authored changed lines (461 additions, 5 deletions) excluding `tasks.md`, `apply-progress.md`.
+
+### Suggested commit
+`feat(004): consultar la tasa de cambio diaria desde la API y programarla [COT-030, E-63, E-64]`
+
+Committed as `18ba13b`.
+
+## Independent verification of 6b, 8a, 8b (2026-10-14) and fix `fix/004-exchange-rate-hardening` (base PR 14)
+
+Verifier verdict on `32aed64`, `b1065fe`, `18ba13b`: no blockers; 1107 focused tests green (1106 passed, 1 skipped). User confirmed the Decision 12 rule for ids swapped between products (both components are new, both prices drop). Fixed in this branch (advisories 4, 6, 7, 8):
+- `ExchangeRate::MAX_VALUE` (`9999999999.9999`, the DECIMAL(14,4) limit): a larger manual rate → 422 on `value`; a larger API `promedio` → `invalid_rate` (logged, event) instead of an uncaught `QueryException`.
+- `RateParser`: a `"promedio"` inside another key or value is ignored, and a repeated top-level key takes the last occurrence, as `json_decode` does.
+- `compose.yaml`: `scheduler` behind the `scheduler` profile, so `sail up -d` leaves it off (verified); start it with `sail up -d scheduler`.
+
+RED: 6 failures + 1 error (trap key, repeated key, 3 over-limit cases, manual 11 digits, API value too large). GREEN: 86/86 in `RateParserTest`, `ExchangeRateTest` and `tests/Feature/Architecture`. Gate: pint, phpstan, `pnpm check`, `types:check`, build passed; `sail artisan test` 2133 tests (2131 passed, 2 skipped, 11253 assertions).
+
+Suggested commit: `fix(004): acotar la tasa de cambio y endurecer la lectura de la API [COT-030, DT-01]`
+
+Committed as `190a9f9`.
+
+## DEC-COT-60 (2026-10-14): exchange rate with 2 decimals (same branch, commit pending)
+
+User: "la tasa no debe tener mas de 2 decimales"; chose option A (2 decimals everywhere: the API `promedio` rounded HALF_UP to 2, manual entry rejects more than 2). Registered first in `docs/specs/004-pricing-and-quotations.md` (COT-030, Escenario base, E-36, E-63, E-64, §9 DEC-COT-60, DT-01) and mirrored in the delta spec, `design.md` (precision, Decision 11, schema, limits, presenter, E-36 values) and `tasks.md` (8.2 note, 9.3, 13.1, 22.1). E-36 Bs values become 315.234,00 / 157.617,00 (36,00 × 875,65 = 31.523,40 per unit).
+
+- Migration `2026_10_14_000002` edited in place to `DECIMAL(14,2)`: it is **Pending** on the local DB (`migrate:status`) and the branch is not merged, so no applied environment changes.
+- `ExchangeRate::SCALE = 2` and `MAX_VALUE = 999999999999.99` shared by `RateParser` and `RecordManualExchangeRate`; cast `AsBigDecimal:2`; factory `100.00`; command output without `toScale(4)`; lang message (12 integers, 2 decimals).
+- RED: 17 failures + 3 errors in `RateParserTest`/`ExchangeRateTest` (4-decimal values, raw column `875.6500`, `RoundingNecessary` on `toScale(2)`). GREEN: 69/69. `MoneyTest` labels "rate ... four decimals" renamed to "four decimals" (Money stays generic).
+- Gate: pint, phpstan, `pnpm check`, build passed; `sail artisan test` 2133 tests (2131 passed, 2 skipped, 11254 assertions).
+
+Suggested commit: `fix(004): guardar la tasa de cambio con 2 decimales [COT-030, DEC-COT-60]`
+
+### Remaining
+8.6 leftovers (`.env.example`, `AGENTS.md` line); then Phase 9 (PR 15): pure calculation classes.

@@ -31,7 +31,18 @@ class CommercialParameters extends Model
 
     protected $table = 'commercial_parameters';
 
+    /** The id of the single row, inserted by its migration. */
+    public const ROW_ID = 1;
+
     public $incrementing = false;
+
+    /**
+     * The parameters in force.
+     */
+    public static function current(): self
+    {
+        return self::query()->findOrFail(self::ROW_ID);
+    }
 
     /**
      * @return array<string, string>

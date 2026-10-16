@@ -86,11 +86,11 @@ Authorization tests hit the backend through HTTP. **The prices and rates in the 
 - Pañal `11` (stock con mínimo): Detal 50,00 · Especial 20,00. Absorbente `16` (stock con mínimo): Detal 40,00 · Especial 15,00. "Pack 6 absorbentes": 1 componente absorbente × 6, a 15,00 por ítem.
 - Bordado pequeño `157` (servicio, esquema Uniformes): 3,00 / 2,00 / 1,50.
 - Pañal infantil `001G` (stock agotable): precio fijo 3,50.
-- Anticipo: 50 %. Vigencia: 7 días. Tasa vigente: 875,6505 Bs por USD.
+- Anticipo: 50 %. Vigencia: 7 días. Tasa vigente: 875,65 Bs por USD.
 
 ## Decisions carried by this capability
 
-All **Confirmada** by the user on 2026-10-12, except DEC-COT-44..DEC-COT-59 (2026-10-13). For each decision the table keeps the topic and the confirmed resolution as written in the source; the discarded alternatives are omitted, except for DEC-COT-44..DEC-COT-56, which are transcribed in full.
+All **Confirmada** by the user on 2026-10-12, except DEC-COT-44..DEC-COT-59 (2026-10-13) and DEC-COT-60 (2026-10-14). For each decision the table keeps the topic and the confirmed resolution as written in the source; the discarded alternatives are omitted, except for DEC-COT-44..DEC-COT-56, which are transcribed in full.
 
 | ID | Decision | Confirmed resolution |
 |---|---|---|
@@ -153,12 +153,13 @@ All **Confirmada** by the user on 2026-10-12, except DEC-COT-44..DEC-COT-59 (202
 | DEC-COT-57 | Convertir en negociación un tramo con precios | Se trata como quitar el tramo (DEC-COT-23) — **Confirmada** (2026-10-13) |
 | DEC-COT-58 | Asignar o mover tallas entre grupos con precios | Mover una talla de un grupo a otro es reorganizar (DEC-COT-53: confirmación y borrado de los precios de los grupos afectados); solo asignar una talla que no estaba en ningún grupo conserva los precios del grupo — **Confirmada** (2026-10-13) |
 | DEC-COT-59 | "Más de un precio unitario" en DEC-COT-54 | Se cuentan valores distintos: dos grupos con el mismo precio son un único precio — **Confirmada** (2026-10-13) |
+| DEC-COT-60 | Decimales de la tasa de cambio | 2 decimales en todo: la API se redondea HALF_UP a 2 y la carga manual rechaza más de 2 — **Confirmada** (2026-10-14). Replaces the 4 decimals of COT-030 and DT-01 |
 
 ## Technical decisions carried by this capability
 
 Status in the source: **Propuesta**, confirmed in `design.md`.
 
-- DT-01: amounts in MySQL `DECIMAL` and exact arithmetic in PHP (e.g., `brick/math`, which Laravel already installs), never `float`. Rates with 4 decimals. Approved dependency (2026-10-13): `brick/math` is declared as a direct dependency in `composer.json`, with the version that Laravel already installs (AGENTS §2).
+- DT-01: amounts in MySQL `DECIMAL` and exact arithmetic in PHP (e.g., `brick/math`, which Laravel already installs), never `float`. Rates with 2 decimals (DEC-COT-60). Approved dependency (2026-10-13): `brick/math` is declared as a direct dependency in `composer.json`, with the version that Laravel already installs (AGENTS §2).
 - DT-02: COT-009 is implemented as a reusable Action (`app/Actions/Quotations/CalculateQuotation`) that uses `ResolveSelection` from `003` and does not write to the database.
 - DT-03: issuing and the sequential number are assigned inside a transaction with locking, so that two simultaneous operations do not repeat a number.
 - DT-04: reading and validating the price CSV is a single Action (`app/Actions/Pricing/ValidatePriceImport`) used by the initial load command (COT-007) and by the ERP import (COT-027). Reading with native PHP functions, no new dependencies. The conflict check of COT-028 compares the previous values stored in the import with the current ones, inside the transaction and with locking.
@@ -816,10 +817,10 @@ Steps 1 to 5 happen in one transaction. From that moment on, no change in prices
 
 Source citation: (COT-016, COT-023)
 
-- GIVEN a complete draft with 10 camisas `110` (36,00; total 360,00; advance 180,00) and the current rate 875,6505
+- GIVEN a complete draft with 10 camisas `110` (36,00; total 360,00; advance 180,00) and the current rate 875,65
 - WHEN it is issued and afterwards the price of `110` in 7–12 changes to 38,00 and a new rate is saved
 - THEN the issued quotation still shows 36,00, total 360,00 and advance 180,00
-- AND it keeps the rate 875,6505 with its date, total 315.234,18 Bs and advance 157.617,09 Bs
+- AND it keeps the rate 875,65 with its date, total 315.234,00 Bs and advance 157.617,00 Bs
 - AND it expires 7 days after the issue, and the issue is audited
 
 #### Scenario: E-37 — Emitir con pendientes
@@ -932,8 +933,8 @@ Source citation: (COT-021, DEC-COT-20)
 
 Prices and quotations are in USD (DEC-COT-01). The system SHALL store the **official rate of the day** (Bs per USD) as a reference for quotations.
 
-- **Automatic retrieval** (DEC-COT-43): a scheduled task queries `https://ve.dolarapi.com/v1/dolares/oficial` **every day at 7:00 a. m., Caracas time** (`America/Caracas`). The `promedio` field is saved as **the rate of that day**, with the date of the query in Caracas; `fechaActualizacion` is saved only as a source datum and does not change the date of the rate. If the rate of that day already exists, it is not duplicated. The retries after a failure are defined in `design.md`.
-- **Fallback** (DEC-COT-38): if the API does not respond, responds with an error or does not bring a positive value, the task saves nothing and the failure is recorded. The system uses the **last saved rate** and always shows it with its date. A user with `pricing.manage` MAY manually register the rate of the day (value > 0, up to 4 decimals); it has origin "manual", its author and audit. If the API later brings the rate of that same day, it does not replace the manual one.
+- **Automatic retrieval** (DEC-COT-43): a scheduled task queries `https://ve.dolarapi.com/v1/dolares/oficial` **every day at 7:00 a. m., Caracas time** (`America/Caracas`). The `promedio` field, rounded to 2 decimals (DEC-COT-60), is saved as **the rate of that day**, with the date of the query in Caracas; `fechaActualizacion` is saved only as a source datum and does not change the date of the rate. If the rate of that day already exists, it is not duplicated. The retries after a failure are defined in `design.md`.
+- **Fallback** (DEC-COT-38): if the API does not respond, responds with an error or does not bring a positive value, the task saves nothing and the failure is recorded. The system uses the **last saved rate** and always shows it with its date. A user with `pricing.manage` MAY manually register the rate of the day (value > 0, up to 2 decimals, DEC-COT-60); it has origin "manual", its author and audit. If the API later brings the rate of that same day, it does not replace the manual one.
 - The current rate is that of the current day or, if it does not exist, the most recent one. The prices screen and the quotation editor show it with its date and origin.
 - The absence of a rate MUST NOT ever prevent calculating or issuing a quotation (COT-016).
 - The integration is decoupled (constitution §15): the API is queried only from the scheduled task, never during calculation or issue.
@@ -945,7 +946,7 @@ Source citation: (COT-030)
 
 - GIVEN the API responds `{"promedio": 875.6505, "fechaActualizacion": "2026-10-09T00:00:00-04:00"}`
 - WHEN the scheduled task runs on 2026-10-12 at 7:00 a. m. Caracas time
-- THEN the rate 875,6505 is saved as the rate of 2026-10-12, with origin "api" and the source date (2026-10-09) as a separate datum
+- THEN the rate 875,65 (the `promedio` rounded to 2 decimals, DEC-COT-60) is saved as the rate of 2026-10-12, with origin "api" and the source date (2026-10-09) as a separate datum
 - AND running the task again that day does not create another rate
 - AND the task is scheduled at 7:00 in the `America/Caracas` zone, not in UTC
 
@@ -957,7 +958,7 @@ Source citation: (COT-030, COT-023)
 - WHEN the task is run and then a quotation is calculated
 - THEN no rate is saved, the failure is recorded and the calculation uses the previous day's rate showing its date
 - AND a user with `pricing.manage` manually registers the rate of the day; it has origin "manual", its author and audit, and becomes the current one
-- AND a user without `pricing.manage` receives 403 when attempting it, and a value of 0 or negative is rejected
+- AND a user without `pricing.manage` receives 403 when attempting it, and a value of 0, negative or with more than 2 decimals is rejected
 
 ### Requirement: COT-031 — Envío por correo
 

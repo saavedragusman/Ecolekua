@@ -21,6 +21,31 @@ final class CatalogSnapshotLoader
 {
     private const ACTIVE = CatalogStatus::Active->value;
 
+    private bool $remembers = false;
+
+    /** @var array<int, ?ProductSnapshot> read products by id; null for an id that does not exist */
+    private array $products = [];
+
+    /** @var array<int, ?ComboSnapshot> */
+    private array $combos = [];
+
+    /** @var list<ValueSnapshot>|null */
+    private ?array $palette = null;
+
+    /**
+     * A fresh loader that remembers what it reads: each product and combo is read once and the palette
+     * once, and a later request reads only the ids it has not seen (design Decision 16, D1). For callers
+     * that resolve many selections in one operation, such as a quotation calculation. This instance is
+     * unchanged and keeps reading on every call.
+     */
+    public function memoized(): self
+    {
+        $loader = new self;
+        $loader->remembers = true;
+
+        return $loader;
+    }
+
     /**
      * Snapshot of the product, or null when it does not exist. Only its active combinations are
      * loaded; availability of the product, its category, its attributes and its values travels as
@@ -43,6 +68,37 @@ final class CatalogSnapshotLoader
     {
         $productIds = array_values(array_unique($productIds));
 
+        if (! $this->remembers) {
+            return $this->loadProducts($productIds);
+        }
+
+        $unseen = array_values(array_filter($productIds, fn (int $id): bool => ! array_key_exists($id, $this->products)));
+
+        if ($unseen !== []) {
+            $loaded = $this->loadProducts($unseen);
+
+            foreach ($unseen as $id) {
+                $this->products[$id] = $loaded[$id] ?? null;
+            }
+        }
+
+        $snapshots = [];
+
+        foreach ($productIds as $id) {
+            if ($this->products[$id] !== null) {
+                $snapshots[$id] = $this->products[$id];
+            }
+        }
+
+        return $snapshots;
+    }
+
+    /**
+     * @param  list<int>  $productIds  distinct
+     * @return array<int, ProductSnapshot>
+     */
+    private function loadProducts(array $productIds): array
+    {
         if ($productIds === []) {
             return [];
         }
@@ -120,6 +176,19 @@ final class CatalogSnapshotLoader
      */
     public function forCombo(int $comboId): ?ComboSnapshot
     {
+        if (! $this->remembers) {
+            return $this->loadCombo($comboId);
+        }
+
+        if (! array_key_exists($comboId, $this->combos)) {
+            $this->combos[$comboId] = $this->loadCombo($comboId);
+        }
+
+        return $this->combos[$comboId];
+    }
+
+    private function loadCombo(int $comboId): ?ComboSnapshot
+    {
         $rows = DB::table('combos')
             ->join('catalog_codes', 'catalog_codes.combo_id', '=', 'combos.id')
             ->leftJoin('combo_components', 'combo_components.combo_id', '=', 'combos.id')
@@ -172,6 +241,18 @@ final class CatalogSnapshotLoader
      * @return list<ValueSnapshot>
      */
     public function palette(): array
+    {
+        if (! $this->remembers) {
+            return $this->loadPalette();
+        }
+
+        return $this->palette ??= $this->loadPalette();
+    }
+
+    /**
+     * @return list<ValueSnapshot>
+     */
+    private function loadPalette(): array
     {
         $rows = DB::table('attribute_values')
             ->join('catalog_attributes', 'catalog_attributes.id', '=', 'attribute_values.catalog_attribute_id')

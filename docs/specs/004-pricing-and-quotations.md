@@ -271,8 +271,8 @@ El equipo técnico carga una única vez los precios de la lista actual mediante 
 
 Los precios y las cotizaciones están en USD (DEC-COT-01). El sistema guarda la **tasa oficial del día** (Bs por USD) como referencia para las cotizaciones.
 
-- **Obtención automática** (DEC-COT-43): una tarea programada consulta `https://ve.dolarapi.com/v1/dolares/oficial` **todos los días a las 7:00 a. m., hora de Caracas** (`America/Caracas`). El campo `promedio` se guarda como **la tasa de ese día**, con la fecha de la consulta en Caracas; `fechaActualizacion` se guarda solo como dato de la fuente y no cambia la fecha de la tasa. Si la tasa de ese día ya existe, no se duplica. Los reintentos tras un fallo se definen en `design.md`.
-- **Respaldo** (DEC-COT-38): si la API no responde, responde con error o no trae un valor positivo, la tarea no guarda nada y queda registrado el fallo. El sistema usa la **última tasa guardada** y la muestra siempre con su fecha. Un usuario con `pricing.manage` puede registrar manualmente la tasa del día (valor > 0, hasta 4 decimales); queda con origen "manual", su autor y auditoría. Si la API trae después la tasa de ese mismo día, no reemplaza la manual.
+- **Obtención automática** (DEC-COT-43): una tarea programada consulta `https://ve.dolarapi.com/v1/dolares/oficial` **todos los días a las 7:00 a. m., hora de Caracas** (`America/Caracas`). El campo `promedio`, redondeado a 2 decimales (DEC-COT-60), se guarda como **la tasa de ese día**, con la fecha de la consulta en Caracas; `fechaActualizacion` se guarda solo como dato de la fuente y no cambia la fecha de la tasa. Si la tasa de ese día ya existe, no se duplica. Los reintentos tras un fallo se definen en `design.md`.
+- **Respaldo** (DEC-COT-38): si la API no responde, responde con error o no trae un valor positivo, la tarea no guarda nada y queda registrado el fallo. El sistema usa la **última tasa guardada** y la muestra siempre con su fecha. Un usuario con `pricing.manage` puede registrar manualmente la tasa del día (valor > 0, hasta 2 decimales, DEC-COT-60); queda con origen "manual", su autor y auditoría. Si la API trae después la tasa de ese mismo día, no reemplaza la manual.
 - La tasa vigente es la del día en curso o, si no existe, la más reciente. La pantalla de precios y el editor de cotizaciones la muestran con su fecha y origen.
 - La falta de tasa **nunca** impide calcular ni emitir una cotización (COT-016).
 - La integración está desacoplada (constitución §15): la API se consulta solo desde la tarea programada, nunca durante el cálculo ni la emisión.
@@ -286,6 +286,7 @@ El tramo se determina por el **total de piezas de cada línea de negocio** en la
 
 - Cuentan las cantidades de las líneas de **productos que no son servicios** con esquema **por tramos**, sumadas por línea de negocio (uniformes por un lado, pañales por otro), aunque sean productos distintos y usen esquemas distintos.
 - No cuentan las líneas de productos con esquema de precio fijo.
+- No cuentan las líneas de productos sin esquema o con un esquema inactivo, que no se pueden cotizar (COT-025, DEC-COT-62).
 - No cuentan las personalizaciones añadidas a una prenda (DEC-COT-13).
 - No cuentan las unidades de los combos (DEC-COT-07).
 - **Servicios vendidos solos** (DEC-COT-14): no suman a su línea de negocio. El tramo de un servicio se elige con la cantidad total de **ese mismo servicio** en la cotización (p. ej., 20 bordados pequeños `157` → tramo 13–49 de su esquema).
@@ -309,7 +310,7 @@ El backend ofrece una única operación, **sin efectos**, que recibe una lista d
 8. Subtotal de la línea = Σ (precio unitario × cantidad de cada fila). Total = Σ subtotales de las líneas con precio.
 9. Anticipo requerido según COT-010, redondeado a 2 decimales.
 10. Equivalente en Bs del total y del anticipo con la tasa vigente (COT-030), redondeado a 2 decimales. Si no hay ninguna tasa guardada, se informa "sin tasa" y no se calcula.
-11. **Aviso de packs** (DEC-COT-08): para cada línea de producto, si existe un combo activo de un solo componente (pack) cuyo componente admite la combinación y la selección de la línea (DEC-PRD-42), la cantidad de la línea alcanza al menos la cantidad del pack y el precio por ítem del pack es menor que el precio unitario aplicado a la línea, el cálculo devuelve un **aviso informativo** con el pack, cuántos packs caben y el ahorro estimado. Si aplican varios packs, se devuelve un solo aviso: el del pack con mayor ahorro estimado y, si empatan, el de más unidades (DEC-COT-47). Una línea con más de un precio unitario (grupos de talla) no tiene aviso de packs (DEC-COT-54); se cuentan los valores distintos, así que dos grupos con el mismo precio cuentan como uno (DEC-COT-59). La línea no cambia; la asesora decide si la reemplaza.
+11. **Aviso de packs** (DEC-COT-08): para cada línea de producto, si existe un combo activo de un solo componente (pack) cuyo componente admite la combinación y la selección de la línea (DEC-PRD-42), la cantidad de la línea alcanza al menos la cantidad del pack y el precio por ítem del pack es menor que el precio unitario aplicado a la línea, el cálculo devuelve un **aviso informativo** con el pack, cuántos packs caben y el ahorro estimado. Si aplican varios packs, se devuelve un solo aviso: el del pack con mayor ahorro estimado y, si empatan, el de más unidades (DEC-COT-47); si también empatan en unidades, el de código de combo menor en orden alfabético (DEC-COT-61). Una línea con más de un precio unitario (grupos de talla) no tiene aviso de packs (DEC-COT-54); se cuentan los valores distintos, así que dos grupos con el mismo precio cuentan como uno (DEC-COT-59). La línea no cambia; la asesora decide si la reemplaza.
 
 **Salida**:
 
@@ -345,7 +346,7 @@ El anticipo requerido depende del modo de abastecimiento del producto y de si la
 
 Una línea requiere asesora cuando cae en un tramo de negociación (50 piezas de uniformes o más en la configuración inicial) o tiene color personalizado (business rules §2.2, §26.1). Los combos nunca admiten color personalizado (DEC-PRD-87).
 
-- **Tramo de negociación**: la línea no tiene precio automático. Un usuario con `quotations.negotiate` registra un **precio unitario negociado** para la línea (y para cada grupo de talla si la combinación los tiene).
+- **Tramo de negociación**: la línea no tiene precio automático. Un usuario con `quotations.negotiate` registra un **precio unitario negociado** para la línea (y para cada grupo de talla que usan sus filas, si la combinación tiene grupos; DEC-COT-66).
 - **Color personalizado**: la línea muestra el precio del tramo como referencia. Un usuario con `quotations.negotiate` confirma ese precio o registra uno negociado, porque la asesora acuerda tela, precio y entrega con el cliente (§26.1).
 - Las líneas negociadas tienen anticipo acordado (COT-010).
 - Una cotización con alguna línea que requiere asesora sin precio negociado o confirmado, o sin anticipo acordado, no se puede emitir.
@@ -367,7 +368,8 @@ Un usuario con `quotations.create` crea una cotización en estado **borrador** p
 
 Además:
 
-- La asesora responsable es, por defecto, la asesora asignada al cliente; si no hay cliente o no tiene asesora, quien crea la cotización si tiene `customers.portfolio`; si no, queda vacía. Se puede cambiar por un usuario activo con `customers.portfolio`.
+- La asesora responsable es, por defecto, la asesora asignada al cliente, solo si está activa y tiene `customers.portfolio`; si no hay cliente, no tiene asesora o su asesora no está disponible, quien crea la cotización si tiene `customers.portfolio`; si no, queda vacía. Cuando la asesora del cliente no está disponible, el sistema muestra el aviso "asesora del cliente no disponible" (DEC-COT-63). Se puede cambiar por un usuario activo con `customers.portfolio`.
+- Si la asesora responsable se desactiva o pierde `customers.portfolio` después, no se reasigna automáticamente (como DEC-CLI-29): la cotización se marca "asesora no disponible". En un borrador se cambia editándolo; en una cotización emitida, un usuario con `customers.assign` puede cambiar solo la asesora, con auditoría, como única excepción a DEC-COT-18 (DEC-COT-64).
 - El origen es **asesora** para las cotizaciones creadas en el ERP. `005` crea las de origen **web**.
 - El número se asigna al crear (DEC-COT-21). Se guarda como entero y se muestra con prefijo y seis cifras, p. ej. `COT-000123`. Un borrador descartado no libera su número, por lo que la numeración puede tener huecos (DEC-COT-45).
 - El editor usa PRD-019 para mostrar las opciones de cada paso y COT-009 para recalcular en cada cambio. El borrador se guarda aunque tenga errores, para continuarlo después.
@@ -570,7 +572,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - Pañal `11` (stock con mínimo): Detal 50,00 · Especial 20,00. Absorbente `16` (stock con mínimo): Detal 40,00 · Especial 15,00. "Pack 6 absorbentes": 1 componente absorbente × 6, a 15,00 por ítem.
 - Bordado pequeño `157` (servicio, esquema Uniformes): 3,00 / 2,00 / 1,50.
 - Pañal infantil `001G` (stock agotable): precio fijo 3,50.
-- Anticipo: 50 %. Vigencia: 7 días. Tasa vigente: 875,6505 Bs por USD.
+- Anticipo: 50 %. Vigencia: 7 días. Tasa vigente: 875,65 Bs por USD.
 
 ### E-01 — Crear un esquema por tramos válido (COT-001, COT-023)
 
@@ -808,10 +810,10 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 
 ### E-36 — Emitir congela precios y tasa (COT-016, COT-023)
 
-- **GIVEN** un borrador completo con 10 camisas `110` (36,00; total 360,00; anticipo 180,00) y la tasa vigente 875,6505
+- **GIVEN** un borrador completo con 10 camisas `110` (36,00; total 360,00; anticipo 180,00) y la tasa vigente 875,65
 - **WHEN** se emite y después el precio de `110` en 7–12 cambia a 38,00 y se guarda una tasa nueva
 - **THEN** la cotización emitida sigue mostrando 36,00, total 360,00 y anticipo 180,00
-- **AND** conserva la tasa 875,6505 con su fecha, total 315.234,18 Bs y anticipo 157.617,09 Bs
+- **AND** conserva la tasa 875,65 con su fecha, total 315.234,00 Bs y anticipo 157.617,00 Bs
 - **AND** vence 7 días después de la emisión, y la emisión queda auditada
 
 ### E-37 — Emitir con pendientes (COT-016)
@@ -990,12 +992,13 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **THEN** el sistema proponía 575,00 (50 %), y el anticipo requerido queda en 400,00
 - **AND** el anticipo acordado guarda usuario y fecha y queda auditado, y la cotización se puede emitir
 - **AND** un monto negativo o mayor que 1.150,00 se rechaza
+- **AND** si después ya no queda ninguna línea negociada o el anticipo supera el nuevo subtotal negociado, el anticipo acordado se descarta sin registro de auditoría propio y se vuelve a proponer (DEC-COT-68)
 
 ### E-63 — Tasa del día desde la API (COT-030)
 
 - **GIVEN** la API responde `{"promedio": 875.6505, "fechaActualizacion": "2026-10-09T00:00:00-04:00"}`
 - **WHEN** la tarea programada se ejecuta el 2026-10-12 a las 7:00 a. m. hora de Caracas
-- **THEN** se guarda la tasa 875,6505 como tasa del 2026-10-12, con origen "api" y la fecha de la fuente (2026-10-09) como dato aparte
+- **THEN** se guarda la tasa 875,65 (el `promedio` redondeado a 2 decimales, DEC-COT-60) como tasa del 2026-10-12, con origen "api" y la fecha de la fuente (2026-10-09) como dato aparte
 - **AND** ejecutar la tarea de nuevo ese día no crea otra tasa
 - **AND** la tarea está programada a las 7:00 en la zona `America/Caracas`, no en UTC
 
@@ -1005,7 +1008,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **WHEN** se ejecuta la tarea y después se calcula una cotización
 - **THEN** no se guarda ninguna tasa, el fallo queda registrado y el cálculo usa la tasa del día anterior mostrando su fecha
 - **AND** un usuario con `pricing.manage` registra manualmente la tasa del día; queda con origen "manual", su autor y auditoría, y pasa a ser la vigente
-- **AND** un usuario sin `pricing.manage` recibe 403 al intentarlo, y un valor 0 o negativo se rechaza
+- **AND** un usuario sin `pricing.manage` recibe 403 al intentarlo, y un valor 0, negativo o con más de 2 decimales se rechaza
 
 ### E-65 — Sin ninguna tasa guardada (COT-009, COT-016, COT-030)
 
@@ -1074,6 +1077,33 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **WHEN** se cambia el destinatario del borrador a ese cliente
 - **THEN** la asesora responsable sigue siendo la misma
 - **AND** un usuario puede cambiarla a mano por un usuario activo con `customers.portfolio`
+- **AND** no se puede dejar el borrador sin asesora: un valor vacío conserva la asesora actual (DEC-COT-65)
+
+### E-74 — Asesora del cliente no disponible al crear (COT-013, DEC-COT-63)
+
+- **GIVEN** un cliente activo cuya asesora asignada está inactiva o no tiene `customers.portfolio`
+- **WHEN** un usuario con `quotations.create` y `customers.portfolio` crea una cotización para ese cliente
+- **THEN** la asesora responsable es quien la crea y el sistema muestra el aviso "asesora del cliente no disponible"
+- **AND** si quien la crea no tiene `customers.portfolio`, la cotización queda sin asesora responsable, con el mismo aviso
+- **AND** si quien la crea elige una asesora a mano, esa queda como responsable y el aviso igual se muestra
+
+### E-75 — Asesora responsable que deja de estar disponible (COT-013, DEC-COT-64, DEC-CLI-29)
+
+- **GIVEN** una cotización cuya asesora responsable se desactiva o pierde `customers.portfolio`
+- **WHEN** se consulta la cotización
+- **THEN** sigue a cargo de esa asesora, sin reasignación automática, y se marca "asesora no disponible"
+- **AND** en un borrador la asesora se cambia editándolo
+- **AND** en una cotización emitida, un usuario con `customers.assign` cambia solo la asesora, por una activa con `customers.portfolio`, y el cambio queda auditado; sin `customers.assign` el backend responde 403 y la cotización no cambia
+- **AND** el documento de la cotización emitida (la asesora que muestra la vista imprimible y el correo) pasa a mostrar la asesora nueva; los precios, la tasa y el resto del documento no cambian
+
+### E-76 — Precio negociado por los grupos de talla que usa la línea (COT-012, DEC-COT-66, DEC-COT-55)
+
+- **GIVEN** una línea de `184` que requiere asesora, con filas solo en tallas del grupo 28–36, aunque la combinación también tiene el grupo 38–44, y un usuario con `quotations.negotiate`
+- **WHEN** registra el precio negociado
+- **THEN** se pide y se guarda un precio solo para el grupo 28–36
+- **AND** un precio enviado para el grupo 38–44, que la línea no usa, se rechaza
+- **AND** si después se agrega una talla del grupo 38–44 o se quitan las del grupo 28–36, el precio negociado se descarta con el aviso de E-22 y se negocia de nuevo (E-72)
+- **AND** si una fila tiene una talla que no está en ningún grupo, la línea sigue "sin precio" (COT-025) y el precio negociado se rechaza indicando esa talla, hasta que la talla tenga grupo o se quite la fila (DEC-COT-67)
 
 ---
 
@@ -1106,7 +1136,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-67 el 2026-10-15 y DEC-COT-68 el 2026-10-16, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1169,12 +1199,21 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-57 | Convertir en negociación un tramo con precios | Se trata como quitar el tramo (DEC-COT-23) | **Confirmada** (2026-10-13) |
 | DEC-COT-58 | Asignar o mover tallas entre grupos con precios | Mover una talla de un grupo a otro es reorganizar (DEC-COT-53: confirmación y borrado de los precios de los grupos afectados); solo asignar una talla que no estaba en ningún grupo conserva los precios del grupo | **Confirmada** (2026-10-13) |
 | DEC-COT-59 | "Más de un precio unitario" en DEC-COT-54 | Se cuentan valores distintos: dos grupos con el mismo precio son un único precio | **Confirmada** (2026-10-13) |
+| DEC-COT-60 | Decimales de la tasa de cambio | A) 2 decimales en todo: la API se redondea HALF_UP a 2 y la carga manual rechaza más de 2 · B) guardar 4 y usar 2 · C) como A pero la carga manual redondea | **Confirmada**: **A** (2026-10-14). Sustituye los 4 decimales de COT-030 y DT-01; E-36, E-63 y E-64 se ajustan |
+| DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
+| DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
+| DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible", que se muestra también cuando se elige una asesora a mano. Escenario E-74 |
+| DEC-COT-68 | ¿Se audita el descarte automático del anticipo acordado? | A) No, igual que el descarte automático del precio negociado (DEC-COT-29) · B) Sí, como `quotations.agreed_advance_set` | **Confirmada**: **A** (2026-10-16). Escenario E-62 |
+| DEC-COT-67 | Línea que requiere asesora con una talla en ningún grupo de su combinación | A) Sigue "sin precio" y no se negocia hasta que la talla tenga grupo o se quite la fila · B) Esa fila se negocia con un precio "sin grupo" | **Confirmada**: **A** (2026-10-15), coherente con COT-025. Escenario E-76 |
+| DEC-COT-66 | Grupos de talla que se negocian en una línea que requiere asesora | A) Solo los grupos que usan las filas de la línea · B) Todos los grupos de la combinación | **Confirmada**: **A** (2026-10-15), coherente con DEC-COT-55: si un cambio agrega o quita un grupo, el precio se descarta y se negocia de nuevo. Escenario E-76 |
+| DEC-COT-65 | ¿Se puede quitar la asesora de un borrador? | A) No: solo se cambia por una activa con `customers.portfolio`; un valor vacío la deja como está · B) Sí, queda vacía y auditada | **Confirmada**: **A** (2026-10-15). Escenario E-73 |
+| DEC-COT-64 | Asesora responsable que se desactiva o pierde `customers.portfolio` después | Sin reasignación automática (como DEC-CLI-29); se marca "asesora no disponible"; en borrador se cambia editando; en emitida, un usuario con `customers.assign` cambia solo la asesora, auditado (excepción a DEC-COT-18), y el documento emitido pasa a mostrar la asesora nueva | **Confirmada** (2026-10-15). Escenario E-75 |
 
 ### Decisiones técnicas
 
 | ID | Decisión | Estado |
 |---|---|---|
-| DT-01 | Importes en `DECIMAL` de MySQL y aritmética exacta en PHP (p. ej., `brick/math`, que Laravel ya instala), nunca `float`. Tasas con 4 decimales | Propuesta — se confirma en `design.md`. Dependencia aprobada (2026-10-13): `brick/math` se declara como dependencia directa en `composer.json`, con la versión que ya instala Laravel (AGENTS §2) |
+| DT-01 | Importes en `DECIMAL` de MySQL y aritmética exacta en PHP (p. ej., `brick/math`, que Laravel ya instala), nunca `float`. Tasas con 2 decimales (DEC-COT-60) | Propuesta — se confirma en `design.md`. Dependencia aprobada (2026-10-13): `brick/math` se declara como dependencia directa en `composer.json`, con la versión que ya instala Laravel (AGENTS §2) |
 | DT-02 | COT-009 se implementa como una Action reutilizable (`app/Actions/Quotations/CalculateQuotation`) que usa `ResolveSelection` de `003` y no escribe en la base de datos | Propuesta — se confirma en `design.md` |
 | DT-03 | La emisión y el número correlativo se asignan dentro de una transacción con bloqueo, para que dos emisiones simultáneas no repitan número | Propuesta — se confirma en `design.md` |
 | DT-04 | La lectura y validación del CSV de precios es una sola Action (`app/Actions/Pricing/ValidatePriceImport`) que usan el comando de carga inicial (COT-007) y la importación del ERP (COT-027). Lectura con las funciones nativas de PHP, sin dependencias nuevas. La comprobación de conflictos de COT-028 compara los valores anteriores guardados en la importación con los vigentes, dentro de la transacción y con bloqueo | Propuesta — se confirma en `design.md` |

@@ -18,7 +18,7 @@ it('DT-01 parses a comma or a dot as the decimal separator', function (string $i
     'one decimal' => ['40,5', 2, '40.50'],
     'integer' => ['40', 2, '40.00'],
     'surrounding spaces' => [' 12.34 ', 2, '12.34'],
-    'rate with four decimals' => ['875,6505', 4, '875.6505'],
+    'four decimals' => ['875,6505', 4, '875.6505'],
 ]);
 
 it('DT-01 parses a negative amount and leaves the sign rule to the caller', function () {
@@ -81,7 +81,7 @@ it('DT-01 displays amounts with the es-VE format', function (string $amount, int
     'below a thousand' => ['40.00', 2, '40,00'],
     'zero' => ['0.00', 2, '0,00'],
     'negative' => ['-1150.00', 2, '-1.150,00'],
-    'rate' => ['875.6505', 4, '875,6505'],
+    'four decimals' => ['875.6505', 4, '875,6505'],
     'no decimals' => ['1000', 0, '1.000'],
 ]);
 

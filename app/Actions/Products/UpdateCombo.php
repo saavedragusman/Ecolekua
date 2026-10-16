@@ -49,7 +49,8 @@ class UpdateCombo
         $before = ComboAudit::snapshot($combo);
         // Components already in the combo keep their product even if it was deactivated (DEC-PRD-64).
         $held = array_values($combo->components()->pluck('product_id')->map(fn (mixed $id): int => (int) $id)->all());
-        $components = ComboRules::validateComponents($data['components'], $held);
+        $own = array_values($combo->components()->pluck('id')->map(fn (mixed $id): int => (int) $id)->all());
+        $components = ComboRules::validateComponents($data['components'], $held, $own);
 
         $combo->fill([
             'name' => $data['name'],
@@ -66,9 +67,9 @@ class UpdateCombo
             $registry->forceFill(['code' => $data['code']])->save();
         }
 
-        if (! ComboComponents::matches($combo, $components)) {
-            ComboComponents::replace($combo, $components);
-        }
+        // Components that keep their product keep their item price (DEC-COT-44); the prices that go
+        // with a replaced or removed component are recorded in the same audit row.
+        $deletedPrices = ComboComponents::matches($combo, $components) ? [] : ComboComponents::replace($combo, $components);
 
         $after = ComboAudit::snapshot($combo);
         $changed = array_keys(array_filter($after, fn (mixed $value, string $field): bool => $value !== $before[$field], ARRAY_FILTER_USE_BOTH));
@@ -76,11 +77,17 @@ class UpdateCombo
         if ($changed !== []) {
             $combo->touch();
 
+            $oldValues = array_intersect_key($before, array_flip($changed));
+
+            if ($deletedPrices !== []) {
+                $oldValues['deleted_item_prices'] = $deletedPrices;
+            }
+
             $this->audit->handle(
                 AuditAction::ComboUpdated,
                 $actor,
                 $combo,
-                oldValues: array_intersect_key($before, array_flip($changed)),
+                oldValues: $oldValues,
                 newValues: array_intersect_key($after, array_flip($changed)),
             );
         }

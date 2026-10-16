@@ -374,6 +374,8 @@ export type ComboProductOption = {
 };
 
 export type ComboComponentFields = {
+    // The stored component; sent back so an edit keeps it and its item price (DEC-COT-44).
+    id: number;
     product_id: number;
     quantity: number;
     values: CombinationValueMap;
