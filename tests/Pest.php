@@ -39,6 +39,26 @@ pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
 
+// Every test of spec 004 (pricing and quotations) carries the `cot` group, so a slice runs with `--group=cot`.
+pest()->group('cot')
+    ->in('Unit/Pricing', 'Unit/Quotations', 'Feature/Pricing', 'Feature/Quotations');
+
+/*
+|--------------------------------------------------------------------------
+| Expectations
+|--------------------------------------------------------------------------
+|
+| Money always travels as a canonical string (DT-01, spec 004 design Decision 3): `"40.00"`, a rate
+| `"875.6505"` with scale 4. Never a JSON number, never a float.
+|
+*/
+
+expect()->extend('toBeMoneyString', function (int $scale = 2) {
+    expect($this->value)->toBeString()->toMatch('/^\d+\.\d{'.$scale.'}$/');
+
+    return $this;
+});
+
 /*
 |--------------------------------------------------------------------------
 | Functions
@@ -58,7 +78,7 @@ function userWithPermissions(PermissionName|string ...$permissions): User
 
 /**
  * A user holding the protected Administrador role, which the seeder gives the Administrador
- * grants of the initial matrices of specs 001, 002 and 003 (every permission except `customers.portfolio`).
+ * grants of the initial matrices of specs 001, 002, 003 and 004 (every permission except `customers.portfolio`).
  */
 function administrator(): User
 {

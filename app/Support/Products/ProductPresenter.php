@@ -651,10 +651,11 @@ final class ProductPresenter
     }
 
     /**
-     * Fields of the combo form (PRD-010): each component with its product, quantity and the admitted
-     * values as `attributeId => valueIds`, ready to be sent back. A null `$combo` is the empty form.
+     * Fields of the combo form (PRD-010): each component with its id, product, quantity and the admitted
+     * values as `attributeId => valueIds`, ready to be sent back. The id lets an edit keep the component
+     * and its item price (DEC-COT-44). A null `$combo` is the empty form.
      *
-     * @return array{name: string, code: string, portal_visible: bool, components: list<array{product_id: int, quantity: int, values: array<int, list<int>>}>}
+     * @return array{name: string, code: string, portal_visible: bool, components: list<array{id: int, product_id: int, quantity: int, values: array<int, list<int>>}>}
      */
     public static function comboForm(?Combo $combo): array
     {
@@ -675,7 +676,7 @@ final class ProductPresenter
                     $values[$value->catalog_attribute_id][] = $value->id;
                 }
 
-                return ['product_id' => $component->product_id, 'quantity' => $component->quantity, 'values' => $values];
+                return ['id' => $component->id, 'product_id' => $component->product_id, 'quantity' => $component->quantity, 'values' => $values];
             })->all()),
         ];
     }

@@ -9,9 +9,11 @@ use App\Support\Customers\PhoneNumber;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
@@ -40,6 +42,7 @@ use Illuminate\Support\Carbon;
  * @property-read CustomerAddress|null $address
  * @property-read User|null $advisor
  * @property-read User $creator
+ * @property-read Collection<int, Quotation> $quotations
  */
 #[Fillable([
     'type', 'name', 'document_type', 'document_number', 'phone', 'email',
@@ -97,6 +100,16 @@ class Customer extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Quotations addressed to the customer, in every state (COT-020, CLI-013).
+     *
+     * @return HasMany<Quotation, $this>
+     */
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class);
     }
 
     /**

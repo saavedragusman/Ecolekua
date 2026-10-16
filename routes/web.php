@@ -14,6 +14,13 @@ use App\Http\Controllers\Customers\CustomerAdvisorController;
 use App\Http\Controllers\Customers\CustomerController;
 use App\Http\Controllers\Customers\CustomerStatusController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\Pricing\ComboPriceController;
+use App\Http\Controllers\Pricing\CommercialParametersController;
+use App\Http\Controllers\Pricing\ExchangeRateController;
+use App\Http\Controllers\Pricing\PriceSchemeController;
+use App\Http\Controllers\Pricing\ProductPriceController;
+use App\Http\Controllers\Pricing\ProductSchemeController;
+use App\Http\Controllers\Pricing\SizeGroupController;
 use App\Http\Controllers\Products\CombinationController;
 use App\Http\Controllers\Products\ComboController;
 use App\Http\Controllers\Products\ProductAssetController;
@@ -21,6 +28,9 @@ use App\Http\Controllers\Products\ProductController;
 use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Products\ProductStockMinimumController;
 use App\Http\Controllers\Products\ProductStructureController;
+use App\Http\Controllers\Quotations\CalculationController;
+use App\Http\Controllers\Quotations\NegotiationController;
+use App\Http\Controllers\Quotations\QuotationController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
 use App\Http\Controllers\Users\UserController;
@@ -154,6 +164,50 @@ Route::put('/combos/{combo}', [ComboController::class, 'update'])->name('combos.
 Route::delete('/combos/{combo}', [ComboController::class, 'destroy'])->name('combos.destroy');
 Route::post('/combos/{combo}/activate', [ComboController::class, 'activate'])->name('combos.activate');
 Route::post('/combos/{combo}/deactivate', [ComboController::class, 'deactivate'])->name('combos.deactivate');
+
+// Price schemes (spec 004, COT-001). Authorization lives in PricingPolicy (`pricing.manage`); the scheme
+// pages arrive with the pricing UI, so only the writes exist for now.
+Route::post('/pricing/schemes', [PriceSchemeController::class, 'store'])->name('pricing.schemes.store');
+Route::put('/pricing/schemes/{scheme}', [PriceSchemeController::class, 'update'])->whereNumber('scheme')->name('pricing.schemes.update');
+Route::post('/pricing/schemes/{scheme}/activate', [PriceSchemeController::class, 'activate'])->whereNumber('scheme')->name('pricing.schemes.activate');
+Route::post('/pricing/schemes/{scheme}/deactivate', [PriceSchemeController::class, 'deactivate'])->whereNumber('scheme')->name('pricing.schemes.deactivate');
+
+// Scheme assignment (COT-002). The static bulk segment is declared before the parameterized route.
+Route::put('/pricing/products/scheme', [ProductSchemeController::class, 'bulk'])->name('pricing.products.scheme.bulk');
+Route::put('/pricing/products/{product}/scheme', [ProductSchemeController::class, 'update'])->whereNumber('product')->name('pricing.products.scheme.update');
+
+// Price table of a product (COT-003): one save for every combination, tier and size group.
+Route::put('/pricing/products/{product}/prices', [ProductPriceController::class, 'update'])->whereNumber('product')->name('pricing.products.prices.update');
+
+// Component prices of a combo (COT-005): one save for every component; the combo price is never stored.
+Route::put('/pricing/combos/{combo}/prices', [ComboPriceController::class, 'update'])->whereNumber('combo')->name('pricing.combos.prices.update');
+
+// Commercial parameters (COT-006): advance percentage and validity of the quotations issued afterwards.
+Route::put('/pricing/settings/parameters', [CommercialParametersController::class, 'update'])->name('pricing.settings.parameters.update');
+
+// Manual exchange rate of today (COT-030, E-64): supersedes the effective rate of the day.
+Route::post('/pricing/exchange-rates', [ExchangeRateController::class, 'store'])->name('pricing.exchange-rates.store');
+
+// Size groups of a combination (COT-004, E-70): the preview is read-only and returns the confirmation
+// token the PUT needs when the change deletes prices.
+Route::post('/pricing/combinations/{combination}/size-groups/preview', [SizeGroupController::class, 'preview'])->whereNumber('combination')->name('pricing.size-groups.preview');
+Route::put('/pricing/combinations/{combination}/size-groups', [SizeGroupController::class, 'update'])->whereNumber('combination')->name('pricing.size-groups.update');
+
+// Live calculation and selection steps of the quotation editor (COT-009, PRD-019), JSON without effects.
+// Static segments: they stay declared before any `{quotation}` route.
+Route::post('/quotations/calculate', [CalculationController::class, 'calculate'])->name('quotations.calculate');
+Route::post('/quotations/selection-options', [CalculationController::class, 'selectionOptions'])->name('quotations.selection-options');
+
+// Draft quotations (COT-013). Authorization lives in QuotationPolicy (`quotations.create`).
+Route::post('/quotations', [QuotationController::class, 'store'])->name('quotations.store');
+Route::get('/quotations/recipients', [QuotationController::class, 'recipients'])->name('quotations.recipients');
+Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->whereNumber('quotation')->name('quotations.update');
+
+// Negotiation (COT-012): `quotations.negotiate`. The line must belong to the quotation.
+Route::put('/quotations/{quotation}/lines/{line}/negotiated-price', [NegotiationController::class, 'price'])
+    ->whereNumber(['quotation', 'line'])->scopeBindings()->name('quotations.negotiated-price');
+Route::put('/quotations/{quotation}/agreed-advance', [NegotiationController::class, 'agreedAdvance'])
+    ->whereNumber('quotation')->name('quotations.agreed-advance');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

@@ -3,7 +3,7 @@
 namespace App\Enums;
 
 /**
- * Audited events of spec 001 (FND-022) and spec 002 (CLI-016) and spec 003 (PRD-017). The backed value is stored in `audit_logs.action`.
+ * Audited events of spec 001 (FND-022), spec 002 (CLI-016), spec 003 (PRD-017) and spec 004 (COT-023). The backed value is stored in `audit_logs.action`.
  */
 enum AuditAction: string
 {
@@ -55,6 +55,32 @@ enum AuditAction: string
     case ComboDeactivated = 'products.combo_deactivated';
     case ComboActivated = 'products.combo_activated';
     case ComboDeleted = 'products.combo_deleted';
+    case PriceSchemeCreated = 'pricing.scheme_created';
+    case PriceSchemeUpdated = 'pricing.scheme_updated';
+    case PriceSchemeDeactivated = 'pricing.scheme_deactivated';
+    case PriceSchemeActivated = 'pricing.scheme_activated';
+    case ProductSchemeAssigned = 'pricing.product_scheme_assigned';
+    case PriceCreated = 'pricing.price_created';
+    case PriceUpdated = 'pricing.price_updated';
+    case PriceDeleted = 'pricing.price_deleted';
+    case SizeGroupsUpdated = 'pricing.size_groups_updated';
+    case ComboItemPriceCreated = 'pricing.combo_item_price_created';
+    case ComboItemPriceUpdated = 'pricing.combo_item_price_updated';
+    case ComboItemPriceDeleted = 'pricing.combo_item_price_deleted';
+    case PricingParametersUpdated = 'pricing.parameters_updated';
+    case ExchangeRateRecorded = 'pricing.exchange_rate_recorded';
+    case PriceImportApplied = 'pricing.import_applied';
+    case PriceImportDiscarded = 'pricing.import_discarded';
+    case QuotationCreated = 'quotations.created';
+    case QuotationIssued = 'quotations.issued';
+    case QuotationDuplicated = 'quotations.duplicated';
+    case QuotationCancelled = 'quotations.cancelled';
+    case QuotationDiscarded = 'quotations.discarded';
+    case QuotationExpired = 'quotations.expired';
+    case QuotationNegotiatedPriceSet = 'quotations.negotiated_price_set';
+    case QuotationAgreedAdvanceSet = 'quotations.agreed_advance_set';
+    case QuotationAdvisorChanged = 'quotations.advisor_changed';
+    case QuotationRecipientChanged = 'quotations.recipient_changed';
 
     /**
      * Spanish label shown in the audit query.
@@ -110,6 +136,32 @@ enum AuditAction: string
             self::ComboDeactivated => 'Combo desactivado',
             self::ComboActivated => 'Combo reactivado',
             self::ComboDeleted => 'Combo eliminado',
+            self::PriceSchemeCreated => 'Esquema de precio creado',
+            self::PriceSchemeUpdated => 'Esquema de precio modificado',
+            self::PriceSchemeDeactivated => 'Esquema de precio desactivado',
+            self::PriceSchemeActivated => 'Esquema de precio reactivado',
+            self::ProductSchemeAssigned => 'Esquema de precio asignado a un producto',
+            self::PriceCreated => 'Precio de combinación registrado',
+            self::PriceUpdated => 'Precio de combinación modificado',
+            self::PriceDeleted => 'Precio de combinación eliminado',
+            self::SizeGroupsUpdated => 'Grupos de talla modificados',
+            self::ComboItemPriceCreated => 'Precio de ítem de combo registrado',
+            self::ComboItemPriceUpdated => 'Precio de ítem de combo modificado',
+            self::ComboItemPriceDeleted => 'Precio de ítem de combo eliminado',
+            self::PricingParametersUpdated => 'Parámetros comerciales modificados',
+            self::ExchangeRateRecorded => 'Tasa de cambio registrada manualmente',
+            self::PriceImportApplied => 'Actualización masiva de precios aplicada',
+            self::PriceImportDiscarded => 'Actualización masiva de precios descartada',
+            self::QuotationCreated => 'Cotización creada',
+            self::QuotationIssued => 'Cotización emitida',
+            self::QuotationDuplicated => 'Cotización duplicada',
+            self::QuotationCancelled => 'Cotización anulada',
+            self::QuotationDiscarded => 'Cotización descartada',
+            self::QuotationExpired => 'Cotización vencida',
+            self::QuotationNegotiatedPriceSet => 'Precio negociado o confirmado en una cotización',
+            self::QuotationAgreedAdvanceSet => 'Anticipo acordado registrado',
+            self::QuotationAdvisorChanged => 'Asesora responsable cambiada',
+            self::QuotationRecipientChanged => 'Destinatario de cotización cambiado',
         };
     }
 }

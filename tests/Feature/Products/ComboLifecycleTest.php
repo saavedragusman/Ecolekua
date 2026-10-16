@@ -150,6 +150,33 @@ it('PRD-012 replaces the components of a combo and audits only the fields that c
         ]);
 });
 
+it('DEC-COT-44 keeps the component rows of an edit that keeps their products and replaces only the others', function () {
+    $catalog = comboCatalog();
+    $combo = makeCombo($catalog);
+    [$diaper, $pad, $cover] = $combo->components()->get()->all();
+
+    putCombo($this, comboEditor(), $combo, comboPayload($catalog, [
+        'components' => [
+            ['id' => $cover->id, ...comboComponent($catalog, 'Protector de cama', 3)],
+            ['id' => $pad->id, ...comboComponent($catalog, 'Pañal ecológico', 1)],
+            comboComponent($catalog, 'Pañal antiderrame', 2, ['Talla' => ['4XG']]),
+        ],
+    ]))->assertRedirect("/combos/{$combo->id}");
+
+    $components = $combo->fresh()->components;
+
+    expect($components->map(fn (ComboComponent $component): array => [$component->product->name, $component->quantity, $component->sort_order])->all())->toBe([
+        ['Protector de cama', 3, 1],
+        ['Pañal ecológico', 1, 2],
+        ['Pañal antiderrame', 2, 3],
+    ])
+        ->and($components[0]->id)->toBe($cover->id)
+        ->and($components[1]->id)->not->toBe($pad->id)
+        ->and($components[2]->id)->toBe($diaper->id)
+        ->and(ComboComponent::query()->whereKey($pad->id)->exists())->toBeFalse()
+        ->and(DB::table('combo_component_values')->where('combo_component_id', $diaper->id)->pluck('attribute_value_id')->all())->toBe(comboIds($catalog, '4XG'));
+});
+
 it('PRD-012 audits a renamed combo with the previous and new name only', function () {
     $catalog = comboCatalog();
     $combo = makeCombo($catalog);

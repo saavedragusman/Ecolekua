@@ -31,7 +31,10 @@ function foundationPermissionNames(): array
 {
     return array_values(array_filter(
         array_map(fn (PermissionName $p) => $p->value, PermissionName::cases()),
-        fn (string $name) => ! str_starts_with($name, 'customers.') && ! str_starts_with($name, 'products.'),
+        fn (string $name) => ! str_starts_with($name, 'customers.')
+            && ! str_starts_with($name, 'products.')
+            && ! str_starts_with($name, 'quotations.')
+            && ! str_starts_with($name, 'pricing.'),
     ));
 }
 
