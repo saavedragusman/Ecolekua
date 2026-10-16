@@ -27,6 +27,7 @@ use App\Support\Quotations\Calculation\CalculationInput;
 use App\Support\Quotations\Calculation\CalculationResult;
 use App\Support\Quotations\Calculation\LineFacts;
 use App\Support\Quotations\Calculation\LineResult;
+use App\Support\Quotations\Calculation\NegotiationBasis;
 use App\Support\Quotations\Calculation\PackAdmission;
 use App\Support\Quotations\Calculation\PackAdvisor;
 use App\Support\Quotations\Calculation\PackCatalog;
@@ -126,7 +127,8 @@ final class CalculateQuotation
         $fullBase = BigDecimal::zero();
 
         foreach ($lines as $line) {
-            if (! $line->addsToTotal() || $line->subtotal === null) {
+            // A negotiated line's advance is the agreed one (COT-010), never a percent or the full subtotal.
+            if (! $line->addsToTotal() || $line->subtotal === null || $line->negotiated) {
                 continue;
             }
 
@@ -151,7 +153,7 @@ final class CalculateQuotation
      */
     private function withPackNotice(LineResult $line, int $productId, array $choices, array $resolved, array $packs, PriceBook $book, array $palette): LineResult
     {
-        if (! $line->addsToTotal() || $packs === []) {
+        if (! $line->addsToTotal() || $line->negotiated || $packs === []) {
             return $line;
         }
 
@@ -210,6 +212,10 @@ final class CalculateQuotation
             packNotice: $notice,
             combinationId: $line->combinationId,
             componentCombinationIds: $line->componentCombinationIds,
+            negotiated: $line->negotiated,
+            negotiatedDiscardedReason: $line->negotiatedDiscardedReason,
+            negotiationBasis: $line->negotiationBasis,
+            notice: $line->notice,
         );
     }
 
@@ -426,33 +432,46 @@ final class CalculateQuotation
         };
 
         $rows = [];
+        $rowGroups = [];
         $unpriced = $scheme === null || $tier === null;
+        $ungrouped = false;
 
         foreach ($line['rows'] as $j => $row) {
             $selection = $resolved[$j] ?? null;
 
-            if ($selection?->combinationId === null || $tier === null || $negotiation) {
+            if ($selection?->combinationId === null || $tier === null) {
                 $rows[] = new RowResult($row['size_value_id'], $row['quantity']);
 
                 continue;
             }
 
-            $groupId = $book->hasSizeGroups($selection->combinationId) ? $book->groupOf($selection->combinationId, $row['size_value_id']) : null;
-            $price = $book->hasSizeGroups($selection->combinationId) && $groupId === null
-                ? null
-                : $book->price($selection->combinationId, $tier->id, $groupId);
+            $grouped = $book->hasSizeGroups($selection->combinationId);
+            $groupId = $grouped ? $book->groupOf($selection->combinationId, $row['size_value_id']) : null;
+            $rowGroups[] = $groupId;
 
-            $unpriced = $unpriced || $price === null;
-            $rows[] = new RowResult($row['size_value_id'], $row['quantity'], $price, $groupId === null ? null : $book->groupLabel($groupId));
+            // A size in no group of a grouped combination has no price, negotiated either (COT-025, DEC-COT-67).
+            if ($grouped && $groupId === null) {
+                $ungrouped = true;
+                $rows[] = new RowResult($row['size_value_id'], $row['quantity']);
+
+                continue;
+            }
+
+            $price = $negotiation ? null : $book->price($selection->combinationId, $tier->id, $groupId);
+            $unpriced = $unpriced || (! $negotiation && $price === null);
+            $rows[] = new RowResult($row['size_value_id'], $row['quantity'], $price, $groupId === null ? null : $book->groupLabel($groupId), $groupId);
         }
 
-        if ($unpriced && ! $negotiation) {
+        if (($unpriced && ! $negotiation) || $ungrouped) {
             $errors = ["lines.{$i}" => self::message('calculation_unpriced'), ...$errors];
         }
 
+        $basis = $first === null ? null : NegotiationBasis::of($first->combinationId, $rowGroups);
+        [$rows, $applied, $discarded] = $this->applyNegotiated($line['negotiated'] ?? null, $rows, $rowGroups, $basis, $reason !== null, $errors === []);
+
         $subtotal = null;
 
-        if ($errors === [] && ! $negotiation) {
+        if ($errors === [] && (! $negotiation || $applied)) {
             $subtotal = BigDecimal::zero();
 
             foreach ($rows as $rowResult) {
@@ -471,7 +490,11 @@ final class CalculateQuotation
             code: $first?->code,
             descriptiveName: $first?->descriptiveName,
             tierLabel: $tier?->label,
-            priceOrigin: $negotiation || $scheme === null ? null : ($scheme->type === PriceSchemeType::Fixed ? PriceOrigin::Fixed : PriceOrigin::Tier),
+            priceOrigin: match (true) {
+                $applied => PriceOrigin::Negotiated,
+                $negotiation || $scheme === null => null,
+                default => $scheme->type === PriceSchemeType::Fixed ? PriceOrigin::Fixed : PriceOrigin::Tier,
+            },
             rows: $rows,
             unitPrice: null,
             subtotal: $subtotal,
@@ -486,7 +509,59 @@ final class CalculateQuotation
             errors: $errors,
             paidInFull: in_array($facts['supply_mode'] ?? null, [SupplyMode::StockWithMinimum, SupplyMode::StockDepletable], true),
             combinationId: $first?->combinationId,
+            negotiated: $applied,
+            negotiatedDiscardedReason: $discarded,
+            negotiationBasis: $basis,
+            notice: $discarded === null ? null : self::message('calculation_negotiated_discarded', [
+                'line' => $i + 1,
+                'reason' => self::message("calculation_negotiated_discarded_{$discarded}"),
+            ]),
         );
+    }
+
+    /**
+     * Applies a line's negotiated prices (COT-012, DEC-COT-55, DEC-COT-66): they are kept while the line still
+     * requires an advisor on the same basis (combination and size groups of its rows) and has no error, and they
+     * replace the unit price of each row by the price of its group. Otherwise they are discarded with the reason.
+     *
+     * @param  array{prices: array<int, BigDecimal>, confirmed: bool, basis: ?NegotiationBasis}|null  $negotiated
+     * @param  list<RowResult>  $rows
+     * @param  list<?int>  $rowGroups
+     * @return array{0: list<RowResult>, 1: bool, 2: ?string} rows, whether applied, discard reason
+     */
+    private function applyNegotiated(?array $negotiated, array $rows, array $rowGroups, ?NegotiationBasis $basis, bool $requiresAdvisor, bool $valid): array
+    {
+        if ($negotiated === null) {
+            return [$rows, false, null];
+        }
+
+        if (! $requiresAdvisor) {
+            return [$rows, false, 'no_longer_requires_advisor'];
+        }
+
+        if ($basis === null || ! $valid) {
+            return [$rows, false, null];
+        }
+
+        $stored = $negotiated['basis'] ?? $basis;
+
+        if (! $stored->matches($basis)) {
+            return [$rows, false, $stored->combinationId !== $basis->combinationId ? 'combination_changed' : 'size_groups_changed'];
+        }
+
+        $priced = [];
+
+        foreach ($rows as $j => $row) {
+            $price = $negotiated['prices'][$rowGroups[$j] ?? 0] ?? null;
+
+            if ($price === null) {
+                return [$rows, false, 'size_groups_changed'];
+            }
+
+            $priced[] = new RowResult($row->sizeValueId, $row->quantity, $price, $row->sizeGroupLabel, $row->sizeGroupId);
+        }
+
+        return [$priced, true, null];
     }
 
     /**

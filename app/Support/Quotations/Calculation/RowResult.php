@@ -15,6 +15,7 @@ final readonly class RowResult
         public int $quantity,
         public ?BigDecimal $unitPrice = null,
         public ?string $sizeGroupLabel = null,
+        public ?int $sizeGroupId = null,
     ) {}
 
     public function subtotal(): ?BigDecimal

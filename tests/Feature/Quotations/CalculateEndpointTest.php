@@ -114,9 +114,17 @@ it('E-20 enviar un anticipo acordado sin quotations.negotiate responde 403 audit
 
 it('E-20 con quotations.negotiate se puede calcular con precio negociado', function () {
     $fx = endpointProduct();
-    $payload = endpointPayload($fx['product'], extra: ['negotiated' => ['prices' => [['size_group_id' => null, 'price' => '10.00']], 'confirmed' => false]]);
+    $payload = endpointPayload($fx['product'], extra: ['negotiated' => [
+        'prices' => [['size_group_id' => null, 'price' => '10.00']],
+        'confirmed' => false,
+        'basis' => ['combination_id' => $fx['combination']->id, 'size_group_ids' => []],
+    ]]);
 
-    postCalculate(userWithPermissions(PermissionName::QuotationsCreate, PermissionName::QuotationsNegotiate), $payload)->assertOk();
+    // The fixed-price line does not require an advisor, so the echoed negotiated price is discarded (COT-012).
+    postCalculate(userWithPermissions(PermissionName::QuotationsCreate, PermissionName::QuotationsNegotiate), $payload)
+        ->assertOk()
+        ->assertJsonPath('lines.0.negotiated_discarded_reason', 'no_longer_requires_advisor')
+        ->assertJsonPath('lines.0.subtotal.value', '25.00');
 
     expect(deniedAudits())->toBe(0);
 });

@@ -29,6 +29,7 @@ use App\Http\Controllers\Products\ProductStatusController;
 use App\Http\Controllers\Products\ProductStockMinimumController;
 use App\Http\Controllers\Products\ProductStructureController;
 use App\Http\Controllers\Quotations\CalculationController;
+use App\Http\Controllers\Quotations\NegotiationController;
 use App\Http\Controllers\Quotations\QuotationController;
 use App\Http\Controllers\Roles\RoleController;
 use App\Http\Controllers\Roles\RolePermissionController;
@@ -201,6 +202,10 @@ Route::post('/quotations/selection-options', [CalculationController::class, 'sel
 Route::post('/quotations', [QuotationController::class, 'store'])->name('quotations.store');
 Route::get('/quotations/recipients', [QuotationController::class, 'recipients'])->name('quotations.recipients');
 Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->whereNumber('quotation')->name('quotations.update');
+
+// Negotiation (COT-012): `quotations.negotiate`. The line must belong to the quotation.
+Route::put('/quotations/{quotation}/lines/{line}/negotiated-price', [NegotiationController::class, 'price'])
+    ->whereNumber(['quotation', 'line'])->scopeBindings()->name('quotations.negotiated-price');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

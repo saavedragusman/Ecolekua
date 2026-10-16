@@ -21,6 +21,7 @@ use App\Support\Customers\PhoneNumber;
 use App\Support\Quotations\Calculation\CalculationInput;
 use App\Support\Quotations\Calculation\CalculationResult;
 use App\Support\Quotations\Calculation\LineResult;
+use App\Support\Quotations\DraftInput;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -69,9 +70,10 @@ class UpdateQuotationDraft
             $this->applyRecipient($locked, $data, $actor);
             $this->applyAdvisor($locked, $data['advisor_id'] ?? null, $actor);
 
-            $result = $this->calculateQuotation->handle(CalculationInput::fromArray(['lines' => $lines]));
+            $result = $this->calculateQuotation->handle(CalculationInput::fromArray(['lines' => $this->withStoredNegotiation($locked, $lines)]));
 
             $this->replaceLines($locked, $lines, $result);
+            $this->clearDiscardedNegotiation($lines, $result);
 
             $locked->forceFill([
                 'notes' => $data['notes'] ?? null,
@@ -100,6 +102,54 @@ class UpdateQuotationDraft
             if (isset($line['id']) && ! in_array((int) $line['id'], $own, true)) {
                 throw ValidationException::withMessages(["lines.{$i}.id" => __('validation.quotation_line_foreign')]);
             }
+        }
+    }
+
+    /**
+     * The lines to calculate: a kept line carries its stored negotiated price and basis, a new line none; the
+     * negotiation sent in the request is never used (design Decision 17).
+     *
+     * @param  list<array<string, mixed>>  $lines
+     * @return list<array<string, mixed>>
+     */
+    private function withStoredNegotiation(Quotation $quotation, array $lines): array
+    {
+        $stored = [];
+
+        foreach (DraftInput::from($quotation)['lines'] as $line) {
+            $stored[(int) $line['id']] = $line['negotiated'];
+        }
+
+        return array_map(fn (array $line): array => [
+            ...$line,
+            'negotiated' => isset($line['id']) ? ($stored[(int) $line['id']] ?? null) : null,
+        ], $lines);
+    }
+
+    /**
+     * A kept line whose negotiated price the calculation discarded loses it and its basis, unaudited (E-22,
+     * DEC-COT-29).
+     *
+     * @param  list<array<string, mixed>>  $lines
+     */
+    private function clearDiscardedNegotiation(array $lines, CalculationResult $result): void
+    {
+        foreach ($lines as $i => $line) {
+            // A combo line has no negotiated price (combos never require an advisor, DEC-PRD-87).
+            $becameCombo = ($line['kind'] ?? null) === LineKind::Combo->value;
+
+            if (! isset($line['id']) || ($result->lines[$i]->negotiatedDiscardedReason === null && ! $becameCombo)) {
+                continue;
+            }
+
+            DB::table('quotation_line_negotiated_prices')->where('quotation_line_id', (int) $line['id'])->delete();
+            QuotationLine::query()->whereKey((int) $line['id'])->update([
+                'negotiated_by' => null,
+                'negotiated_at' => null,
+                'negotiation_confirmed' => false,
+                'negotiated_combination_id' => null,
+                'negotiated_size_group_ids' => null,
+            ]);
         }
     }
 

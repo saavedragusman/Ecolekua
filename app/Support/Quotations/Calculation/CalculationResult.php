@@ -63,15 +63,23 @@ final readonly class CalculationResult
         return $reasons;
     }
 
+    /**
+     * No error, no line without price, no line waiting for an advisor, and an agreed advance when there are
+     * negotiated lines (COT-012).
+     */
     public function complete(): bool
     {
+        $negotiated = false;
+
         foreach ($this->lines as $line) {
             if (! $line->addsToTotal()) {
                 return false;
             }
+
+            $negotiated = $negotiated || $line->negotiated;
         }
 
-        return true;
+        return ! $negotiated || $this->advance->agreed !== null;
     }
 
     /** @return array<string, mixed> */
