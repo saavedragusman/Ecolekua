@@ -70,10 +70,19 @@ class UpdateQuotationDraft
             $this->applyRecipient($locked, $data, $actor);
             $this->applyAdvisor($locked, $data['advisor_id'] ?? null, $actor);
 
-            $result = $this->calculateQuotation->handle(CalculationInput::fromArray(['lines' => $this->withStoredNegotiation($locked, $lines)]));
+            $result = $this->calculateQuotation->handle(CalculationInput::fromArray([
+                'lines' => $this->withStoredNegotiation($locked, $lines),
+                'agreed_advance' => DraftInput::from($locked)['agreed_advance'],
+            ]));
 
             $this->replaceLines($locked, $lines, $result);
             $this->clearDiscardedNegotiation($lines, $result);
+
+            // An agreed advance with no negotiated line left, or above the new negotiated subtotal, goes, unaudited
+            // (COT-010, DEC-COT-68).
+            if ($result->agreedAdvanceDiscarded) {
+                $locked->forceFill(['agreed_advance' => null, 'agreed_advance_by' => null, 'agreed_advance_at' => null]);
+            }
 
             $locked->forceFill([
                 'notes' => $data['notes'] ?? null,

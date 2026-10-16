@@ -26,7 +26,7 @@ final readonly class CalculationInput
      */
     private function __construct(
         public array $lines,
-        public ?string $agreedAdvance,
+        public ?BigDecimal $agreedAdvance,
     ) {}
 
     /**
@@ -60,7 +60,30 @@ final readonly class CalculationInput
             ];
         }
 
-        return new self($lines, $valid['agreed_advance'] ?? null);
+        return new self($lines, self::agreedAdvance($valid['agreed_advance'] ?? null));
+    }
+
+    /**
+     * The agreed advance as an amount in USD with at most 2 decimals, zero or more (DEC-COT-40); a string, never
+     * a float (DT-01).
+     *
+     * @throws ValidationException when it is not such an amount
+     */
+    private static function agreedAdvance(?string $amount): ?BigDecimal
+    {
+        if ($amount === null || trim($amount) === '') {
+            return null;
+        }
+
+        try {
+            $parsed = Money::parse($amount, 2);
+        } catch (InvalidAmount) {
+            $parsed = null;
+        }
+
+        return $parsed === null || $parsed->isNegative()
+            ? throw ValidationException::withMessages(['agreed_advance' => __('validation.agreed_advance_invalid')])
+            : $parsed;
     }
 
     /**

@@ -25,6 +25,8 @@ final readonly class CalculationResult
         public BigDecimal $advancePercentage,
         public AdvanceBreakdown $advance,
         public ?RateSnapshot $rate,
+        public ?BigDecimal $proposedAgreedAdvance = null,
+        public bool $agreedAdvanceDiscarded = false,
     ) {}
 
     public function total(): BigDecimal
@@ -38,6 +40,31 @@ final readonly class CalculationResult
         }
 
         return Money::round($total);
+    }
+
+    /** The subtotal of the negotiated lines, or null when there is none (COT-010). */
+    public function negotiatedSubtotal(): ?BigDecimal
+    {
+        return self::negotiatedSubtotalOf($this->lines);
+    }
+
+    /**
+     * The subtotal of the lines priced by a negotiated or confirmed price, or null when there is none: the base
+     * of the agreed advance (COT-010, DEC-COT-11).
+     *
+     * @param  list<LineResult>  $lines
+     */
+    public static function negotiatedSubtotalOf(array $lines): ?BigDecimal
+    {
+        $subtotal = null;
+
+        foreach ($lines as $line) {
+            if ($line->negotiated && $line->addsToTotal() && $line->subtotal !== null) {
+                $subtotal = ($subtotal ?? BigDecimal::zero())->plus($line->subtotal);
+            }
+        }
+
+        return $subtotal;
     }
 
     public function requiresAdvisor(): bool
@@ -98,6 +125,8 @@ final readonly class CalculationResult
                 'stock' => self::money($this->advance->stock),
                 'agreed' => self::money($this->advance->agreed),
             ],
+            'proposed_agreed_advance' => self::money($this->proposedAgreedAdvance),
+            'agreed_advance_discarded' => $this->agreedAdvanceDiscarded,
             'rate' => $this->rate === null ? null : [
                 'value' => Money::toStorage($this->rate->value, 2),
                 'date' => $this->rate->date->toDateString(),

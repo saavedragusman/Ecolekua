@@ -111,17 +111,50 @@ final class CalculateQuotation
         }
 
         $percent = CommercialParameters::current()->advance_percentage;
+        [$agreed, $proposed, $agreedDiscarded] = $this->agreedAdvance($lines, $percent, $input->agreedAdvance);
 
-        return new CalculationResult($lines, $count['lines'], $percent, $this->advance($lines, $percent), $this->currentRate->get());
+        return new CalculationResult(
+            $lines,
+            $count['lines'],
+            $percent,
+            $this->advance($lines, $percent, $agreed),
+            $this->currentRate->get(),
+            $proposed,
+            $agreedDiscarded,
+        );
+    }
+
+    /**
+     * The agreed advance of the negotiated lines (COT-010, DEC-COT-11, E-62): the one given while there are
+     * negotiated lines and it does not exceed their subtotal, otherwise discarded (DEC-COT-68); the proposal is
+     * the advance percent of the negotiated subtotal.
+     *
+     * @param  list<LineResult>  $lines
+     * @return array{0: ?BigDecimal, 1: ?BigDecimal, 2: bool} agreed, proposed, whether the given one was discarded
+     */
+    private function agreedAdvance(array $lines, BigDecimal $percent, ?BigDecimal $given): array
+    {
+        $negotiatedSubtotal = CalculationResult::negotiatedSubtotalOf($lines);
+        $proposed = $negotiatedSubtotal === null ? null : AdvanceCalculator::proposedAgreed($percent, $negotiatedSubtotal);
+
+        if ($given === null) {
+            return [null, $proposed, false];
+        }
+
+        if ($negotiatedSubtotal === null || $given->isGreaterThan($negotiatedSubtotal)) {
+            return [null, $proposed, true];
+        }
+
+        return [$given, $proposed, false];
     }
 
     /**
      * The required advance of the priced lines (COT-010): the advance percent of the on-demand and service
-     * lines, the whole subtotal of the stock and combo lines. The agreed part arrives with negotiated prices.
+     * lines, the whole subtotal of the stock and combo lines, and the agreed advance of the negotiated lines.
      *
      * @param  list<LineResult>  $lines
      */
-    private function advance(array $lines, BigDecimal $percent): AdvanceBreakdown
+    private function advance(array $lines, BigDecimal $percent, ?BigDecimal $agreed): AdvanceBreakdown
     {
         $percentBase = BigDecimal::zero();
         $fullBase = BigDecimal::zero();
@@ -139,7 +172,7 @@ final class CalculateQuotation
             }
         }
 
-        return AdvanceCalculator::required($percent, $percentBase, $fullBase, null);
+        return AdvanceCalculator::required($percent, $percentBase, $fullBase, $agreed);
     }
 
     /**

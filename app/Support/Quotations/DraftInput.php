@@ -5,18 +5,20 @@ namespace App\Support\Quotations;
 use App\Enums\LineKind;
 use App\Models\Quotation;
 use App\Models\QuotationLine;
+use App\Support\Pricing\Money;
 use Illuminate\Support\Facades\DB;
 use stdClass;
 
 /**
  * The calculation input of a stored draft (COT-013, design Decision 17): every line as it was saved, in order,
- * with its id and, when it has one, its stored negotiated price and the basis it was negotiated for. The draft
- * save, the negotiation and the open recalculation take the negotiated price from here, never from a request.
+ * with its id and, when it has one, its stored negotiated price and the basis it was negotiated for, plus the
+ * stored agreed advance. The draft save, the negotiation and the open recalculation take both from here, never
+ * from a request.
  */
 final class DraftInput
 {
     /**
-     * @return array{lines: list<array<string, mixed>>}
+     * @return array{lines: list<array<string, mixed>>, agreed_advance: ?string}
      */
     public static function from(Quotation $quotation): array
     {
@@ -52,7 +54,7 @@ final class DraftInput
                     'size_group_ids' => $line->negotiated_size_group_ids ?? [],
                 ],
             ] : null,
-        ])->all())];
+        ])->all()), 'agreed_advance' => $quotation->agreed_advance === null ? null : Money::toStorage($quotation->agreed_advance, 2)];
     }
 
     /**

@@ -471,3 +471,238 @@ it('COT-012 una línea de otra cotización no se encuentra', function () {
         ->putJson("/quotations/{$other->id}/lines/{$quotation->lines->sole()->id}/negotiated-price", ['prices' => [['size_group_id' => null, 'price' => '29.00']]])
         ->assertNotFound();
 });
+
+/*
+| Phase 12b: agreed advance (COT-010, DEC-COT-11, DEC-COT-40, DEC-COT-68, E-62) and discard by basis (E-72).
+*/
+
+/**
+ * The quotation of E-19: 30 shirts at 29,00 and 20 chemises at 14,00 negotiated (1.150,00).
+ */
+function negE19(array $fx, int $shirts = 30): Quotation
+{
+    $quotation = negDraft([negLine($fx, 'camisa', ['M' => $shirts]), negLine($fx, 'chemise', ['M' => 20])]);
+    $actor = negNegotiator();
+    negotiate($actor, $quotation->lines[0], ['prices' => [['size_group_id' => null, 'price' => '29.00']]])->assertRedirect();
+    negotiate($actor, $quotation->lines[1], ['prices' => [['size_group_id' => null, 'price' => '14.00']]])->assertRedirect();
+
+    return $quotation->fresh();
+}
+
+function agreeAdvance(User $actor, Quotation $quotation, mixed $amount): TestResponse
+{
+    return test()->actingAs($actor)->putJson("/quotations/{$quotation->id}/agreed-advance", ['amount' => $amount]);
+}
+
+it('E-62 el sistema propone el porcentaje vigente del subtotal negociado y la asesora registra el anticipo acordado', function () {
+    $fx = negCatalog();
+    $quotation = negE19($fx);
+    $actor = negNegotiator();
+
+    expect(negCalculate($quotation)['proposed_agreed_advance']['value'])->toBe('575.00');
+
+    agreeAdvance($actor, $quotation, '400,00')->assertRedirect();
+
+    $quotation->refresh();
+    $result = negCalculate($quotation);
+    $audit = AuditLog::query()->where('action', AuditAction::QuotationAgreedAdvanceSet->value)->sole();
+
+    expect((string) $quotation->agreed_advance)->toBe('400.00')
+        ->and($quotation->agreed_advance_by)->toBe($actor->id)
+        ->and($quotation->agreed_advance_at)->not->toBeNull()
+        ->and($result['breakdown']['agreed']['value'])->toBe('400.00')
+        ->and($result['required_advance']['value'])->toBe('400.00')
+        ->and($result['complete'])->toBeTrue()
+        ->and($audit->old_values)->toBe(['agreed_advance' => null])
+        ->and($audit->new_values)->toBe(['agreed_advance' => '400.00']);
+});
+
+it('E-62 el anticipo acordado va de cero al subtotal negociado, con a lo sumo 2 decimales', function (mixed $amount, bool $accepted) {
+    $fx = negCatalog();
+    $quotation = negE19($fx);
+
+    $response = agreeAdvance(negNegotiator(), $quotation, $amount);
+
+    $accepted ? $response->assertRedirect() : $response->assertStatus(422)->assertJsonValidationErrors(['amount']);
+})->with([
+    'cero' => ['0', true],
+    'el subtotal' => ['1150.00', true],
+    'negativo' => ['-1', false],
+    'mayor que el subtotal' => ['1150.01', false],
+    'tres decimales' => ['100.005', false],
+]);
+
+it('E-62 sin líneas negociadas no hay anticipo acordado que registrar', function () {
+    $fx = negCatalog();
+    $quotation = negDraft([negLine($fx, 'camisa', ['M' => 10])]);
+
+    agreeAdvance(negNegotiator(), $quotation, '10.00')->assertStatus(422)->assertJsonValidationErrors(['amount']);
+});
+
+it('E-20 sin quotations.negotiate no se registra el anticipo acordado y la denegación queda auditada', function () {
+    $fx = negCatalog();
+    $quotation = negE19($fx);
+
+    agreeAdvance(negCreator(), $quotation, '400.00')->assertForbidden();
+
+    expect($quotation->fresh()->agreed_advance)->toBeNull()
+        ->and(AuditLog::query()->where('action', AuditAction::AuthorizationDenied->value)->count())->toBe(1);
+});
+
+it('DEC-COT-18 una cotización emitida no recibe anticipo acordado', function () {
+    $fx = negCatalog();
+    $quotation = negE19($fx);
+    $quotation->forceFill(['status' => 'issued', 'issued_at' => now(), 'expires_on' => now()->addDays(7)])->save();
+
+    agreeAdvance(negNegotiator(), $quotation, '400.00')
+        ->assertStatus(422)
+        ->assertJsonPath('message', 'La cotización no está en borrador; duplíquela para cambiarla.');
+});
+
+it('DEC-COT-68 sin líneas negociadas el borrador descarta el anticipo acordado sin auditar', function () {
+    $fx = negCatalog();
+    $quotation = negE19($fx);
+    agreeAdvance(negNegotiator(), $quotation, '400.00')->assertRedirect();
+    $audits = AuditLog::query()->count();
+
+    negResave($quotation, $fx, function (array $lines) {
+        $lines[1]['rows'][0]['quantity'] = 10;
+
+        return $lines;
+    })->assertRedirect();
+
+    $quotation->refresh();
+
+    expect($quotation->agreed_advance)->toBeNull()
+        ->and($quotation->agreed_advance_by)->toBeNull()
+        ->and($quotation->agreed_advance_at)->toBeNull()
+        ->and(AuditLog::query()->count())->toBe($audits);
+});
+
+it('DEC-COT-68 si el anticipo acordado supera el nuevo subtotal negociado, se descarta y se vuelve a proponer', function () {
+    $fx = negCatalog();
+    $quotation = negE19($fx, shirts: 35);
+    agreeAdvance(negNegotiator(), $quotation, '1295.00')->assertRedirect();
+
+    negResave($quotation, $fx, function (array $lines) {
+        $lines[0]['rows'][0]['quantity'] = 30;
+
+        return $lines;
+    })->assertRedirect();
+
+    $result = negCalculate($quotation);
+
+    expect($quotation->fresh()->agreed_advance)->toBeNull()
+        ->and($result['proposed_agreed_advance']['value'])->toBe('575.00')
+        ->and($result['complete'])->toBeFalse();
+});
+
+it('DEC-COT-68 renegociar un precio por debajo del anticipo acordado lo descarta sin auditar', function () {
+    $fx = negCatalog();
+    $quotation = negE19($fx);
+    $actor = negNegotiator();
+    agreeAdvance($actor, $quotation, '1150.00')->assertRedirect();
+
+    negotiate($actor, $quotation->lines[0], ['prices' => [['size_group_id' => null, 'price' => '20.00']]])->assertRedirect();
+
+    $quotation->refresh();
+
+    expect($quotation->agreed_advance)->toBeNull()
+        ->and($quotation->agreed_advance_by)->toBeNull()
+        ->and($quotation->agreed_advance_at)->toBeNull()
+        ->and(AuditLog::query()->where('action', AuditAction::QuotationAgreedAdvanceSet->value)->count())->toBe(1);
+});
+
+it('COT-010 al guardar, el anticipo acordado sale de lo guardado y nunca del payload', function () {
+    $fx = negCatalog();
+    $quotation = negE19($fx);
+    agreeAdvance(negNegotiator(), $quotation, '400.00')->assertRedirect();
+
+    test()->actingAs(negCreator())->putJson("/quotations/{$quotation->id}", [
+        'customer_id' => $quotation->customer_id,
+        'lines' => DraftInput::from($quotation->fresh())['lines'],
+        'agreed_advance' => '1.00',
+    ])->assertRedirect();
+
+    expect((string) $quotation->fresh()->agreed_advance)->toBe('400.00');
+});
+
+it('E-72 el cálculo en vivo indica que cambiaron los grupos de talla', function () {
+    $fx = negCatalog();
+    $basis = ['combination_id' => $fx['combinations']['pantalon']->id, 'size_group_ids' => [$fx['groups'][0]->id]];
+
+    $result = test()->actingAs(negNegotiator())->postJson('/quotations/calculate', ['lines' => [
+        negLine($fx, 'pantalon', ['32' => 25, '40' => 25], ['negotiated' => ['prices' => [['size_group_id' => $fx['groups'][0]->id, 'price' => '20.00']], 'confirmed' => false, 'basis' => $basis]]),
+    ]])->assertOk()->json();
+
+    expect($result['lines'][0]['negotiated_discarded_reason'])->toBe('size_groups_changed')
+        ->and($result['lines'][0]['notice'])->toBe('Se descartó el precio negociado de la línea 1: cambiaron los grupos de talla.');
+});
+
+it('COT-010 el cálculo en vivo indica que el anticipo acordado se descarta', function () {
+    $fx = negCatalog();
+
+    $result = test()->actingAs(negNegotiator())->postJson('/quotations/calculate', [
+        'lines' => [negLine($fx, 'camisa', ['M' => 10])],
+        'agreed_advance' => '100.00',
+    ])->assertOk()->json();
+
+    expect($result['agreed_advance_discarded'])->toBeTrue()
+        ->and($result['breakdown']['agreed'])->toBeNull()
+        ->and($result['proposed_agreed_advance'])->toBeNull();
+});
+
+it('E-72 si cambia la combinación de una línea negociada, su precio se descarta y la otra lo conserva', function () {
+    $fx = negCatalog();
+    $basis = ['combination_id' => $fx['combinations']['chemise']->id, 'size_group_ids' => []];
+    $negotiated = fn (string $price, array $basis) => ['negotiated' => ['prices' => [['size_group_id' => null, 'price' => $price]], 'confirmed' => false, 'basis' => $basis]];
+
+    $result = test()->actingAs(negNegotiator())->postJson('/quotations/calculate', ['lines' => [
+        negLine($fx, 'camisa', ['M' => 30], $negotiated('29.00', $basis)),
+        negLine($fx, 'chemise', ['M' => 20], $negotiated('14.00', $basis)),
+    ]])->assertOk()->json();
+
+    expect($result['lines'][0]['negotiated_discarded_reason'])->toBe('combination_changed')
+        ->and($result['lines'][0]['notice'])->toBe('Se descartó el precio negociado de la línea 1: cambió la combinación.')
+        ->and($result['lines'][0]['subtotal'])->toBeNull()
+        ->and($result['lines'][1]['negotiated_discarded'])->toBeFalse()
+        ->and($result['lines'][1]['subtotal']['value'])->toBe('280.00');
+});
+
+it('E-72 agregar una fila en otro grupo de talla descarta el precio negociado; cambiar solo cantidades lo conserva', function () {
+    $fx = negCatalog();
+    $quotation = negDraft([negLine($fx, 'pantalon', ['32' => 50])]);
+    negotiate(negNegotiator(), $quotation->lines->sole(), ['prices' => [['size_group_id' => $fx['groups'][0]->id, 'price' => '20.00']]])->assertRedirect();
+
+    negResave($quotation, $fx, function (array $lines) use ($fx) {
+        $lines[0]['rows'][0]['quantity'] = 45;
+        $lines[0]['rows'][] = ['size_value_id' => $fx['vals']['34']->id, 'quantity' => 5];
+
+        return $lines;
+    })->assertRedirect();
+
+    expect(negStoredPrices($quotation->lines->sole()))->toHaveCount(1);
+
+    negResave($quotation, $fx, function (array $lines) use ($fx) {
+        $lines[0]['rows'][] = ['size_value_id' => $fx['vals']['40']->id, 'quantity' => 1];
+
+        return $lines;
+    })->assertRedirect();
+
+    expect(negStoredPrices($quotation->lines->sole()))->toBe([]);
+});
+
+it('E-72 si se reorganizan los grupos de talla, el precio negociado guardado se descarta al guardar', function () {
+    $fx = negCatalog();
+    $quotation = negDraft([negLine($fx, 'pantalon', ['32' => 50])]);
+    negotiate(negNegotiator(), $quotation->lines->sole(), ['prices' => [['size_group_id' => $fx['groups'][0]->id, 'price' => '20.00']]])->assertRedirect();
+
+    $merged = SizeGroup::factory()->create(['combination_id' => $fx['combinations']['pantalon']->id, 'sort_order' => 3]);
+    DB::table('size_group_values')->where('combination_id', $fx['combinations']['pantalon']->id)->update(['size_group_id' => $merged->id]);
+    CombinationPrice::factory()->create(['combination_id' => $fx['combinations']['pantalon']->id, 'price_tier_id' => $fx['detal']->id, 'size_group_id' => $merged->id, 'unit_price' => '26.00']);
+
+    negResave($quotation, $fx, fn (array $lines) => $lines)->assertRedirect();
+
+    expect(negStoredPrices($quotation->lines->sole()))->toBe([])
+        ->and($quotation->lines->sole()->fresh()->negotiated_size_group_ids)->toBeNull();
+});

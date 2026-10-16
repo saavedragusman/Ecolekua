@@ -206,6 +206,8 @@ Route::put('/quotations/{quotation}', [QuotationController::class, 'update'])->w
 // Negotiation (COT-012): `quotations.negotiate`. The line must belong to the quotation.
 Route::put('/quotations/{quotation}/lines/{line}/negotiated-price', [NegotiationController::class, 'price'])
     ->whereNumber(['quotation', 'line'])->scopeBindings()->name('quotations.negotiated-price');
+Route::put('/quotations/{quotation}/agreed-advance', [NegotiationController::class, 'agreedAdvance'])
+    ->whereNumber('quotation')->name('quotations.agreed-advance');
 
 // Audit query (FND-025). Read-only: audit records are immutable (FND-024), no other route touches them.
 Route::get('/audit', [AuditLogController::class, 'index'])->name('audit.index');

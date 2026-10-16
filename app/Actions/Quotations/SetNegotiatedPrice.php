@@ -78,7 +78,14 @@ class SetNegotiatedPrice
             ])->save();
 
             $result = $this->calculateQuotation->handle(CalculationInput::fromArray(DraftInput::from($quotation->fresh() ?? $quotation)));
-            $quotation->forceFill(['total' => $result->total(), 'requires_advisor' => $result->requiresAdvisor()])->save();
+            $quotation->forceFill(['total' => $result->total(), 'requires_advisor' => $result->requiresAdvisor()]);
+
+            // An agreed advance above the new negotiated subtotal goes, unaudited (COT-010, DEC-COT-68).
+            if ($result->agreedAdvanceDiscarded) {
+                $quotation->forceFill(['agreed_advance' => null, 'agreed_advance_by' => null, 'agreed_advance_at' => null]);
+            }
+
+            $quotation->save();
 
             $this->audit->handle(AuditAction::QuotationNegotiatedPriceSet, $actor, $quotation, newValues: [
                 'line' => $line->position,
