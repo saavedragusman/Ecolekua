@@ -992,6 +992,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **THEN** el sistema proponía 575,00 (50 %), y el anticipo requerido queda en 400,00
 - **AND** el anticipo acordado guarda usuario y fecha y queda auditado, y la cotización se puede emitir
 - **AND** un monto negativo o mayor que 1.150,00 se rechaza
+- **AND** si después ya no queda ninguna línea negociada o el anticipo supera el nuevo subtotal negociado, el anticipo acordado se descarta sin registro de auditoría propio y se vuelve a proponer (DEC-COT-68)
 
 ### E-63 — Tasa del día desde la API (COT-030)
 
@@ -1135,7 +1136,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-67 el 2026-10-15, durante la implementación.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-67 el 2026-10-15 y DEC-COT-68 el 2026-10-16, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1202,6 +1203,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
 | DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
 | DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible", que se muestra también cuando se elige una asesora a mano. Escenario E-74 |
+| DEC-COT-68 | ¿Se audita el descarte automático del anticipo acordado? | A) No, igual que el descarte automático del precio negociado (DEC-COT-29) · B) Sí, como `quotations.agreed_advance_set` | **Confirmada**: **A** (2026-10-16). Escenario E-62 |
 | DEC-COT-67 | Línea que requiere asesora con una talla en ningún grupo de su combinación | A) Sigue "sin precio" y no se negocia hasta que la talla tenga grupo o se quite la fila · B) Esa fila se negocia con un precio "sin grupo" | **Confirmada**: **A** (2026-10-15), coherente con COT-025. Escenario E-76 |
 | DEC-COT-66 | Grupos de talla que se negocian en una línea que requiere asesora | A) Solo los grupos que usan las filas de la línea · B) Todos los grupos de la combinación | **Confirmada**: **A** (2026-10-15), coherente con DEC-COT-55: si un cambio agrega o quita un grupo, el precio se descarta y se negocia de nuevo. Escenario E-76 |
 | DEC-COT-65 | ¿Se puede quitar la asesora de un borrador? | A) No: solo se cambia por una activa con `customers.portfolio`; un valor vacío la deja como está · B) Sí, queda vacía y auditada | **Confirmada**: **A** (2026-10-15). Escenario E-73 |
