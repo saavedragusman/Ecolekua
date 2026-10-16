@@ -67,6 +67,9 @@ Reglas:
 - Si hay discrepancia entre un archivo del repo y la memoria de Engram, **manda el archivo**.
 - Este `AGENTS.md` resume principios; el detalle vive en la constitution.
 - Enmiendas en la spec original. Cuando una feature cambia comportamiento de una spec anterior, el agente propone la enmienda en esa spec (sección “Cambios posteriores”, citando el ID de la nueva) y no implementa hasta que la apruebe el humano.
+- `openspec/` es **histórico** (specs 001–003 y el diseño congelado de 004, ver §4.2).
+  No se crean ni se archivan cambios ahí. No es fuente de comportamiento: manda `docs/specs/`.
+
 ---
 
 ## 4. Flujo de trabajo (ODD con Gentle-AI v4)
@@ -88,19 +91,38 @@ Secciones obligatorias, en este orden:
 6. **Evidencia**: prueba por cada `E-xx` y resultado de los comandos de §12.
 7. **Siguiente paso**.
 
+#### Excepción transitoria — spec 004
+ (Iniciada con SDD, migrada a ODD en la Fase 9.)
+- `openspec/changes/004-pricing-and-quotations/design.md` es la fuente del diseño técnico de 004.
+  Está **congelado**: solo lectura, no se edita.
+- En `odd/tasks/004-pricing-and-quotations.md`, la sección "Diseño técnico" lo referencia
+  en lugar de copiarlo. Todo cambio al diseño se registra en una sección
+  "Cambios al diseño" del documento ODD, con su motivo y DEC; nunca en openspec.
+- Las fases 0–8 se registran como cerradas con una línea por fase y su commit;
+  no se migra `apply-progress.md`.
+- Desde 005, el documento ODD contiene el diseño técnico completo.
+
 ### 4.3 Puertas (obligatorias aunque ODD no las exija)
 1. **Antes de crear el documento**: si la spec tiene decisiones sin confirmar, listarlas con el formato de §6 y detenerse.
 2. **Antes de la primera línea de código**: con Diseño y Tareas escritos, detenerse y esperar aprobación humana.
 3. **Cierre**: verificar contra la spec (cada `E-xx` con prueba en verde), registrar la evidencia y esperar confirmación humana.
 
+La puerta 2 es **una sola aprobación por spec**. Aprobado el documento, las tareas
+se ejecutan seguidas; el agente solo vuelve a detenerse ante un [DEC-PENDIENTE]
+(§5–§6) o un cambio al Diseño técnico, y en ese caso solo se aprueba ese cambio.
+En 004, la puerta 2 revisa el documento ODD (tareas 9–28), no el diseño ya aprobado en SDD.
+
 ### 4.4 Commits
-ODD cierra cada tarea con un commit por defecto. **En este proyecto no.**
-El agente crea la rama de la feature, pero no hace commit, push ni merge.
+ODD cierra cada tarea con un commit por defecto.
+El agente crea la rama de la feature, hace commit pero no push ni merge.
 Al cerrar cada tarea, anota en el documento el mensaje de commit sugerido.
 
 ### 4.5 Engram
-Igual que antes. El documento de feature tiene copia en Engram; si difieren, manda el archivo del repositorio.
+Guardar: decisiones técnicas del Diseño técnico, hallazgos no obvios del código,
+errores recurrentes y su solución.
 No guardar: credenciales, contenido de `.env`, datos personales de clientes o empleados, precios reales de Ecolekua.
+El documento de feature tiene copia en Engram; si difieren, manda el archivo del repositorio.
+
 ---
 
 ## 5. Cuándo detenerse y preguntar
