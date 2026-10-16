@@ -346,7 +346,7 @@ El anticipo requerido depende del modo de abastecimiento del producto y de si la
 
 Una línea requiere asesora cuando cae en un tramo de negociación (50 piezas de uniformes o más en la configuración inicial) o tiene color personalizado (business rules §2.2, §26.1). Los combos nunca admiten color personalizado (DEC-PRD-87).
 
-- **Tramo de negociación**: la línea no tiene precio automático. Un usuario con `quotations.negotiate` registra un **precio unitario negociado** para la línea (y para cada grupo de talla si la combinación los tiene).
+- **Tramo de negociación**: la línea no tiene precio automático. Un usuario con `quotations.negotiate` registra un **precio unitario negociado** para la línea (y para cada grupo de talla que usan sus filas, si la combinación tiene grupos; DEC-COT-66).
 - **Color personalizado**: la línea muestra el precio del tramo como referencia. Un usuario con `quotations.negotiate` confirma ese precio o registra uno negociado, porque la asesora acuerda tela, precio y entrega con el cliente (§26.1).
 - Las líneas negociadas tienen anticipo acordado (COT-010).
 - Una cotización con alguna línea que requiere asesora sin precio negociado o confirmado, o sin anticipo acordado, no se puede emitir.
@@ -1095,6 +1095,14 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **AND** en una cotización emitida, un usuario con `customers.assign` cambia solo la asesora, por una activa con `customers.portfolio`, y el cambio queda auditado; sin `customers.assign` el backend responde 403 y la cotización no cambia
 - **AND** el documento de la cotización emitida (la asesora que muestra la vista imprimible y el correo) pasa a mostrar la asesora nueva; los precios, la tasa y el resto del documento no cambian
 
+### E-76 — Precio negociado por los grupos de talla que usa la línea (COT-012, DEC-COT-66, DEC-COT-55)
+
+- **GIVEN** una línea de `184` que requiere asesora, con filas solo en tallas del grupo 28–36, aunque la combinación también tiene el grupo 38–44, y un usuario con `quotations.negotiate`
+- **WHEN** registra el precio negociado
+- **THEN** se pide y se guarda un precio solo para el grupo 28–36
+- **AND** un precio enviado para el grupo 38–44, que la línea no usa, se rechaza
+- **AND** si después se agrega una talla del grupo 38–44 o se quitan las del grupo 28–36, el precio negociado se descarta con el aviso de E-22 y se negocia de nuevo (E-72)
+
 ---
 
 ## 8. Interfaz (ERP)
@@ -1126,7 +1134,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-65 el 2026-10-15, durante la implementación.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-66 el 2026-10-15, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1193,6 +1201,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
 | DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
 | DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible", que se muestra también cuando se elige una asesora a mano. Escenario E-74 |
+| DEC-COT-66 | Grupos de talla que se negocian en una línea que requiere asesora | A) Solo los grupos que usan las filas de la línea · B) Todos los grupos de la combinación | **Confirmada**: **A** (2026-10-15), coherente con DEC-COT-55: si un cambio agrega o quita un grupo, el precio se descarta y se negocia de nuevo. Escenario E-76 |
 | DEC-COT-65 | ¿Se puede quitar la asesora de un borrador? | A) No: solo se cambia por una activa con `customers.portfolio`; un valor vacío la deja como está · B) Sí, queda vacía y auditada | **Confirmada**: **A** (2026-10-15). Escenario E-73 |
 | DEC-COT-64 | Asesora responsable que se desactiva o pierde `customers.portfolio` después | Sin reasignación automática (como DEC-CLI-29); se marca "asesora no disponible"; en borrador se cambia editando; en emitida, un usuario con `customers.assign` cambia solo la asesora, auditado (excepción a DEC-COT-18), y el documento emitido pasa a mostrar la asesora nueva | **Confirmada** (2026-10-15). Escenario E-75 |
 
