@@ -1102,6 +1102,7 @@ Datos comunes de los ejemplos, salvo que el escenario diga otra cosa:
 - **THEN** se pide y se guarda un precio solo para el grupo 28–36
 - **AND** un precio enviado para el grupo 38–44, que la línea no usa, se rechaza
 - **AND** si después se agrega una talla del grupo 38–44 o se quitan las del grupo 28–36, el precio negociado se descarta con el aviso de E-22 y se negocia de nuevo (E-72)
+- **AND** si una fila tiene una talla que no está en ningún grupo, la línea sigue "sin precio" (COT-025) y el precio negociado se rechaza indicando esa talla, hasta que la talla tenga grupo o se quite la fila (DEC-COT-67)
 
 ---
 
@@ -1134,7 +1135,7 @@ Aplica `docs/ui/design-system.md` completo. Puntos específicos de esta spec:
 
 ## 9. Decisiones de esta Spec
 
-Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-66 el 2026-10-15, durante la implementación.
+Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC-COT-44 a DEC-COT-59 el 2026-10-13, tras la exploración y el diseño del change; DEC-COT-60 el 2026-10-14 y DEC-COT-61 a DEC-COT-67 el 2026-10-15, durante la implementación.
 
 | ID | Decisión | Opciones | Estado |
 |---|---|---|---|
@@ -1201,6 +1202,7 @@ Todas **Confirmadas** por el usuario: DEC-COT-01 a DEC-COT-43 el 2026-10-12; DEC
 | DEC-COT-61 | Empate de DEC-COT-47 en ahorro y en unidades | A) El primero según el orden de carga · B) El de código de combo menor (orden alfabético) | **Confirmada**: **B** (2026-10-15) |
 | DEC-COT-62 | ¿Cuentan para el tramo las piezas de un producto con esquema por tramos inactivo? | A) No: se trata como un producto sin esquema · B) Sí: el esquema sigue siendo por tramos | **Confirmada**: **A** (2026-10-15) |
 | DEC-COT-63 | Asesora por defecto cuando la asesora del cliente está inactiva o sin `customers.portfolio` | A) Se asigna igual · B) Se salta: quien crea si tiene cartera; si no, ninguna · C) Se rechaza la creación | **Confirmada**: **B** (2026-10-15), con el aviso "asesora del cliente no disponible", que se muestra también cuando se elige una asesora a mano. Escenario E-74 |
+| DEC-COT-67 | Línea que requiere asesora con una talla en ningún grupo de su combinación | A) Sigue "sin precio" y no se negocia hasta que la talla tenga grupo o se quite la fila · B) Esa fila se negocia con un precio "sin grupo" | **Confirmada**: **A** (2026-10-15), coherente con COT-025. Escenario E-76 |
 | DEC-COT-66 | Grupos de talla que se negocian en una línea que requiere asesora | A) Solo los grupos que usan las filas de la línea · B) Todos los grupos de la combinación | **Confirmada**: **A** (2026-10-15), coherente con DEC-COT-55: si un cambio agrega o quita un grupo, el precio se descarta y se negocia de nuevo. Escenario E-76 |
 | DEC-COT-65 | ¿Se puede quitar la asesora de un borrador? | A) No: solo se cambia por una activa con `customers.portfolio`; un valor vacío la deja como está · B) Sí, queda vacía y auditada | **Confirmada**: **A** (2026-10-15). Escenario E-73 |
 | DEC-COT-64 | Asesora responsable que se desactiva o pierde `customers.portfolio` después | Sin reasignación automática (como DEC-CLI-29); se marca "asesora no disponible"; en borrador se cambia editando; en emitida, un usuario con `customers.assign` cambia solo la asesora, auditado (excepción a DEC-COT-18), y el documento emitido pasa a mostrar la asesora nueva | **Confirmada** (2026-10-15). Escenario E-75 |
